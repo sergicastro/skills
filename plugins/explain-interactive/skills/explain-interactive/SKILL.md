@@ -21,10 +21,8 @@ Turn a complex explanation into a single self-contained HTML page that a human c
    - Where the real mechanism is spatial/temporal (flows, layers, sequences, state changes), plan a **diagram** for that step.
    - The 2–3 points where a learner most likely gets confused → **check-your-understanding** questions.
 2. **Fill the template** at `template.html` (same directory as this file). Keep its structure, stepper, styles and JS; replace only the `STEPS`, `GLOSSARY`, `META` data and per-step HTML. Do not pull in frameworks.
-3. **Deliver** (pick the first that works):
-   - If the `Artifact` tool is available: load the `artifact-design` skill, write the file to the scratchpad, publish it, and give the link.
-   - Otherwise write it to `~/explanations/<kebab-topic>.html` and run `open <path>` (macOS) / `xdg-open` (Linux).
-4. Reply in chat with **one line**: what the page covers + link/path. Don't repeat the explanation in chat.
+3. **Deliver locally.** Write the file to `~/explanations/<kebab-topic>.html` and run `open <path>` (macOS) / `xdg-open` (Linux). Never publish to claude.ai or use the `Artifact` tool unless the user explicitly asks for it.
+4. Reply in chat with **one line**: what the page covers + file path. Don't repeat the explanation in chat.
 
 ## Content rules per step
 
