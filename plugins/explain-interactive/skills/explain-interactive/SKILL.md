@@ -16,11 +16,12 @@ Turn a complex explanation into a single self-contained HTML page that a human c
 
 1. **Decompose before writing HTML.** Re-read the source explanation and produce (internally) a learning path:
    - One-sentence **big picture** (what & why).
+   - One **running example**: a concrete case from the conversation (a specific request, file, value — e.g. "`GET /orders` with an expired token") that every step follows. It supplies the real values for diagram labels and code.
    - 4–10 **steps**, each introducing ONE new idea, ordered so each builds only on earlier ones.
    - **Prerequisite terms** → glossary entries.
-   - Where the real mechanism is spatial/temporal (flows, layers, sequences, state changes), plan a **diagram** for that step.
-   - The 2–3 points where a learner most likely gets confused → **check-your-understanding** questions.
-2. **Fill the template** at `template.html` (same directory as this file). Keep its structure, stepper, styles and JS; replace only the `STEPS`, `GLOSSARY`, `META` data and per-step HTML. Do not pull in frameworks.
+   - Where the real mechanism is spatial/temporal (flows, layers, sequences, state changes), plan **one diagram for the whole page**: pick the pattern from `diagram-recipes.md` (read it), then decide which parts each step lights up.
+   - The 2–3 points where a learner most likely gets confused → **check-your-understanding** questions. Each wrong option should be a real misconception from the source.
+2. **Fill the template** at `template.html` (same directory as this file). Keep its structure, stepper, styles and JS; replace only the `STEPS`, `GLOSSARY`, `META`, `DIAGRAM` data and per-step HTML. Do not pull in frameworks.
 3. **Deliver locally.** Write the file to `~/explanations/<kebab-topic>.html` and run `open <path>` (macOS) / `xdg-open` (Linux). Never publish to claude.ai or use the `Artifact` tool unless the user explicitly asks for it.
 4. Reply in chat with **one line**: what the page covers + file path. Don't repeat the explanation in chat.
 
@@ -33,16 +34,19 @@ Each step object has:
 | `title` | ≤ 6 words, names the idea ("Requests hit the gateway first") |
 | `summary` | ≤ 8 words, one-line takeaway shown next to the title in the Recap's step list ("bad tokens stop at a 401"). |
 | `body` | 2–5 short sentences of plain language. Bold the one key idea. **Name the highlighted part of the diagram** and wrap that name in `<mark>…</mark>`; it gets the same colour as the diagram's `hl` highlight, so the reader can match text to picture. Wrap glossary terms in `<dfn>term</dfn>` for hover tooltips. |
-| `visual` | Inline SVG or small HTML diagram showing *this step's* mechanism. Give the `<svg>` a `viewBox` but **no `width`** (it scales to its column). Use CSS vars (`var(--fg)`, `var(--accent)`, …) so it works in dark mode. Highlight what's new in this step with `class="hl"`. Optional only if a visual would add nothing. |
-| `analogy` | Optional one-liner real-world analogy. |
-| `code` | Optional minimal snippet (≤ 15 lines) — only the lines that matter, with `// ← this` markers. |
+| `diagram` | **Preferred visual.** `{ hl: [ids new in this step], hide?: [...], dim?: [...], build?: [...] }` over the page's shared `DIAGRAM` (parts are `<g data-id="…">`). Earlier steps' parts look normal, parts not introduced yet are ghosted, the Recap shows everything, and a legend is added. `build` lists parts (or arrays of parts) revealed one per Next/→ click before the step advances — use it only where message order is the point, max 4 stages. |
+| `visual` | Escape hatch when one step needs its own picture (replaces `diagram`). Inline SVG or small HTML. Give the `<svg>` a `viewBox` of width 560–720 (≤ 900 for `wide`) so the 14px text renders near its real size, and **no `width`**. Use CSS vars so it works in dark mode and the diagram kit classes (`.box .arrow .label .zone .hl .bad .ok`); mark staged parts with `data-b="1"`, `data-b="2"`… and set `build: n` on the step. |
+| `analogy` | Optional one-liner real-world analogy. Say which part maps to which; put "where the analogy breaks down" in `deeper`. |
+| `code` | Optional minimal snippet (≤ 15 lines) — only the lines that matter. Lines containing `←` (e.g. `// ← this`) are highlighted in the diagram's colour. |
 | `deeper` | Optional "go deeper" detail, hidden behind a toggle. Edge cases and nuance go here, NOT in `body`. |
-| `quiz` | Optional `{q, options[], answer, why}` — for the confusing steps. Use 3–4 options: the reader gets one retry before the answer is revealed, and with only 2 options the retry would give it away. |
+| `quiz` | Optional `{q, options[], answer, why}` — for the confusing steps. Use 3–4 options: the reader gets one retry before the answer is revealed, and with only 2 options the retry would give it away. Ask a **prediction** ("what happens if…", "which component…"), not recall of the text. An option may be `{t, why}`: `why` is shown on the retry and explains why *that* answer is wrong (name the misconception). `why` on the quiz explains the right answer and names the trap. A quiz may sit on the step *after* a concept is introduced, to apply it. |
 | `wide` | Optional `true` — puts `visual`/`code` under the text at full width instead of beside it. Use for very wide diagrams. The Recap is always wide. |
 
 Global rules:
 - **One new concept per step.** If a step needs "and also…", split it.
-- Reuse the same diagram across steps and progressively reveal/highlight parts — consistency beats novelty.
+- **Concrete before abstract**: each `body` starts with what happens to the running example, then states the general rule. Diagram labels and code use the example's real values. Step 1 shows the whole map ghosted with only the entry point lit.
+- **One diagram, same positions in every step** (the `DIAGRAM` + `diagram.hl` mechanism): consistency beats novelty. Follow the rules in `diagram-recipes.md` (labelled arrows, 1–3 parts per step, ≤ ~7 boxes, no sentences in boxes).
+- Colour carries one meaning: `<mark>` and `.hl` (orange) = the thing this step is about; key ideas are just **bold**.
 - Use the user's actual names (files, services, functions) from the conversation, not generic placeholders.
 - Final step is always **Recap**: a 1–2 sentence `body` + a "how it all fits" `visual`. Don't write the step list yourself; the template builds it from each step's `title` + `summary` (clickable, with quiz marks) and adds the finish panel (score, Start over, Review all, Glossary).
 - No external network resources (fonts, CDNs, images). Must work offline and in light/dark mode.
@@ -54,11 +58,13 @@ Global rules:
 - **Orientation**: the sidebar lists every step title (current / visited, plus ✓ / ? quiz marks) under the big picture. The big picture also opens step 1 on every screen. On phones the top bar shows title + `n / N`, and the ☰ drawer holds the steps, Glossary, Show all and the theme switch.
 - **Navigation**: footer Back (hidden on step 1) / Next with a "Next: <title>" preview (shown on the button on phones); ← / → keys; swipe on phones; each step is a browser-history entry, so browser Back/Forward move between steps; `#step-N` deep links.
 - **Ending**: on the last step Next becomes "Finish ✓" and jumps to the finish panel (score, Start over, Review all steps, Open glossary).
-- **Quiz**: one retry before the answer is revealed; results show in the sidebar and the Recap.
+- **Shared diagram**: one `DIAGRAM`, per-step `diagram.hl` lighting, auto-ghosting of parts not yet introduced, legend, staged `build` reveals, diagram kit classes (`.label .zone .lifeline .bad .ok .flow .dim`), arrowheads that follow the theme.
+- **Orientation**: every step shows "Step n of N"; steps slide in from the direction of travel; code lines with `←` are highlighted.
+- **Quiz**: one retry before the answer is revealed, with option-specific hints; results show in the sidebar and the Recap.
 - **Progress is remembered** per page (localStorage): visited steps, quiz answers, last step.
 - "Show all" for skimming / printing; the sidebar and counter follow the scroll position.
 - Glossary tooltips via `<dfn>` (kept on-screen) plus a Glossary drawer. Drawers have a × button, a dimmed backdrop and close on Esc.
-- Accessibility: step changes and quiz results are announced to screen readers; focus moves to the step heading when picked from the outline; reduced-motion is respected.
+- Accessibility: step changes, reveals and quiz explanations are announced to screen readers; `aria-current` marks the current step; drawers are dialogs that take focus, return it on close, and block ←/→ while open; ←/→ scroll a wide diagram instead of changing step; `<dfn data-term="token">tokens</dfn>` maps inflected words to a glossary entry; reduced-motion is respected.
 - Light/dark: follows `prefers-color-scheme` by default; the ☀/☾ button switches manually and the choice is remembered. Diagrams scroll sideways on phones rather than shrinking to unreadable text.
 
 Keep each step to roughly one screen: body ≤ 5 sentences, code ≤ 15 lines of ≤ 60 characters, quiz 3–4 options.
