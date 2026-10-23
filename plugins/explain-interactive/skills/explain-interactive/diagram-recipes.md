@@ -22,7 +22,7 @@ Read this when planning the page's diagram (workflow step 1). One diagram serves
 - **At most ~7 boxes on screen.** Merge or drop details that this explanation doesn't need.
 - **No sentences inside boxes**: a name (≤ 3 words) per box. Prose belongs in `body`.
 - **Colour means one thing:** orange `.hl` = new in this step (and the `<mark>` in the text), red `.bad` = rejected/failure, green `.ok` = accepted/success, ghosted = not introduced yet.
-- **Size the viewBox for real text.** Width 560–720 (up to 900 for `wide` steps), height ≤ ~60% of the width. SVG text scales with the viewBox: a 1200-wide viewBox shrinks 14px text to ~8px. Base text 14px, `.label` 12px, never below 11px.
+- **Size the viewBox for real text.** Width 560–720 (up to 900 for `wide` steps), height ≤ ~60% of the width. SVG text scales with the viewBox: a 1200-wide viewBox shrinks 16px text to ~9px. Base text 16px, `.label` 14px, never below 12px.
 - **Use `data-id`, not `id`**, on each part (`<g data-id="gw">…</g>`): the SVG is cloned for every step, so ids would repeat.
 - Use CSS (`.flow`) for motion, never SMIL `<animate>` (reduced-motion settings don't stop it).
 - `build` (staged reveal, ≤ 4 stages) is for sequences where the order of messages is the point.
