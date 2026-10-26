@@ -263,8 +263,7 @@ epic: <slug>
 - **Live dry run**: a throwaway epic made of a markdown list (no GitHub), one manager
   and two named worker sessions, going through register → request → done → approve
   → unblock → request.
-- **GitHub dry run**: a test epic in a scratch repo/board, checking assignment, board
-  status, and the manager fixing a gap the worker left.
+- GitHub behaviour (§6) is not covered by the test plan.
 
 ## 9. Repository and installation
 
