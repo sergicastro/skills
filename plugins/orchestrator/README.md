@@ -50,6 +50,19 @@ orchestration, and gives you its URL (default `http://127.0.0.1:8765/`). The ind
 every orchestration; each one has a page with its dependency graph, goals, workers and
 recent events, updated within a second of each change.
 
+![Epic page: dependency graph, goals, workers and recent events](docs/images/status-epic-light.png)
+
+<details>
+<summary>Dark mode and the index page</summary>
+
+![Epic page in dark mode](docs/images/status-epic-dark.png)
+
+![Index of all orchestrations](docs/images/status-index.png)
+
+</details>
+
+The screenshots use made-up data.
+
     python3 skills/orchestrator/scripts/orch_state.py serve --ensure   # start if needed
     python3 skills/orchestrator/scripts/orch_state.py serve --stop     # stop it
 
