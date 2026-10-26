@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>$title</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #f7f7f5; --card: #ffffff; --fg: #1d1d1b; --muted: #6b6b66; --line: #e2e1dc; --edge: #9a9992;
+  --s-blocked: #8a8a85; --s-blocked-bg: #ececea;
+  --s-ready: #2f6fdb; --s-ready-bg: #e3edfc;
+  --s-assigned: #b7791f; --s-assigned-bg: #fbf0dc;
+  --s-needs-user: #d14343; --s-needs-user-bg: #fbe4e4;
+  --s-in-review: #7c4dcc; --s-in-review-bg: #efe7fb;
+  --s-done: #2f8f4e; --s-done-bg: #e2f3e7;
+  --flash: #ffe58a;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161615; --card: #1f1f1d; --fg: #ecebe6; --muted: #a3a29b; --line: #34332f; --edge: #6f6e68;
+    --s-blocked: #9b9b95; --s-blocked-bg: #2a2a28;
+    --s-ready: #6ea2f5; --s-ready-bg: #1c2a42;
+    --s-assigned: #e0a64a; --s-assigned-bg: #3a2c14;
+    --s-needs-user: #f07171; --s-needs-user-bg: #3d1d1d;
+    --s-in-review: #b08cf0; --s-in-review-bg: #2d2242;
+    --s-done: #5cc27f; --s-done-bg: #18321f;
+    --flash: #6b5a12;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.bar { display: flex; justify-content: space-between; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.bar a { color: inherit; }
+#conn.live::before, #conn.down::before { content: "\25CF"; margin-right: 6px; }
+#conn.live { color: var(--s-done); }
+#conn.down { color: var(--s-needs-user); }
+main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+h1 { font-size: 24px; margin: 8px 0; }
+h1 a { color: inherit; }
+h2 { font-size: 16px; margin: 28px 0 10px; }
+.meta, .updated, .legend { color: var(--muted); font-size: 13px; margin: 4px 0; }
+code { font-size: 12.5px; }
+.s-blocked { --c: var(--s-blocked); --cb: var(--s-blocked-bg); }
+.s-ready { --c: var(--s-ready); --cb: var(--s-ready-bg); }
+.s-assigned { --c: var(--s-assigned); --cb: var(--s-assigned-bg); }
+.s-needs-user { --c: var(--s-needs-user); --cb: var(--s-needs-user-bg); }
+.s-in-review { --c: var(--s-in-review); --cb: var(--s-in-review-bg); }
+.s-done { --c: var(--s-done); --cb: var(--s-done-bg); }
+.progress { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--line); margin-top: 12px; }
+.seg { height: 100%; background: var(--c); }
+.badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; color: var(--c); background: var(--cb); white-space: nowrap; }
+.table, .graph { overflow-x: auto; background: var(--card); border: 1px solid var(--line); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; font-size: 12px; }
+tr:last-child td { border-bottom: 0; }
+td a { color: var(--s-ready); }
+.graph svg { display: block; }
+.node rect { fill: var(--cb); stroke: var(--c); stroke-width: 1.5; }
+.node text { fill: var(--fg); font-size: 12px; }
+.node .nid { font-weight: 600; }
+.node .nworker { fill: var(--muted); font-size: 11px; }
+.edge { fill: none; stroke: var(--edge); stroke-width: 1.5; }
+.edge.waiting { stroke-dasharray: 5 4; }
+.arrowhead { fill: var(--edge); }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: var(--s-blocked); }
+.dot.live { background: var(--s-done); }
+.dot.gone { background: var(--s-needs-user); }
+.events { list-style: none; padding: 0; margin: 0; font-size: 13px; }
+.events li { padding: 5px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.events time { color: var(--muted); display: inline-block; min-width: 90px; }
+.banner { background: var(--s-needs-user-bg); border: 1px solid var(--s-needs-user); border-radius: 8px; padding: 10px 14px; margin: 8px 0 16px; }
+.banner ul { margin: 4px 0 0; padding-left: 20px; }
+.empty { color: var(--muted); }
+.cards { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+.card { display: block; padding: 14px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; color: inherit; text-decoration: none; }
+.card:hover { border-color: var(--edge); }
+.card h2 { margin: 0 0 4px; font-size: 16px; }
+tr.flash td, .node.flash rect { animation: flash 2s ease-out; }
+@keyframes flash { from { background-color: var(--flash); fill: var(--flash); } }
+</style>
+</head>
+<body data-stream="$stream">
+<div class="bar"><a id="home" href="/">All orchestrations</a><span id="conn"></span></div>
+<main>$main</main>
+<script>
+(function () {
+  var conn = document.getElementById("conn");
+  function ago(iso) {
+    var s = Math.round((Date.now() - Date.parse(iso)) / 1000);
+    if (isNaN(s)) return iso;
+    if (s < 45) return "just now";
+    if (s < 3600) return Math.round(s / 60) + " min ago";
+    if (s < 86400) return Math.round(s / 3600) + " h ago";
+    return Math.round(s / 86400) + " d ago";
+  }
+  function times() {
+    document.querySelectorAll("time[datetime]").forEach(function (t) {
+      t.textContent = ago(t.getAttribute("datetime"));
+    });
+  }
+  function statuses() {
+    var m = {};
+    document.querySelectorAll("main [data-goal]").forEach(function (el) {
+      m[el.tagName + ":" + el.dataset.goal] = el.dataset.status;
+    });
+    return m;
+  }
+  function swap(html) {
+    var before = statuses();
+    document.querySelector("main").innerHTML = html;
+    document.querySelectorAll("main [data-goal]").forEach(function (el) {
+      if (before[el.tagName + ":" + el.dataset.goal] !== el.dataset.status) el.classList.add("flash");
+    });
+    times();
+  }
+  times();
+  setInterval(times, 30000);
+  if (location.protocol === "file:") {
+    conn.textContent = "static file, reloads every 3 s";
+    document.getElementById("home").hidden = true;
+    setTimeout(function () { location.reload(); }, 3000);
+    return;
+  }
+  var stream = document.body.dataset.stream;
+  if (!stream) return;
+  var es = new EventSource(stream);
+  es.onmessage = function (e) {
+    conn.textContent = "live";
+    conn.className = "live";
+    swap(e.data);
+  };
+  es.onerror = function () {
+    conn.textContent = "reconnecting\u2026";
+    conn.className = "down";
+  };
+})();
+</script>
+</body>
+</html>

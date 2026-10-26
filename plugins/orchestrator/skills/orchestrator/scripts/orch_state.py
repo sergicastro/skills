@@ -197,6 +197,8 @@ def save(slug, state, events):
 def write_views(d, state):
     vm = view_model(state, read_events(d))
     write_atomic(d / "status.md", orch_view.render_md(vm))
+    page = orch_view.render_page(vm["title"], orch_view.main_html(vm), f"/events/{vm['slug']}")
+    write_atomic(d / "status.html", page)
 
 
 def read_events(d, limit=EVENTS_SHOWN):

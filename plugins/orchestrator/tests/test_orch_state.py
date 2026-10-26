@@ -570,5 +570,57 @@ class ViewModelTests(Base):
         self.assertEqual(vm["events"][0]["actor"], "demo-w-a")
 
 
+class HtmlTests(Base):
+    def page(self, p=None):
+        self.init(p)
+        return (Path(self.tmp.name) / "demo" / "status.html").read_text()
+
+    def main(self, p=None, problems=()):
+        state = orch_state.init("demo", p or plan())
+        return orch_view.main_html(orch_state.view_model(state, [], problems))
+
+    def test_save_writes_status_html(self):
+        page = self.page()
+        self.assertIn('<tr id="goal-g1" data-goal="g1" data-status="ready">', page)
+        self.assertIn('data-stream="/events/demo"', page)
+        self.assertIn("<title>Demo epic</title>", page)
+
+    def test_values_from_state_are_escaped(self):
+        page = self.page(plan({"g1": {"title": "<script>alert(1)</script> & co", "summary": "x", "depends_on": []}}))
+        self.assertNotIn("<script>alert", page)
+        self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt; &amp; co", page)
+
+    def test_only_http_links(self):
+        p = plan()
+        p["epic"]["source"] = "javascript:alert(1)"
+        page = self.page(p)
+        self.assertNotIn('href="javascript', page)
+        self.assertIn("Demo epic", page)
+
+    def test_no_external_urls_without_links_in_state(self):
+        page = self.page()
+        self.assertNotIn("http://", page)
+        self.assertNotIn("https://", page)
+
+    def test_graph_has_one_node_per_goal_and_one_edge_per_dependency(self):
+        main = self.main()
+        self.assertEqual(main.count('class="node '), 4)
+        self.assertEqual(main.count('<path class="edge '), 4)
+        self.assertEqual(main.count('class="edge waiting"'), 4)
+        self.assertIn('<a href="#goal-g4" class="node s-blocked" data-goal="g4" data-status="blocked">', main)
+
+    def test_problems_banner(self):
+        main = self.main(problems=["g1: invalid status weird"])
+        self.assertIn('class="banner"', main)
+        self.assertIn("g1: invalid status weird", main)
+        self.assertNotIn('class="banner"', self.main())
+
+    def test_events_are_listed_newest_first(self):
+        self.init()
+        self.run_cli("register", "demo", "demo-w-a")
+        page = (Path(self.tmp.name) / "demo" / "status.html").read_text()
+        self.assertLess(page.index("REGISTER"), page.index("INIT"))
+
+
 if __name__ == "__main__":
     unittest.main()
