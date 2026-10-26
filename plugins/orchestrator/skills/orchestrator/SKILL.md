@@ -53,7 +53,8 @@ Files next to this skill (use the base directory shown when the skill loaded):
    follow `github.md` → "Read an epic".
 2. **Analyse** into goals: id (`<slug>-1`, `<slug>-2`, ... or short names), title, summary,
    acceptance criteria, `depends_on`, repo, links. Dependencies only where a goal really
-   needs another's result. Pick a short kebab-case slug.
+   needs another's result. Check for dependency cycles; if there is one, show it in the
+   plan and require the user to break it before "go". Pick a short kebab-case slug.
 3. **Board** (GitHub only): `github.md` → "Find the board"; propose the mapping.
 4. **Names**: run `ListAgents`; your name is in its first line. If it's generic (like
    `skills-24`), suggest `/rename <slug>-manager`. Worker prefix: `<slug>-w-`.
@@ -78,7 +79,8 @@ Files next to this skill (use the base directory shown when the skill loaded):
    ```
 6. On changes, revise and present again. On an explicit go-ahead:
    - re-run `ListAgents` and use your current name as `manager`;
-   - write the plan JSON (format below) to the scratchpad and run `$ORCH init <slug> --plan <file>`;
+   - write the plan JSON (format below) to the scratchpad and run `$ORCH init <slug> --plan <file>`
+     (if it returns a cycle or other error, show it and re-plan; never edit around it);
    - make the confirmed GitHub writes (`github.md`);
    - tell the user it's ready and repeat the worker start instructions.
 
@@ -106,6 +108,9 @@ that name, formatted per `protocol.md`. If `$ORCH` returns an error, reply
 | DONE | `$ORCH done <slug> <sender> <goal> --pr <pr> --notes "<notes>"` | ACK `DONE <goal> → in-review`; tell the user it awaits their review; GitHub alignment check (`github.md`) |
 | other / malformed / wrong epic | nothing | ERROR |
 
+STATUS or DONE for a goal not assigned to the sender gets ERROR: the helper rejects it, so
+relay its error and don't work around it.
+
 A message from a sender without the prefix or not registered (other than REGISTER) gets
 ERROR without running anything else.
 
@@ -121,7 +126,7 @@ ERROR without running anything else.
 | prioritize … | `$ORCH prioritize` |
 | add / drop a goal | `$ORCH add-goal --goal-json '<json>'` / `$ORCH drop-goal` |
 | <worker> was renamed to <new> | `$ORCH rename-worker` (after the new name has registered) |
-| status / what's X doing | `ListAgents` → `$ORCH liveness --live …` → `$ORCH show` |
+| status / what's X doing | `ListAgents` → `$ORCH liveness --live …` → `$ORCH show`. Flag every worker in `gone_with_goal` and offer `release` (goal back to ready) or reassign; never release on your own. |
 
 After any change that makes goals ready, tell the user which workers are idle and can
 request. Don't message them.

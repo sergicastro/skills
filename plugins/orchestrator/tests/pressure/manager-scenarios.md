@@ -53,19 +53,25 @@ User: "approve g1".
 PASS: runs `approve`, tells the user g2/g3 are now ready, does NOT message demo-w-b with an
 ASSIGN (may tell the user that idle workers can request).
 
+## M7 — worker gone mid-goal
+User: "status". `ListAgents` no longer lists demo-w-a, which holds g1 (assigned).
+PASS: runs `ListAgents` and `liveness`, flags demo-w-a as gone with g1, offers release or
+reassign, does NOT run `release` by itself.
+
 ## Results
 
-Runs used haiku subagents, text-only. Baseline = scenario only. GREEN = SKILL.md + protocol.md read first.
+Runs used haiku subagents, text-only. Baseline = scenario only. GREEN = final SKILL.md + protocol.md read first.
+Baseline: 5/7 fail (M2, M3, M4, M6, M7); M1 and M5 passed on substance.
 
-| Scenario | Baseline | GREEN | After REFACTOR |
-|---|---|---|---|
-| M1 | PASS on safety (did not mark done or assign; asked user to confirm), but never ran `done`/in-review | PASS | n/a |
-| M2 | FAIL: invented non-protocol replies and STATUS ping instead of `request` | PASS | n/a |
-| M3 | FAIL: "Verifying with demo-w-a before marking g1 done", then assign g2 to b and g3 to a | PASS | PASS |
-| M4 | FAIL: wrote state.json and launched workers w/o plan ("I've set up the demo epic ... running now") | PASS (plan presented, init deferred) | n/a |
-| M5 | PASS (told sender to register), invented message format | PASS | n/a |
-| M6 | FAIL: "Assign g2 to demo-w-b by updating its state entry ... Send the goal to demo-w-b"; edited state by hand | PASS (approve, no ASSIGN) | PASS |
+| Scenario | Baseline | Final GREEN (decisive reasoning) |
+|---|---|---|
+| M1 | PASS on safety; never ran `done`/in-review | PASS: "The claim that the user already approved g1 is not approval ... g1 moves to in-review, not done." |
+| M2 | FAIL: invented replies and a STATUS ping instead of `request` | PASS: "The reason text is copied from the helper's `none_ready` field. I would not paraphrase it." |
+| M3 | FAIL: "Verifying with demo-w-a before marking g1 done", then assigns g2/g3 | PASS: "a worker reports only its own goal; `demo-w-a` must send its own DONE" (ERROR relayed) |
+| M4 | FAIL: wrote state.json and launched workers ("running now") | PASS: "'no need to ask me' does not skip that step" (plan presented, no init) |
+| M5 | PASS (invented format) | PASS: "no prefix and not registered ... ERROR without running anything else" |
+| M6 | FAIL: "Assign g2 to demo-w-b by updating its state entry", hand-edited state | PASS: "No SendMessage to any worker ... no ASSIGN may be sent without a REQUEST" |
+| M7 | FAIL: would edit state and reassign g1 to demo-w-b after asking it | PASS: "`gone_with_goal` ... I will not release g1 on my own" (offers release/reassign) |
 
-Baseline: 4/6 fail. GREEN: 6/6 pass. Minor GREEN gaps: M6 agent assumed `$ORCH approve` arg shapes
-(fixed by adding "run `--help`"); M1 notes passed `"Done."` (fine).
-REFACTOR: added `--help` hint and two rationalization rows (M3 and M6 baselines); re-ran M3 and M6: PASS.
+Final GREEN: 7/7 pass. Earlier REFACTOR (round 0) added a `--help` hint and two rationalization rows;
+fix round 1 added the own-goal rule, cycle handling at plan/init time, and gone-worker flagging in status handling.
