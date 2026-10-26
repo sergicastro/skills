@@ -1,5 +1,8 @@
+import http.server
 import json
 import os
+import socket
+import subprocess
 import sys
 import threading
 import time
@@ -13,6 +16,14 @@ from test_orch_state import Base  # noqa: E402
 
 import orch_serve  # noqa: E402
 import orch_view  # noqa: E402
+
+SCRIPT = Path(__file__).resolve().parents[1] / "skills" / "orchestrator" / "scripts" / "orch_state.py"
+
+
+def free_port():
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
 
 
 class ServerTests(Base):
@@ -113,6 +124,67 @@ class IndexHtmlTests(unittest.TestCase):
                     "events": [{"at": at, "actor": "m", "event": "E", "details": ""}]}
         out = orch_view.index_main_html([card("old", "2026-10-25T00:00:00Z"), card("new", "2026-10-26T00:00:00Z")], "/x")
         self.assertLess(out.index('href="/new"'), out.index('href="/old"'))
+
+
+class LifecycleTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.port = str(free_port())
+        self.addCleanup(self.cli, "--stop")
+
+    def cli(self, *args):
+        r = subprocess.run([sys.executable, str(SCRIPT), "serve", *args],
+                           capture_output=True, text=True, timeout=20, env=os.environ.copy())
+        return r.returncode, json.loads(r.stdout)
+
+    def test_ensure_twice_reuses_one_server(self):
+        code, first = self.cli("--ensure", "--port", self.port)
+        self.assertEqual(code, 0, first)
+        self.assertTrue(first["started"])
+        self.assertEqual(first["url"], f"http://127.0.0.1:{self.port}/")
+        code, second = self.cli("--ensure", "--port", self.port)
+        self.assertEqual(code, 0, second)
+        self.assertFalse(second["started"])
+        self.assertEqual(second["pid"], first["pid"])
+
+    def test_concurrent_ensure_starts_one_server(self):
+        cmd = [sys.executable, str(SCRIPT), "serve", "--ensure", "--port", self.port]
+        procs = [subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True) for _ in range(2)]
+        outs = [json.loads(p.communicate(timeout=20)[0]) for p in procs]
+        self.assertEqual(outs[0]["pid"], outs[1]["pid"])
+        self.assertEqual(sorted(o["started"] for o in outs), [False, True])
+
+    def test_stale_server_file_is_replaced(self):
+        (Path(self.tmp.name) / ".server.json").write_text(json.dumps({"pid": 999999, "port": int(self.port)}))
+        code, out = self.cli("--ensure", "--port", self.port)
+        self.assertEqual(code, 0, out)
+        self.assertTrue(out["started"])
+        self.assertNotEqual(out["pid"], 999999)
+
+    def test_stop_removes_server_file(self):
+        self.cli("--ensure", "--port", self.port)
+        code, out = self.cli("--stop")
+        self.assertEqual(code, 0, out)
+        self.assertTrue(out["stopped"])
+        self.assertFalse((Path(self.tmp.name) / ".server.json").exists())
+        self.assertIsNone(orch_serve.probe(int(self.port)))
+
+    def test_stop_without_server(self):
+        code, out = self.cli("--stop")
+        self.assertEqual(code, 0, out)
+        self.assertFalse(out["stopped"])
+
+    def test_foreign_port_is_refused(self):
+        class Quiet(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+        foreign = http.server.HTTPServer(("127.0.0.1", 0), Quiet)
+        threading.Thread(target=foreign.serve_forever, daemon=True).start()
+        self.addCleanup(foreign.server_close)
+        self.addCleanup(foreign.shutdown)
+        code, out = self.cli("--ensure", "--port", str(foreign.server_address[1]))
+        self.assertEqual(code, 2)
+        self.assertIn("in use by another program", out["error"])
 
 
 if __name__ == "__main__":

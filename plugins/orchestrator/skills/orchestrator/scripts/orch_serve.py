@@ -3,10 +3,19 @@
 Pages are rendered fresh from the state directory on each request. Server-Sent Event
 streams poll the files' mtimes and push the re-rendered <main> when they change.
 """
+import fcntl
+import http.client
 import http.server
 import json
 import os
+import signal
+import subprocess
+import sys
 import threading
+import time
+import urllib.error
+import urllib.request
+from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 import orch_state
@@ -136,3 +145,98 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 idle += POLL
         except (BrokenPipeError, ConnectionResetError):
             pass  # the browser went away; it reconnects on its own
+
+
+START_TIMEOUT = 5
+
+
+def server_file():
+    return orch_state.root() / ".server.json"
+
+
+def url(rec):
+    return f"http://127.0.0.1:{rec['port']}/"
+
+
+def probe(port):
+    """/healthz JSON from 127.0.0.1:port; {} if something else answers; None if nothing listens."""
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/healthz", timeout=1) as r:
+            return json.loads(r.read().decode())
+    except (urllib.error.HTTPError, http.client.HTTPException, ValueError):
+        return {}
+    except OSError:
+        return None
+
+
+def ours(info):
+    return bool(info) and info.get("app") == "orch_state" and info.get("root") == str(orch_state.root())
+
+
+def running():
+    """The recorded server if it still answers as ours, else None."""
+    try:
+        rec = json.loads(server_file().read_text())
+    except (OSError, ValueError):
+        return None
+    info = probe(rec.get("port"))
+    return rec if ours(info) and info.get("pid") == rec.get("pid") else None
+
+
+def ensure(port):
+    r = orch_state.root()
+    r.mkdir(parents=True, exist_ok=True)
+    rec = running()
+    if rec:
+        return {"url": url(rec), "started": False, "pid": rec["pid"]}
+    with open(r / ".server.lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)  # released when the file closes
+        rec = running()  # another caller may have started it while we waited
+        if rec:
+            return {"url": url(rec), "started": False, "pid": rec["pid"]}
+        server_file().unlink(missing_ok=True)
+        info = probe(port)
+        if info is not None and not ours(info):
+            raise orch_state.OrchError(f"port {port} is in use by another program; pass --port")
+        with open(r / "server.log", "a") as log:
+            subprocess.Popen([sys.executable, str(Path(orch_state.__file__).resolve()), "serve", "--port", str(port)],
+                             stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+        deadline = time.monotonic() + START_TIMEOUT
+        while time.monotonic() < deadline:
+            rec = running()
+            if rec:
+                return {"url": url(rec), "started": True, "pid": rec["pid"]}
+            time.sleep(0.1)
+    raise orch_state.OrchError(f"server did not start on port {port}; see {r / 'server.log'}")
+
+
+def stop():
+    rec = running()
+    if not rec:
+        server_file().unlink(missing_ok=True)
+        return {"stopped": False, "reason": "no server running"}
+    os.kill(rec["pid"], signal.SIGTERM)
+    deadline = time.monotonic() + START_TIMEOUT
+    while time.monotonic() < deadline and probe(rec["port"]) is not None:
+        time.sleep(0.1)
+    server_file().unlink(missing_ok=True)
+    return {"stopped": True, "pid": rec["pid"]}
+
+
+def serve(port):
+    orch_state.root().mkdir(parents=True, exist_ok=True)
+    server = StatusServer(port)
+    rec = {"pid": os.getpid(), "port": server.server_address[1]}
+    orch_state.write_atomic(server_file(), json.dumps(rec) + "\n")
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    print(f"serving {url(rec)}", flush=True)
+    try:
+        server.serve_forever()
+    finally:
+        server.closing.set()
+        server.server_close()
+        try:
+            if json.loads(server_file().read_text()).get("pid") == os.getpid():
+                server_file().unlink()
+        except (OSError, ValueError):
+            pass

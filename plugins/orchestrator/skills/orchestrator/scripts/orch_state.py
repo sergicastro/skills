@@ -2,6 +2,7 @@
 """State helper for the orchestrator skill. Only the manager session runs it.
 
 Usage: orch_state.py <command> <slug> [args]
+       orch_state.py serve [--port N] [--ensure | --stop]
 
 Every command prints one JSON object to stdout and exits 0, except `show`, which
 prints status.md. A rejected operation prints {"error": "..."} and exits 2.
@@ -581,13 +582,24 @@ def build_parser():
         sp.add_argument("slug")
         for flags, kwargs in args:
             sp.add_argument(*flags, **kwargs)
+    sp = sub.add_parser("serve", help="live status pages for every orchestration")
+    sp.add_argument("--port", type=int, default=8765)
+    mode = sp.add_mutually_exclusive_group()
+    mode.add_argument("--ensure", action="store_true", help="start in the background unless already running")
+    mode.add_argument("--stop", action="store_true", help="stop the background server")
     return p
 
 
 def main(argv=None):
     a = build_parser().parse_args(argv)
     try:
-        if a.cmd == "init":
+        if a.cmd == "serve":
+            import orch_serve  # only serve needs the http and process machinery
+            if not (a.ensure or a.stop):
+                orch_serve.serve(a.port)
+                return 0
+            out = orch_serve.ensure(a.port) if a.ensure else orch_serve.stop()
+        elif a.cmd == "init":
             state = init(a.slug, json.loads(Path(a.plan).read_text()))
             save(a.slug, state, [("manager", "INIT", f"{len(state['goals'])} goals")])
             out = {
@@ -615,4 +627,6 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
+    # let orch_serve's `import orch_state` reuse this module instead of loading a second copy
+    sys.modules.setdefault("orch_state", sys.modules["__main__"])
     sys.exit(main())
