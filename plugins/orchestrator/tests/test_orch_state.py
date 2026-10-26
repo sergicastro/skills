@@ -164,5 +164,111 @@ class ReadTests(Base):
         self.assertIn("unknown goal g9", out["error"])
 
 
+class WorkerTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.init()
+
+    def test_register_rejects_wrong_prefix(self):
+        code, out = self.run_cli("register", "demo", "skills-24")
+        self.assertEqual(code, 2)
+        self.assertIn("does not start with worker prefix 'demo-w-'", out["error"])
+
+    def test_register_and_reregister(self):
+        self.assertEqual(self.run_cli("register", "demo", "demo-w-a"),
+                         (0, {"registered": "demo-w-a", "new": True, "current": None}))
+        self.assertEqual(self.run_cli("register", "demo", "demo-w-a")[1]["new"], False)
+        self.assertIn("demo-w-a", self.state()["workers"])
+
+    def test_request_requires_registration(self):
+        code, out = self.run_cli("request", "demo", "demo-w-a")
+        self.assertEqual(code, 2)
+        self.assertIn("demo-w-a is not registered", out["error"])
+
+    def test_request_assigns_ready_goal(self):
+        self.run_cli("register", "demo", "demo-w-a")
+        code, out = self.run_cli("request", "demo", "demo-w-a")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out["assigned"], "g1")
+        self.assertEqual(out["epic"], "demo")
+        self.assertEqual(out["upstream"], [])
+        self.assertIsNone(out["board"])
+        self.assertEqual(out["state_dir"], str(Path(self.tmp.name) / "demo"))
+        s = self.state()
+        self.assertEqual(s["goals"]["g1"]["status"], "assigned")
+        self.assertEqual(s["goals"]["g1"]["worker"], "demo-w-a")
+        self.assertEqual(s["workers"]["demo-w-a"]["current"], "g1")
+
+    def test_request_while_holding_goal_is_rejected(self):
+        self.run_cli("register", "demo", "demo-w-a")
+        self.run_cli("request", "demo", "demo-w-a")
+        code, out = self.run_cli("request", "demo", "demo-w-a")
+        self.assertEqual(code, 2)
+        self.assertIn("already has goal g1", out["error"])
+
+    def test_request_with_nothing_ready_explains_why(self):
+        self.run_cli("register", "demo", "demo-w-a")
+        self.run_cli("register", "demo", "demo-w-b")
+        self.run_cli("request", "demo", "demo-w-a")
+        code, out = self.run_cli("request", "demo", "demo-w-b")
+        self.assertEqual(code, 0)
+        self.assertEqual(out, {"none_ready": "g1 (assigned) blocks g2, g3"})
+
+    def test_board_values_are_included(self):
+        p = plan(board={"project": "org/12", "field": "Status",
+                        "mapping": {"ready": "Todo", "assigned": "In Progress", "in-review": "In Review", "done": "Done"}})
+        p["epic"]["slug"] = "boarded"
+        self.init(p, slug="boarded")
+        self.run_cli("register", "boarded", "demo-w-a")
+        out = self.run_cli("request", "boarded", "demo-w-a")[1]
+        self.assertEqual(out["board"], {"project": "org/12", "field": "Status", "start": "In Progress", "done": "In Review"})
+
+    def test_status_needs_user_and_blocked(self):
+        self.run_cli("register", "demo", "demo-w-a")
+        self.run_cli("request", "demo", "demo-w-a")
+        code, out = self.run_cli("status", "demo", "demo-w-a", "g1", "needs-user", "--reason", "pick an API shape")
+        self.assertEqual((code, out), (0, {"goal": "g1", "status": "needs-user", "reason": "pick an API shape"}))
+        code, out = self.run_cli("status", "demo", "demo-w-a", "g1", "blocked", "--reason", "CI is down")
+        self.assertEqual(out, {"goal": "g1", "status": "needs-user", "reason": "blocked: CI is down"})
+        code, out = self.run_cli("status", "demo", "demo-w-a", "g1", "assigned")
+        self.assertEqual(out, {"goal": "g1", "status": "assigned", "reason": None})
+
+    def test_status_requires_reason(self):
+        self.run_cli("register", "demo", "demo-w-a")
+        self.run_cli("request", "demo", "demo-w-a")
+        code, out = self.run_cli("status", "demo", "demo-w-a", "g1", "needs-user")
+        self.assertEqual(code, 2)
+        self.assertIn("reason is required", out["error"])
+
+    def test_report_on_someone_elses_goal_is_rejected(self):
+        self.run_cli("register", "demo", "demo-w-a")
+        self.run_cli("register", "demo", "demo-w-b")
+        self.run_cli("request", "demo", "demo-w-a")
+        for argv in (("status", "demo", "demo-w-b", "g1", "needs-user", "--reason", "x"),
+                     ("done", "demo", "demo-w-b", "g1", "--notes", "x")):
+            code, out = self.run_cli(*argv)
+            self.assertEqual(code, 2)
+            self.assertIn("g1 is not assigned to demo-w-b", out["error"])
+
+    def test_done_moves_to_in_review(self):
+        self.run_cli("register", "demo", "demo-w-a")
+        self.run_cli("request", "demo", "demo-w-a")
+        code, out = self.run_cli("done", "demo", "demo-w-a", "g1", "--pr", "https://x/pull/1", "--notes", "token is now JWT")
+        self.assertEqual((code, out), (0, {"goal": "g1", "status": "in-review", "newly_ready": []}))
+        s = self.state()
+        self.assertEqual(s["goals"]["g1"]["handoff"], {"pr": "https://x/pull/1", "notes": "token is now JWT"})
+        self.assertEqual(s["workers"]["demo-w-a"]["current"], None)
+        self.assertEqual(s["workers"]["demo-w-a"]["history"], ["g1"])
+        log = (Path(self.tmp.name) / "demo" / "events.log").read_text()
+        self.assertIn("demo-w-a DONE g1 pr=https://x/pull/1", log)
+
+    def test_done_requires_notes(self):
+        self.run_cli("register", "demo", "demo-w-a")
+        self.run_cli("request", "demo", "demo-w-a")
+        code, out = self.run_cli("done", "demo", "demo-w-a", "g1", "--notes", "")
+        self.assertEqual(code, 2)
+        self.assertIn("handoff notes are required", out["error"])
+
+
 if __name__ == "__main__":
     unittest.main()

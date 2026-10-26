@@ -246,6 +246,113 @@ def init(slug, plan):
     return state
 
 
+def require_worker(state, name):
+    if name not in state["workers"]:
+        raise OrchError(f"{name} is not registered")
+    w = state["workers"][name]
+    w["last_seen"] = now()
+    return w
+
+
+def owned_goal(state, worker, gid):
+    g = goal(state, gid)
+    if g["worker"] != worker or g["status"] not in ("assigned", "needs-user"):
+        raise OrchError(f"{gid} is not assigned to {worker}")
+    return g
+
+
+def register(state, name):
+    prefix = state["worker_prefix"]
+    if not name.startswith(prefix):
+        raise OrchError(f"{name} does not start with worker prefix {prefix!r}")
+    w = state["workers"].get(name)
+    if w:
+        w["last_seen"] = now()
+        return {"registered": name, "new": False, "current": w["current"]}, [(name, "REGISTER", "again")]
+    state["workers"][name] = {"registered": now(), "current": None, "history": [], "last_seen": now(), "live": None}
+    return {"registered": name, "new": True, "current": None}, [(name, "REGISTER", "")]
+
+
+def assignment(state, gid):
+    goals = state["goals"]
+    g = goals[gid]
+    upstream = []
+    for dep in g["depends_on"]:
+        handoff = goals[dep]["handoff"] or {}
+        upstream.append({"goal": dep, "title": goals[dep]["title"], "status": goals[dep]["status"],
+                         "pr": handoff.get("pr"), "notes": handoff.get("notes")})
+    board = state.get("board")
+    if board:
+        board = {"project": board["project"], "field": board["field"],
+                 "start": board["mapping"].get("assigned"), "done": board["mapping"].get("in-review")}
+    slug = state["epic"]["slug"]
+    return {"assigned": gid, "epic": slug, "title": g["title"], "summary": g["summary"],
+            "acceptance": g["acceptance"], "repo": g["repo"], "links": g["links"],
+            "upstream": upstream, "board": board, "state_dir": str(state_dir(slug))}
+
+
+def none_ready_reason(state):
+    goals = state["goals"]
+    ok = UNBLOCK[state["policy"]["unblock_on"]]
+    waiting = {}
+    for gid, g in goals.items():
+        if g["status"] == "blocked":
+            for dep in g["depends_on"]:
+                # report only the nearest unfinished dependency, not blocked ones in between
+                if goals[dep]["status"] not in ok and goals[dep]["status"] != "blocked":
+                    waiting.setdefault(dep, []).append(gid)
+    if waiting:
+        return "; ".join(f"{dep} ({goals[dep]['status']}) blocks {', '.join(b)}" for dep, b in waiting.items())
+    remaining = [gid for gid, g in goals.items() if g["status"] != "done"]
+    if not remaining:
+        return "all goals are done"
+    return "every open goal is already taken or in review: " + ", ".join(remaining)
+
+
+def request(state, name):
+    w = require_worker(state, name)
+    if w["current"]:
+        cur = w["current"]
+        raise OrchError(f"{name} already has goal {cur} ({state['goals'][cur]['status']})")
+    goals = state["goals"]
+    ready = [gid for gid, g in goals.items() if g["status"] == "ready"]
+    if not ready:
+        return {"none_ready": none_ready_reason(state)}, [(name, "REQUEST", "none-ready")]
+    related = [gid for gid in ready if set(goals[gid]["depends_on"]) & set(w["history"])]
+    gid = (related or ready)[0]
+    g = goals[gid]
+    g["status"], g["worker"], g["reason"] = "assigned", name, None
+    w["current"] = gid
+    return assignment(state, gid), [(name, "REQUEST", ""), ("manager", "ASSIGN", f"{gid} -> {name}")]
+
+
+def report_status(state, name, gid, new, reason):
+    require_worker(state, name)
+    g = owned_goal(state, name, gid)
+    if new != "assigned" and not reason:
+        raise OrchError("a reason is required for needs-user and blocked")
+    if new == "assigned":
+        g["status"], g["reason"] = "assigned", None
+    else:
+        g["status"] = "needs-user"
+        g["reason"] = reason if new == "needs-user" else f"blocked: {reason}"
+    return {"goal": gid, "status": g["status"], "reason": g["reason"]}, [(name, "STATUS", f"{gid} {new} {reason or ''}")]
+
+
+def done(state, name, gid, pr, notes):
+    w = require_worker(state, name)
+    g = owned_goal(state, name, gid)
+    if not notes:
+        raise OrchError("handoff notes are required")
+    g["status"], g["reason"] = "in-review", None
+    g["handoff"] = {"pr": pr, "notes": notes}
+    w["current"] = None
+    if gid not in w["history"]:
+        w["history"].append(gid)
+    newly = recompute(state)
+    return {"goal": gid, "status": "in-review", "newly_ready": newly}, [(name, "DONE", f"{gid} pr={pr or '-'}")]
+
+
 ARGS = {
     "init": [(["--plan"], {"required": True, "help": "path to the confirmed plan JSON"})],
     "validate": [],
@@ -257,6 +364,22 @@ COMMANDS = {
     "validate": lambda s, a: ({"valid": True, "goals": len(s["goals"])}, []),
     "get": lambda s, a: (dict({"goal": a.goal}, **goal(s, a.goal)), []),
 }
+
+
+ARGS.update({
+    "register": [(["worker"], {})],
+    "request": [(["worker"], {})],
+    "status": [(["worker"], {}), (["goal"], {}),
+               (["state"], {"choices": ["needs-user", "blocked", "assigned"]}), (["--reason"], {})],
+    "done": [(["worker"], {}), (["goal"], {}), (["--pr"], {}), (["--notes"], {"required": True})],
+})
+
+COMMANDS.update({
+    "register": lambda s, a: register(s, a.worker),
+    "request": lambda s, a: request(s, a.worker),
+    "status": lambda s, a: report_status(s, a.worker, a.goal, a.state, a.reason),
+    "done": lambda s, a: done(s, a.worker, a.goal, a.pr, a.notes),
+})
 
 
 def build_parser():
