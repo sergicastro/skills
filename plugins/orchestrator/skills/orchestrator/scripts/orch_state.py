@@ -15,10 +15,13 @@ import sys
 import tempfile
 from pathlib import Path
 
+import orch_view
+
 VERSION = 1
 STATES = ("blocked", "ready", "assigned", "needs-user", "in-review", "done")
 UNBLOCK = {"done": ("done",), "in-review": ("in-review", "done")}
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+EVENTS_SHOWN = 30
 
 
 class OrchError(Exception):
@@ -185,56 +188,78 @@ def save(slug, state, events):
     d = state_dir(slug)
     d.mkdir(parents=True, exist_ok=True)
     write_atomic(d / "state.json", json.dumps(state, indent=2) + "\n")
-    write_atomic(d / "status.md", render(state))
+    write_views(d, state)
     with open(d / "events.log", "a") as f:
         for actor, event, details in events:
             f.write(f"{now()} {actor} {event} {details}".rstrip() + "\n")
 
 
-def cell(value):
-    return str(value or "").replace("|", "\\|").replace("\n", " ")
+def write_views(d, state):
+    vm = view_model(state, read_events(d))
+    write_atomic(d / "status.md", orch_view.render_md(vm))
 
 
-def render(state):
+def read_events(d, limit=EVENTS_SHOWN):
+    """The last `limit` lines of events.log, newest first."""
+    path = Path(d) / "events.log"
+    if not path.exists():
+        return []
+    out = []
+    for line in path.read_text().splitlines()[-limit:]:
+        parts = line.split(" ", 3)
+        if len(parts) < 3:
+            continue
+        out.append({"at": parts[0], "actor": parts[1], "event": parts[2],
+                    "details": parts[3] if len(parts) > 3 else ""})
+    return out[::-1]
+
+
+def depths(goals):
+    """Column per goal: the longest dependency path back to a goal with no dependencies."""
+    memo = {}
+
+    def depth(gid):
+        if gid not in memo:
+            memo[gid] = 0  # placeholder so a cycle in unvalidated state can't recurse forever
+            deps = [d for d in goals[gid].get("depends_on", []) if d in goals]
+            memo[gid] = 1 + max(depth(d) for d in deps) if deps else 0
+        return memo[gid]
+
+    return {gid: depth(gid) for gid in goals}
+
+
+def view_model(state, events, problems=()):
     e = state["epic"]
     goals = state["goals"]
-    counts = {s: sum(1 for g in goals.values() if g["status"] == s) for s in STATES}
-    lines = [
-        f"# {e.get('title') or e['slug']}",
-        "",
-        f"- Slug: `{e['slug']}`",
-        f"- Source: {e.get('source') or '-'}",
-        f"- Manager session: `{state['manager']}`",
-        f"- Worker prefix: `{state['worker_prefix']}`",
-        f"- Unblock policy: dependents start when dependencies are `{state['policy']['unblock_on']}`",
-        "- Progress: " + ", ".join(f"{counts[s]} {s}" for s in STATES if counts[s]),
-        "",
-        "## Goals",
-        "",
-        "| Goal | Title | Status | Worker | PR | Reason |",
-        "|---|---|---|---|---|---|",
-    ]
-    for gid, g in goals.items():
-        pr = (g.get("handoff") or {}).get("pr")
-        lines.append(f"| {gid} | {cell(g['title'])} | {g['status']} | {cell(g['worker'])} | {cell(pr)} | {cell(g['reason'])} |")
-    lines += ["", "## Dependencies", ""]
-    deps = [f"- {gid} ← {', '.join(g['depends_on'])}" for gid, g in goals.items() if g["depends_on"]]
-    lines += deps or ["- none"]
-    lines += [
-        "",
-        "## Workers",
-        "",
-        f"Liveness checked: {state.get('live_checked') or 'never'}",
-        "",
-        "| Worker | Current goal | Done so far | Live | Last seen |",
-        "|---|---|---|---|---|",
-    ]
-    live_label = {True: "yes", False: "gone", None: "?"}
-    for name, w in state["workers"].items():
-        lines.append(f"| {name} | {cell(w['current'])} | {cell(', '.join(w['history']))} | {live_label[w.get('live')]} | {w['last_seen']} |")
-    if not state["workers"]:
-        lines.append("| - | - | - | - | - |")
-    return "\n".join(lines) + "\n"
+    ok = UNBLOCK.get(state["policy"].get("unblock_on"), UNBLOCK["done"])
+    col = depths(goals)
+    used = {}
+    rows = {}
+    for gid in goals:
+        rows[gid] = used.get(col[gid], 0)
+        used[col[gid]] = rows[gid] + 1
+    return {
+        "slug": e["slug"],
+        "title": e.get("title") or e["slug"],
+        "source": e.get("source"),
+        "manager": state["manager"],
+        "worker_prefix": state["worker_prefix"],
+        "unblock_on": state["policy"].get("unblock_on"),
+        "counts": [(s, sum(1 for g in goals.values() if g["status"] == s)) for s in STATES],
+        "goals": [{"id": gid, "title": g["title"], "status": g["status"], "worker": g["worker"],
+                   "pr": (g.get("handoff") or {}).get("pr"), "reason": g.get("reason"),
+                   "depends_on": g["depends_on"], "col": col[gid], "row": rows[gid]}
+                  for gid, g in goals.items()],
+        "edges": [{"from": dep, "to": gid, "met": goals[dep]["status"] in ok}
+                  for gid, g in goals.items() for dep in g["depends_on"] if dep in goals],
+        "live_checked": state.get("live_checked"),
+        "workers": [{"name": n, "current": w["current"], "history": w["history"],
+                     "live": w.get("live"), "last_seen": w["last_seen"]}
+                    for n, w in state["workers"].items()],
+        "events": list(events),
+        "problems": list(problems),
+        "updated": now(),
+    }
 
 
 def goal(state, gid):
@@ -570,7 +595,7 @@ def main(argv=None):
                 "blocked": [g for g, v in state["goals"].items() if v["status"] == "blocked"],
             }
         elif a.cmd == "show":
-            sys.stdout.write(render(load(a.slug)))
+            sys.stdout.write(orch_view.render_md(view_model(load(a.slug), [])))
             return 0
         else:
             state = load(a.slug)

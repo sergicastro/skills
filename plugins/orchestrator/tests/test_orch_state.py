@@ -9,6 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills" / "orchestrator" / "scripts"))
 import orch_state  # noqa: E402
+import orch_view  # noqa: E402
 
 GOLDEN = Path(__file__).resolve().parent / "golden" / "status.md"
 
@@ -498,7 +499,66 @@ class GoldenTests(Base):
 
     def test_status_md_matches_golden(self):
         state = self.build()
-        self.assertEqual(orch_state.render(state), GOLDEN.read_text())
+        expected = GOLDEN.read_text()
+        self.assertEqual(orch_view.render_md(orch_state.view_model(state, [])), expected)
+        self.assertEqual((Path(self.tmp.name) / "demo" / "status.md").read_text(), expected)
+
+
+class ViewModelTests(Base):
+    def vm(self, goals=None, policy="done", statuses=None):
+        state = orch_state.init("demo", plan(goals, policy={"unblock_on": policy}))
+        for gid, s in (statuses or {}).items():
+            state["goals"][gid]["status"] = s
+        return orch_state.view_model(state, [])
+
+    def layout(self, vm):
+        return {g["id"]: (g["col"], g["row"]) for g in vm["goals"]}
+
+    def test_diamond_layout(self):
+        self.assertEqual(self.layout(self.vm()), {"g1": (0, 0), "g2": (1, 0), "g3": (1, 1), "g4": (2, 0)})
+
+    def test_chain_and_independent_layout(self):
+        vm = self.vm({
+            "a": {"title": "A", "summary": "a", "depends_on": []},
+            "b": {"title": "B", "summary": "b", "depends_on": ["a"]},
+            "c": {"title": "C", "summary": "c", "depends_on": ["b"]},
+            "x": {"title": "X", "summary": "x", "depends_on": []},
+        })
+        self.assertEqual(self.layout(vm), {"a": (0, 0), "b": (1, 0), "c": (2, 0), "x": (0, 1)})
+
+    def test_depths_survive_a_cycle(self):
+        goals = {"a": {"depends_on": ["b"]}, "b": {"depends_on": ["a"]}}
+        self.assertEqual(set(orch_state.depths(goals)), {"a", "b"})
+
+    def test_counts_follow_state_order(self):
+        vm = self.vm()
+        self.assertEqual(vm["counts"], [("blocked", 3), ("ready", 1), ("assigned", 0),
+                                        ("needs-user", 0), ("in-review", 0), ("done", 0)])
+
+    def test_edges_met_follows_policy(self):
+        def met(vm):
+            return {(e["from"], e["to"]): e["met"] for e in vm["edges"]}
+        strict = met(self.vm(statuses={"g1": "in-review"}))
+        self.assertFalse(strict[("g1", "g2")])
+        early = met(self.vm(policy="in-review", statuses={"g1": "in-review"}))
+        self.assertTrue(early[("g1", "g2")])
+        self.assertFalse(early[("g2", "g4")])
+        self.assertEqual(len(early), 4)
+
+    def test_read_events_newest_first_limited(self):
+        d = Path(self.tmp.name)
+        lines = "".join(f"2026-10-26T10:00:{i:02d}Z manager E{i} detail {i}\n" for i in range(35))
+        (d / "events.log").write_text(lines)
+        ev = orch_state.read_events(d)
+        self.assertEqual(len(ev), 30)
+        self.assertEqual(ev[0], {"at": "2026-10-26T10:00:34Z", "actor": "manager", "event": "E34", "details": "detail 34"})
+        self.assertEqual(ev[-1]["event"], "E5")
+
+    def test_read_events_without_details_or_log(self):
+        d = Path(self.tmp.name)
+        self.assertEqual(orch_state.read_events(d / "missing"), [])
+        (d / "events.log").write_text("2026-10-26T10:00:00Z user APPROVE\n")
+        self.assertEqual(orch_state.read_events(d)[0]["details"], "")
 
 
 if __name__ == "__main__":
