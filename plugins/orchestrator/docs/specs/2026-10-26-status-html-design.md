@@ -22,14 +22,18 @@ Decisions taken during brainstorming:
 ## 2. Architecture
 
 ```
-orch_state.py
-  view_model(state, events)  -> dict                      all logic, once
-  render_md(vm)    + templates/status.md.tmpl    -> status.md
-  render_html(vm)  + templates/status.html.tmpl  -> status.html
-                     main body built by main_html(vm), graph by graph_svg(vm)
-  save()           writes state.json, events.log, status.md, status.html
-  serve [--port 8765] [--ensure] [--stop]
+scripts/orch_state.py   view_model(state, events, problems) -> dict    all logic, once
+                        save() writes state.json, events.log, then status.md and status.html
+                        CLI: serve [--port 8765] [--ensure | --stop]
+scripts/orch_view.py    render_md(vm)  + templates/status.md.tmpl   -> status.md
+                        render_page(title, main_html(vm), stream)
+                                       + templates/status.html.tmpl -> status.html
+                        graph_svg(vm), index_main_html(cards)
+scripts/orch_serve.py   StatusServer, SSE streams, ensure/stop
 ```
+
+`orch_view.py` imports only the stdlib, so `orch_state.py` can import it without a
+cycle; `orch_serve.py` imports both and is loaded only by the `serve` command.
 
 ### 2.1 View model and templates
 
@@ -80,8 +84,9 @@ port 8765. It is read-only and answers GET only.
   2. Otherwise remove a stale `.server.json`, take an exclusive lock on
      `<root>/.server.lock`, check again (another caller may have just started it),
      then start `serve --port N` detached (new session, stdout/stderr to
-     `<root>/server.log`), wait up to 5 s for `/healthz`, write `.server.json`,
-     release the lock and print the URL.
+     `<root>/server.log`), wait up to 5 s for it to answer `/healthz`, release the
+     lock and print the URL. The server writes `.server.json` itself once it has bound
+     the port, and removes it on exit.
 - `serve --stop`: confirm via `/healthz` that the recorded pid is our server, send
   SIGTERM, remove `.server.json`. If nothing is running, say so and exit 0.
 - Plain `serve` runs in the foreground (used by `--ensure` and for debugging).
@@ -152,7 +157,7 @@ time of the last event. Sorted by most recent activity. Each card links to
 |---|---|
 | `state.json` missing | Epic absent from index; `/<slug>` returns 404 page |
 | `state.json` unreadable or invalid JSON | Serve the last good render with a banner `state.json unreadable: <error>`; recover on next good write |
-| `validate()` problems | Render anyway; list problems in a warning banner (and in `status.md`, as today) |
+| `validate()` problems | Render anyway in the served page with a warning banner. `status.md` and `status.html` are unaffected: `save()` refuses to write invalid state |
 | `events.log` missing | Events section shows "no events yet" |
 | Port answers but isn't our server | `--ensure` fails with a message suggesting `--port`; never kills a foreign process |
 | Stale `.server.json` | `--ensure` removes it and starts a fresh server |
