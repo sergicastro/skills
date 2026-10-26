@@ -175,3 +175,23 @@ def main_html(vm):
 
 def render_page(title, main, stream):
     return template("status.html.tmpl").substitute(title=esc(title), main=main, stream=esc(stream))
+
+
+def index_main_html(cards, root):
+    if not cards:
+        return f'<h1>Orchestrations</h1><p class="empty">No orchestrations under <code>{esc(root)}</code>.</p>'
+
+    def last(c):
+        return c["events"][0]["at"] if c["events"] else ""
+
+    out = []
+    for c in sorted(cards, key=last, reverse=True):
+        active = sum(1 for w in c["workers"] if w["current"])
+        when = time_html(last(c)) if last(c) else "none yet"
+        err = problems_html([c["error"]]) if c.get("error") else ""
+        bar = progress_html(c["counts"]) if c["counts"] else ""
+        out.append(
+            f'<a class="card" href="/{esc(c["slug"])}"><h2>{esc(c["title"])}</h2>'
+            f'<p class="meta"><code>{esc(c["slug"])}</code> · {active} active worker{"" if active == 1 else "s"} · last event {when}</p>'
+            f"{err}{bar}</a>")
+    return '<h1>Orchestrations</h1><div class="cards">' + "".join(out) + "</div>"
