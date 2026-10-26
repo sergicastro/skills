@@ -48,7 +48,7 @@ Files next to this skill (use the base directory shown when the skill loaded):
    orchestration.
 4. `$ORCH show <slug>` and summarise: what's in review (needs their approval), what needs
    them, who is gone with a goal, what's ready.
-5. `$ORCH serve --ensure` and give the user `<url><slug>` as the live status page. If it
+5. `$ORCH serve --ensure` and give the user `<url><slug>` (the `url` field of its JSON, which ends in `/`) as the live status page. If it
    returns an error, tell the user, offer `~/.claude-orchestrator/<slug>/status.html`
    instead, and carry on: the page never blocks orchestration.
 

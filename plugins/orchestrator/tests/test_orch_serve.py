@@ -7,6 +7,7 @@ import sys
 import threading
 import time
 import unittest
+from unittest import mock
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -45,7 +46,8 @@ class ServerTests(Base):
             with urllib.request.urlopen(self.base + path, timeout=5) as r:
                 return r.status, r.read().decode()
         except urllib.error.HTTPError as e:
-            return e.code, e.read().decode()
+            with e:
+                return e.code, e.read().decode()
 
     def read_event(self, resp):
         lines = []
@@ -77,7 +79,7 @@ class ServerTests(Base):
         self.assertIn('data-stream="/events/demo"', page)
 
     def test_unknown_or_unsafe_paths_are_404(self):
-        for path in ("/nope", "/..%2f..%2fetc%2fpasswd", "/events/nope", "/demo/", "/events/..%2fdemo"):
+        for path in ("/nope", "/..%2f..%2fetc%2fpasswd", "/events/nope", "/demo/", "/events/..%2fdemo", "/demo%0a", "/events/demo%0a"):
             code, _ = self.get(path)
             self.assertEqual(code, 404, path)
 
@@ -95,6 +97,24 @@ class ServerTests(Base):
         resp = urllib.request.urlopen(self.base + "/events", timeout=5)
         self.addCleanup(resp.close)
         self.assertIn('href="/demo"', self.read_event(resp))
+
+    def test_stream_survives_carriage_return(self):
+        path = Path(self.tmp.name) / "demo" / "state.json"
+        state = json.loads(path.read_text())
+        state["goals"]["g1"]["title"] = "a\revent: x"
+        path.write_text(json.dumps(state))
+        resp = urllib.request.urlopen(self.base + "/events/demo", timeout=5)
+        self.addCleanup(resp.close)
+        raw = b""
+        while not raw.endswith(b"\n\n") or b"data:" not in raw:
+            line = resp.readline()
+            self.assertNotEqual(line, b"", "stream closed")
+            raw += line
+        self.assertNotIn(b"\r", raw)
+        for line in raw.decode().split("\n"):
+            self.assertTrue(line == "" or line.startswith(("data: ", "retry: ")), line)
+        message = "\n".join(l[len("data: "):] for l in raw.decode().split("\n") if l.startswith("data: "))
+        self.assertIn("<td>a\nevent: x</td>", message)
 
     def test_corrupt_state_keeps_last_good_render(self):
         self.get("/demo")
@@ -168,6 +188,26 @@ class LifecycleTests(Base):
         self.assertTrue(out["stopped"])
         self.assertFalse((Path(self.tmp.name) / ".server.json").exists())
         self.assertIsNone(orch_serve.probe(int(self.port)))
+
+    def test_ensure_readopts_live_server_without_record(self):
+        _, first = self.cli("--ensure", "--port", self.port)
+        rec = Path(self.tmp.name) / ".server.json"
+        rec.unlink()
+        code, again = self.cli("--ensure", "--port", self.port)
+        self.assertEqual(code, 0, again)
+        self.assertFalse(again["started"])
+        self.assertEqual(again["pid"], first["pid"])
+        self.assertEqual(json.loads(rec.read_text()), {"pid": first["pid"], "port": int(self.port)})
+
+    def test_stop_keeps_record_when_server_survives(self):
+        _, first = self.cli("--ensure", "--port", self.port)
+        killed = []
+        with mock.patch.object(orch_serve, "START_TIMEOUT", 0.3), \
+                mock.patch.object(orch_serve.os, "kill", lambda pid, sig: killed.append(pid)):
+            out = orch_serve.stop()
+        self.assertEqual(killed, [first["pid"]])
+        self.assertFalse(out["stopped"])
+        self.assertTrue((Path(self.tmp.name) / ".server.json").exists())
 
     def test_stop_without_server(self):
         code, out = self.cli("--stop")

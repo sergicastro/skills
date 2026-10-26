@@ -38,7 +38,7 @@ def root():
 
 
 def state_dir(slug):
-    if not SLUG_RE.match(slug):
+    if not SLUG_RE.fullmatch(slug):
         raise OrchError(f"invalid slug {slug!r}: use lowercase letters, digits and dashes")
     return root() / slug
 

@@ -8,7 +8,9 @@ import http.client
 import http.server
 import json
 import os
+import re
 import signal
+import socket
 import subprocess
 import sys
 import threading
@@ -47,7 +49,7 @@ class StatusServer(http.server.ThreadingHTTPServer):
         self.last_good = {}
 
     def epic_exists(self, slug):
-        return bool(orch_state.SLUG_RE.match(slug)) and (orch_state.root() / slug / "state.json").is_file()
+        return bool(orch_state.SLUG_RE.fullmatch(slug)) and (orch_state.root() / slug / "state.json").is_file()
 
     def epics(self):
         r = orch_state.root()
@@ -134,7 +136,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 sig = signature()
                 if sig != last:
                     last, idle = sig, 0.0
-                    data = "".join(f"data: {line}\n" for line in render().split("\n")) + "\n"
+                    data = "".join(f"data: {line}\n" for line in re.split(r"\r\n|\r|\n", render())) + "\n"
                     self.wfile.write(data.encode())
                     self.wfile.flush()
                 elif idle >= KEEPALIVE:
@@ -159,12 +161,15 @@ def url(rec):
 
 
 def probe(port):
-    """/healthz JSON from 127.0.0.1:port; {} if something else answers; None if nothing listens."""
+    """/healthz JSON from 127.0.0.1:port; {} if something else answers or is too slow;
+    None only if the connection is refused."""
     try:
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/healthz", timeout=1) as r:
             return json.loads(r.read().decode())
     except (urllib.error.HTTPError, http.client.HTTPException, ValueError):
         return {}
+    except (TimeoutError, socket.timeout):
+        return {}  # busy: something is listening but too slow to answer
     except OSError:
         return None
 
@@ -194,9 +199,12 @@ def ensure(port):
         rec = running()  # another caller may have started it while we waited
         if rec:
             return {"url": url(rec), "started": False, "pid": rec["pid"]}
-        server_file().unlink(missing_ok=True)
         info = probe(port)
-        if info is not None and not ours(info):
+        if ours(info):  # a live server of ours lost its record: re-adopt it
+            orch_state.write_atomic(server_file(), json.dumps({"pid": info["pid"], "port": port}) + "\n")
+            return {"url": url({"port": port}), "started": False, "pid": info["pid"]}
+        server_file().unlink(missing_ok=True)
+        if info is not None:
             raise orch_state.OrchError(f"port {port} is in use by another program; pass --port")
         with open(r / "server.log", "a") as log:
             subprocess.Popen([sys.executable, str(Path(orch_state.__file__).resolve()), "serve", "--port", str(port)],
@@ -213,12 +221,20 @@ def ensure(port):
 def stop():
     rec = running()
     if not rec:
-        server_file().unlink(missing_ok=True)
-        return {"stopped": False, "reason": "no server running"}
+        try:
+            port = json.loads(server_file().read_text()).get("port")
+        except (OSError, ValueError):
+            port = None
+        if port is None or probe(port) is None:  # refused: the record is stale
+            server_file().unlink(missing_ok=True)
+            return {"stopped": False, "reason": "no server running"}
+        return {"stopped": False, "reason": f"server on port {port} did not answer; record kept"}
     os.kill(rec["pid"], signal.SIGTERM)
     deadline = time.monotonic() + START_TIMEOUT
     while time.monotonic() < deadline and probe(rec["port"]) is not None:
         time.sleep(0.1)
+    if probe(rec["port"]) is not None:
+        return {"stopped": False, "pid": rec["pid"], "reason": "server still answering after SIGTERM"}
     server_file().unlink(missing_ok=True)
     return {"stopped": True, "pid": rec["pid"]}
 

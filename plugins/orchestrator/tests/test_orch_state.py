@@ -111,6 +111,11 @@ class InitTests(Base):
         self.assertEqual(code, 2)
         self.assertIn("invalid slug", out["error"])
 
+    def test_init_rejects_trailing_newline_slug(self):
+        code, out = self.init(slug="demo\n")
+        self.assertEqual(code, 2)
+        self.assertIn("invalid slug", out["error"])
+
     def test_init_rejects_slug_mismatch(self):
         code, out = self.init(slug="other")
         self.assertEqual(code, 2)
