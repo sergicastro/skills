@@ -144,7 +144,8 @@ Each orchestration has its own directory, outside any repo:
 ```
 ~/.claude-orchestrator/<epic-slug>/
 ├── state.json    # source of truth, written only by the manager
-├── status.md     # readable summary, regenerated on each change (may become status.html later)
+├── status.md     # readable summary, regenerated on each change
+├── status.html   # same summary as a page, live when served (see status-html design)
 └── events.log    # append-only, one line per event
 ```
 
@@ -187,6 +188,11 @@ Workers may read these files but never write them.
 Contains: the epic header and policy; a table of goals with state, worker, PR and
 reason; the dependency graph as text; the workers and what each is doing, including
 liveness from the last `ListAgents` check.
+
+### 5.2a `status.html` and the live server
+
+Rendered from the same view model as `status.md`. `orch_state.py serve` shows every
+epic live in a browser. See `2026-10-26-status-html-design.md`.
 
 ### 5.3 `events.log`
 
@@ -300,5 +306,4 @@ epic: <slug>
 - Manager pushing work or auto-assigning without a `REQUEST`.
 - Launching or naming worker sessions automatically.
 - Automatically mirroring state transitions to GitHub beyond §6.
-- `status.html` (planned later).
 - Coordinating across machines (local sessions only).
