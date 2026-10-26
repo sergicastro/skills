@@ -99,6 +99,18 @@ The manager only responds; it never pushes work.
 | User asks for status | Answer from `state.json` plus `ListAgents` liveness |
 | User changes the plan | Apply it (reprioritize, add/drop goals, overrides) and log it |
 
+### 3.4 Manager context hygiene
+
+Keeping the manager's context small is what makes the setup cheaper than one session
+handling every issue. The manager:
+
+- never does implementation work itself (no code reading, edits, builds or tests);
+- asks workers for short handoff notes: decisions and facts downstream goals need,
+  never pasted diffs, logs or file contents;
+- reads goal details from `state.json` when it needs them, rather than keeping
+  them in its conversation;
+- answers status questions from `state.json` and `ListAgents`, not from memory.
+
 ## 4. Goal states
 
 ```
