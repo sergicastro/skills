@@ -43,7 +43,8 @@ in the manager session (`rename-worker`).
 
 ## Working a goal
 
-1. On the user's "next": send REQUEST.
+1. On the user's "next": send REQUEST. No reply by the user's next prompt → tell the user and
+   send it once more.
 2. NONE_READY → tell the user the reason; stop.
 3. ASSIGN (from your manager) → summarise the goal, acceptance criteria and upstream notes to
    the user, then start working it with your normal workflow. Read upstream PRs/notes as needed.

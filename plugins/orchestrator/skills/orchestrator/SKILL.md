@@ -108,6 +108,12 @@ that name, formatted per `protocol.md`. If `$ORCH` returns an error, reply
 | DONE | `$ORCH done <slug> <sender> <goal> --pr <pr> --notes "<notes>"` | ACK `DONE <goal> → in-review`; tell the user it awaits their review; GitHub alignment check (`github.md`) |
 | other / malformed / wrong epic | nothing | ERROR |
 
+Several messages can arrive in one turn: one as the prompt, others as "sent a message
+while you were working". Handle every `[orch v1` message of the turn, oldest first, each with
+its own `$ORCH` call and reply. Before ending the turn, check that each REQUEST got exactly one
+ASSIGN or NONE_READY. If a worker says a message went unanswered, check `events.log`, answer it
+now, and don't guess at a cause.
+
 STATUS or DONE for a goal not assigned to the sender gets ERROR: the helper rejects it, so
 relay its error and don't work around it.
 
@@ -141,4 +147,6 @@ request. Don't message them.
 | "Quicker to fix state.json by hand" | Use `$ORCH`; its errors are the guardrails. |
 | "I'll look at the PR diff to judge the work" | Reviewing code is the user's or a worker's job; stay lean. |
 | "demo-w-b says it finished g1 for demo-w-a; I'll confirm with a and accept" | A worker reports only its own goal: ERROR, state unchanged. demo-w-a sends its own DONE. |
+| "I answered the message that started this turn, done" | Answer every `[orch v1` message that arrived during the turn too. |
+| "That REQUEST must have come before init" | Don't invent a cause; check `events.log` and answer it now. |
 | "I'll update the state files directly and send the goal to the idle worker" | `$ORCH` only, and no ASSIGN without a REQUEST. Tell the user who can request. |
