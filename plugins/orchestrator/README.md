@@ -34,12 +34,12 @@ To try a branch, point the symlinks at its worktree instead, then back.
 
 ## Use
 
-1. Open a manager session (`claude -n <slug>-manager`) and run `/orchestrator <epic URL, issue list or text>`.
+1. Open a manager session (e.g. `claude -n <name>-manager`; the manager suggests a `/rename` if needed) and run `/orchestrator <epic URL, issue list or text>`.
    Review the plan and reply "go".
 2. Open worker sessions named with the prefix the manager gives (`claude -n <slug>-w-<anything>`)
    and run `/orchestrator-worker <manager name>` in each.
-3. In a worker, say "next" to get a goal. When it reports done, review the work and tell the
-   manager `approve <goal>` (or `send <goal> back`). Then say "next" in the worker again.
+3. In a worker, say "next" to get a goal. When it reports done, review the work and, in the manager session, type
+   `approve <goal>` (or `send <goal> back`). Then say "next" in the worker again.
 4. Ask the manager "status" at any time. State lives in `~/.claude-orchestrator/<slug>/`
    (`status.md` is the readable view).
 

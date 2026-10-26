@@ -396,5 +396,89 @@ class UserTests(Base):
         self.assertIn("| demo-w-a | g1 |  | gone |", self.run_cli("show", "demo")[1])
 
 
+class EdgeCaseTests(Base):
+    def test_add_goal_requires_id(self):
+        self.init()
+        code, out = self.run_cli("add-goal", "demo", "--goal-json", json.dumps({"title": "t", "summary": "s"}))
+        self.assertEqual(code, 2)
+        self.assertIn("needs an id", out["error"])
+
+    def test_add_goal_unknown_dependency(self):
+        self.init()
+        code, out = self.run_cli("add-goal", "demo", "--goal-json",
+                                 json.dumps({"id": "g5", "title": "t", "summary": "s", "depends_on": ["zz"]}))
+        self.assertEqual(code, 2)
+        self.assertIn("g5: unknown dependency zz", out["error"])
+        self.assertNotIn("g5", self.state()["goals"])
+
+    def test_depends_on_must_be_a_list(self):
+        self.init()
+        code, out = self.run_cli("add-goal", "demo", "--goal-json",
+                                 json.dumps({"id": "g5", "title": "t", "summary": "s", "depends_on": "g1"}))
+        self.assertEqual(code, 2)
+        self.assertIn("depends_on must be a list", out["error"])
+
+    def test_rename_to_unprefixed_name_is_rejected(self):
+        self.init()
+        self.run_cli("register", "demo", "demo-w-a")
+        code, out = self.run_cli("rename-worker", "demo", "demo-w-a", "other")
+        self.assertEqual(code, 2)
+        self.assertIn("does not start with worker prefix", out["error"])
+
+    def test_sendback_to_unregistered_worker_is_rejected(self):
+        self.init()
+        state = self.state()
+        state["goals"]["g1"].update(status="in-review", worker="ghost")
+        with self.assertRaises(orch_state.OrchError) as cm:
+            orch_state.sendback(state, "g1", "redo")
+        self.assertIn("no longer registered", str(cm.exception))
+
+    def test_all_goals_done_reports_none_ready(self):
+        self.init(plan({"g1": {"title": "Only", "summary": "s"}}))
+        self.run_cli("register", "demo", "demo-w-a")
+        self.run_cli("request", "demo", "demo-w-a")
+        self.run_cli("done", "demo", "demo-w-a", "g1", "--notes", "n")
+        self.run_cli("approve", "demo", "g1")
+        self.assertEqual(self.run_cli("request", "demo", "demo-w-a"), (0, {"none_ready": "all goals are done"}))
+
+    def test_status_assigned_clears_reason(self):
+        self.init()
+        self.run_cli("register", "demo", "demo-w-a")
+        self.run_cli("request", "demo", "demo-w-a")
+        self.run_cli("status", "demo", "demo-w-a", "g1", "needs-user", "--reason", "question")
+        code, out = self.run_cli("status", "demo", "demo-w-a", "g1", "assigned")
+        self.assertEqual((code, out), (0, {"goal": "g1", "status": "assigned", "reason": None}))
+        self.assertIsNone(self.state()["goals"]["g1"]["reason"])
+
+    def test_init_with_missing_plan_file_is_a_json_error(self):
+        code, out = self.run_cli("init", "demo", "--plan", str(Path(self.tmp.name) / "nope.json"))
+        self.assertEqual(code, 2)
+        self.assertIn("error", out)
+
+    def test_init_rejects_goals_that_are_not_an_object(self):
+        code, out = self.init(plan(goals=["g1"]))
+        self.assertEqual(code, 2)
+        self.assertIn("must be an object", out["error"])
+
+    def test_validate_reports_goal_missing_title(self):
+        self.init()
+        s = self.state()
+        del s["goals"]["g1"]["title"]
+        (Path(self.tmp.name) / "demo" / "state.json").write_text(json.dumps(s))
+        code, out = self.run_cli("validate", "demo")
+        self.assertEqual(code, 2)
+        self.assertIn("g1: missing title", out["error"])
+
+    def test_validate_reports_worker_missing_history(self):
+        self.init()
+        self.run_cli("register", "demo", "demo-w-a")
+        s = self.state()
+        del s["workers"]["demo-w-a"]["history"]
+        (Path(self.tmp.name) / "demo" / "state.json").write_text(json.dumps(s))
+        code, out = self.run_cli("show", "demo")
+        self.assertEqual(code, 2)
+        self.assertIn("worker demo-w-a: missing history", out["error"])
+
+
 if __name__ == "__main__":
     unittest.main()

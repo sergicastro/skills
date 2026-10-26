@@ -42,9 +42,8 @@ Files next to this skill (use the base directory shown when the skill loaded):
 2. `ListAgents`; then `$ORCH liveness <slug> --live <comma-separated peer names>`.
 3. Check your own session name (first line of `ListAgents`) equals `manager` in
    `$ORCH show <slug>`. If not, tell the user: workers address the old name; either
-   `/rename` this session back or have every worker re-register with the new name
-   (state.json's `manager` can't be changed by the helper; if the user insists, re-init is
-   the only path; explain).
+   `/rename` this session back to `<manager>`. Don't re-init: it would discard the
+   orchestration.
 4. `$ORCH show <slug>` and summarise: what's in review (needs their approval), what needs
    them, who is gone with a goal, what's ready.
 
@@ -86,7 +85,7 @@ Files next to this skill (use the base directory shown when the skill loaded):
 
 Plan JSON for `init`:
 ```json
-{"epic": {"slug": "<slug>", "title": "<title>", "source": "<url or null>"},
+{"epic": {"slug": "<slug>", "title": "<title>", "source": "<url or null>", "owned_by_manager": true},
  "manager": "<your session name>", "worker_prefix": "<slug>-w-",
  "policy": {"unblock_on": "done"},
  "board": null,
@@ -117,21 +116,21 @@ now, and don't guess at a cause.
 STATUS or DONE for a goal not assigned to the sender gets ERROR: the helper rejects it, so
 relay its error and don't work around it.
 
-A message from a sender without the prefix or not registered (other than REGISTER) gets
-ERROR without running anything else.
+Unprefixed sender: ERROR without running `$ORCH`. Prefixed but unregistered (other than
+REGISTER): the helper rejects it; relay its error.
 
 ## Handling the user
 
 | User says | Run |
 |---|---|
-| approve <goal> | `$ORCH approve`; report newly ready goals; GitHub: set done status, update epic progress comment |
-| send <goal> back (reason) | `$ORCH sendback --reason`; tell the user to explain in that worker's session |
-| release / reassign <goal> | `$ORCH release` (worker gone, or the user wants someone else on it) |
-| start <goal> now | `$ORCH start` |
+| approve <goal> | `$ORCH approve <slug> <goal>`; report newly ready goals; GitHub: set done status, update epic progress comment |
+| send <goal> back (reason) | `$ORCH sendback <slug> <goal> --reason "<reason>"`; tell the user to explain in that worker's session |
+| release / reassign <goal> | `$ORCH release <slug> <goal>` (worker gone, or the user wants someone else on it) |
+| start <goal> now | `$ORCH start <slug> <goal>` |
 | unblock on review | `$ORCH policy <slug> in-review` (back: `done`) |
-| prioritize … | `$ORCH prioritize` |
-| add / drop a goal | `$ORCH add-goal --goal-json '<json>'` / `$ORCH drop-goal` |
-| <worker> was renamed to <new> | `$ORCH rename-worker` (after the new name has registered) |
+| prioritize … | `$ORCH prioritize <slug> <goal>...` |
+| add / drop a goal | `$ORCH add-goal <slug> --goal-json '<json>'` (json has an `id`) / `$ORCH drop-goal <slug> <goal>` |
+| <worker> was renamed to <new> | `$ORCH rename-worker <slug> <old> <new>` (after the new name has registered) |
 | status / what's X doing | `ListAgents` → `$ORCH liveness --live …` → `$ORCH show`. Flag every worker in `gone_with_goal` and offer `release` (goal back to ready) or reassign; never release on your own. |
 
 After any change that makes goals ready, tell the user which workers are idle and can

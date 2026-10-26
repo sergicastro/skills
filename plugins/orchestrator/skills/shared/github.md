@@ -14,8 +14,11 @@ and read them with `gh issue view` as well.
 
 ## Find the board and Status options (manager)
 
-`projectItems` from `gh issue view` lists the projects the epic is on. Then:
+`projectItems` from `gh issue view` lists the titles of the projects the epic is on. Needs the
+`project` token scope (`gh auth refresh -s project`) and `jq` for the snippets in this file.
+Get the project number from its title, then:
 ```bash
+gh project list --owner <owner> --format json --jq '.projects[] | select(.title=="<title>") | .number'
 gh project view <number> --owner <owner> --format json --jq '{id, title, url}'
 gh project field-list <number> --owner <owner> --format json \
   --jq '.fields[] | select(.name=="Status") | {id, options}'
@@ -59,12 +62,13 @@ with the commands above, then tell the user what you fixed.
 
 ## Epic progress comment (manager owns the epic)
 
-Create it once and store its id under `epic.progress_comment` in the plan (before init)
-or note it in your reply if it was created later:
+Start the body with the marker `<!-- orch:<slug> -->` so the comment can always be found again.
+Create it once; before creating or updating, look it up (take the first match):
 ```bash
-gh issue comment <n> --repo <owner/repo> --body-file <file> # then find its id:
-gh api repos/<owner>/<repo>/issues/<n>/comments --jq '.[-1].id'
-gh api -X PATCH repos/<owner>/<repo>/issues/comments/<id> -F body=@<file>   # update
+gh api --paginate repos/<owner>/<repo>/issues/<n>/comments \
+  --jq '.[] | select(.body | contains("<!-- orch:<slug> -->")) | .id'
+gh issue comment <n> --repo <owner/repo> --body-file <file>                  # none found: create
+gh api -X PATCH repos/<owner>/<repo>/issues/comments/<id> -F body=@<file>   # found: update
 ```
 The body is a checklist: `- [x] g1 Title (#101, PR #210)` for done goals and
 `- [ ] g2 Title (#102) — <state>` for the rest. Set the epic's own board status from the

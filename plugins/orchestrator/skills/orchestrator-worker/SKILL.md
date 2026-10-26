@@ -58,6 +58,9 @@ in the manager session (`rename-worker`).
    and short notes: decisions, interfaces and facts later goals need. At most ~10 lines, no
    diffs or logs.
 7. On ACK: tell the user the goal is in review in the manager session, and stop.
+8. ERROR → show it to the user and stop. If it says you already hold a goal, wait for the
+   ASSIGN or ask the user.
+9. If the user says the goal was sent back, keep working it and send DONE again; don't REQUEST.
 
 If `SendMessage` to the manager fails: tell the user to resume it (`/orchestrator <slug>` in
 the manager session) and retry when they say so.

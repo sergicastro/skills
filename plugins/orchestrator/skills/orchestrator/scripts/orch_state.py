@@ -43,11 +43,14 @@ def new_goal(gid, raw):
     missing = [k for k in ("title", "summary") if not raw.get(k)]
     if missing:
         raise OrchError(f"{gid}: missing {', '.join(missing)}")
+    deps = raw.get("depends_on", [])
+    if not isinstance(deps, list) or not all(isinstance(d, str) for d in deps):
+        raise OrchError(f"{gid}: depends_on must be a list of goal ids")
     return {
         "title": raw["title"],
         "summary": raw["summary"],
         "acceptance": raw.get("acceptance", []),
-        "depends_on": raw.get("depends_on", []),
+        "depends_on": deps,
         "repo": raw.get("repo"),
         "links": raw.get("links", []),
         "status": "blocked",
@@ -99,10 +102,22 @@ def validate(state):
         problems.append("missing epic.slug")
     if state["policy"].get("unblock_on") not in UNBLOCK:
         problems.append(f"invalid policy.unblock_on {state['policy'].get('unblock_on')!r}")
+    if not isinstance(state["goals"], dict) or not isinstance(state["workers"], dict):
+        return problems + ["goals and workers must be objects"]
     if not state["goals"]:
         problems.append("no goals")
     goals = state["goals"]
     for gid, g in goals.items():
+        if not isinstance(g, dict):
+            problems.append(f"{gid}: goal must be an object")
+            continue
+        absent = [k for k in ("title", "status", "depends_on", "worker") if k not in g]
+        if absent:
+            problems.append(f"{gid}: missing {', '.join(absent)}")
+            continue
+        if not isinstance(g["depends_on"], list):
+            problems.append(f"{gid}: depends_on must be a list")
+            continue
         if g.get("status") not in STATES:
             problems.append(f"{gid}: invalid status {g.get('status')}")
         for dep in g.get("depends_on", []):
@@ -110,12 +125,18 @@ def validate(state):
                 problems.append(f"{gid}: unknown dependency {dep}")
         if g.get("status") in ("assigned", "needs-user", "in-review") and g.get("worker") not in state["workers"]:
             problems.append(f"{gid}: {g.get('status')} but worker {g.get('worker')!r} is not registered")
+    if problems:
+        return problems
     cycle = find_cycle(goals)
     if cycle:
         problems.append("dependency cycle: " + " -> ".join(cycle))
     for name, w in state["workers"].items():
         if not name.startswith(state["worker_prefix"]):
             problems.append(f"worker {name} lacks prefix {state['worker_prefix']}")
+        absent = [k for k in ("current", "history", "last_seen") if not isinstance(w, dict) or k not in w]
+        if absent:
+            problems.append(f"worker {name}: missing {', '.join(absent)}")
+            continue
         cur = w.get("current")
         if cur is not None and (cur not in goals or goals[cur].get("worker") != name):
             problems.append(f"worker {name}: current goal {cur} does not belong to it")
@@ -228,7 +249,10 @@ def init(slug, plan):
     epic = plan.get("epic") or {}
     if epic.get("slug") != slug:
         raise OrchError(f"plan epic.slug {epic.get('slug')!r} does not match {slug!r}")
-    goals = {gid: new_goal(gid, raw) for gid, raw in (plan.get("goals") or {}).items()}
+    raw_goals = plan.get("goals") or {}
+    if not isinstance(raw_goals, dict):
+        raise OrchError("plan goals must be an object keyed by goal id")
+    goals = {gid: new_goal(gid, raw) for gid, raw in raw_goals.items()}
     state = {
         "version": VERSION,
         "epic": epic,
@@ -420,7 +444,11 @@ def add_goal(state, raw):
         raise OrchError("goal JSON needs an id")
     if gid in state["goals"]:
         raise OrchError(f"{gid} already exists")
-    state["goals"][gid] = new_goal(gid, raw)
+    new = new_goal(gid, raw)
+    for dep in new["depends_on"]:
+        if dep not in state["goals"]:
+            raise OrchError(f"{gid}: unknown dependency {dep}")
+    state["goals"][gid] = new
     recompute(state)
     return {"added": gid, "status": state["goals"][gid]["status"]}, [("user", "ADD", gid)]
 
@@ -552,7 +580,7 @@ def main(argv=None):
                 if problems:
                     raise OrchError("refusing to save invalid state: " + "; ".join(problems))
                 save(a.slug, state, events)
-    except (OrchError, json.JSONDecodeError) as e:
+    except (OrchError, json.JSONDecodeError, KeyError, TypeError, AttributeError, OSError) as e:
         print(json.dumps({"error": str(e)}))
         return 2
     print(json.dumps(out, indent=2))
