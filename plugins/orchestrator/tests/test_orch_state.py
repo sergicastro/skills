@@ -362,6 +362,11 @@ class UserTests(Base):
         self.assertIn("g4 depends on g2", out["error"])
         self.assertEqual(self.run_cli("drop-goal", "demo", "g5"), (0, {"dropped": "g5"}))
 
+    def test_add_goal_rejects_non_object(self):
+        code, out = self.run_cli("add-goal", "demo", "--goal-json", "[]")
+        self.assertEqual(code, 2)
+        self.assertIn("must be an object", out["error"])
+
     def test_drop_refuses_owned_goal(self):
         self.run_cli("request", "demo", "demo-w-a")
         code, out = self.run_cli("drop-goal", "demo", "g1")

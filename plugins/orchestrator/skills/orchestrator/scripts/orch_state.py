@@ -413,6 +413,8 @@ def prioritize(state, gids):
 
 
 def add_goal(state, raw):
+    if not isinstance(raw, dict):
+        raise OrchError("goal JSON must be an object")
     gid = raw.get("id")
     if not gid:
         raise OrchError("goal JSON needs an id")
