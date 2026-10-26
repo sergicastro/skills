@@ -1,0 +1,304 @@
+#!/usr/bin/env python3
+"""State helper for the orchestrator skill. Only the manager session runs it.
+
+Usage: orch_state.py <command> <slug> [args]
+
+Every command prints one JSON object to stdout and exits 0, except `show`, which
+prints status.md. A rejected operation prints {"error": "..."} and exits 2.
+"""
+import argparse
+import datetime
+import json
+import os
+import re
+import sys
+import tempfile
+from pathlib import Path
+
+VERSION = 1
+STATES = ("blocked", "ready", "assigned", "needs-user", "in-review", "done")
+UNBLOCK = {"done": ("done",), "in-review": ("in-review", "done")}
+SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+
+
+class OrchError(Exception):
+    pass
+
+
+def now():
+    return os.environ.get("ORCH_NOW") or datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def root():
+    return Path(os.environ.get("ORCH_ROOT") or Path.home() / ".claude-orchestrator")
+
+
+def state_dir(slug):
+    if not SLUG_RE.match(slug):
+        raise OrchError(f"invalid slug {slug!r}: use lowercase letters, digits and dashes")
+    return root() / slug
+
+
+def new_goal(gid, raw):
+    missing = [k for k in ("title", "summary") if not raw.get(k)]
+    if missing:
+        raise OrchError(f"{gid}: missing {', '.join(missing)}")
+    return {
+        "title": raw["title"],
+        "summary": raw["summary"],
+        "acceptance": raw.get("acceptance", []),
+        "depends_on": raw.get("depends_on", []),
+        "repo": raw.get("repo"),
+        "links": raw.get("links", []),
+        "status": "blocked",
+        "worker": None,
+        "reason": None,
+        "handoff": None,
+        "override": None,
+    }
+
+
+def find_cycle(goals):
+    color = {}
+    stack = []
+
+    def visit(gid):
+        color[gid] = 1
+        stack.append(gid)
+        for dep in goals[gid].get("depends_on", []):
+            if dep not in goals:
+                continue
+            if color.get(dep) == 1:
+                return stack[stack.index(dep):] + [dep]
+            if dep not in color:
+                found = visit(dep)
+                if found:
+                    return found
+        color[gid] = 2
+        stack.pop()
+        return None
+
+    for gid in goals:
+        if gid not in color:
+            found = visit(gid)
+            if found:
+                return found
+    return None
+
+
+def validate(state):
+    problems = []
+    if state.get("version") != VERSION:
+        problems.append(f"unsupported version {state.get('version')!r}")
+    for key in ("epic", "manager", "worker_prefix", "policy", "goals", "workers"):
+        if state.get(key) is None:
+            problems.append(f"missing {key}")
+    if problems:
+        return problems
+    if not state["epic"].get("slug"):
+        problems.append("missing epic.slug")
+    if state["policy"].get("unblock_on") not in UNBLOCK:
+        problems.append(f"invalid policy.unblock_on {state['policy'].get('unblock_on')!r}")
+    if not state["goals"]:
+        problems.append("no goals")
+    goals = state["goals"]
+    for gid, g in goals.items():
+        if g.get("status") not in STATES:
+            problems.append(f"{gid}: invalid status {g.get('status')}")
+        for dep in g.get("depends_on", []):
+            if dep not in goals:
+                problems.append(f"{gid}: unknown dependency {dep}")
+        if g.get("status") in ("assigned", "needs-user", "in-review") and g.get("worker") not in state["workers"]:
+            problems.append(f"{gid}: {g.get('status')} but worker {g.get('worker')!r} is not registered")
+    cycle = find_cycle(goals)
+    if cycle:
+        problems.append("dependency cycle: " + " -> ".join(cycle))
+    for name, w in state["workers"].items():
+        if not name.startswith(state["worker_prefix"]):
+            problems.append(f"worker {name} lacks prefix {state['worker_prefix']}")
+        cur = w.get("current")
+        if cur is not None and (cur not in goals or goals[cur].get("worker") != name):
+            problems.append(f"worker {name}: current goal {cur} does not belong to it")
+    return problems
+
+
+def recompute(state):
+    """Move unowned goals between blocked and ready. Returns the goals that became ready."""
+    ok = UNBLOCK[state["policy"]["unblock_on"]]
+    goals = state["goals"]
+    newly = []
+    for gid, g in goals.items():
+        if g["status"] not in ("blocked", "ready"):
+            continue
+        forced = (g.get("override") or {}).get("start")
+        met = forced or all(goals[d]["status"] in ok for d in g["depends_on"])
+        new = "ready" if met else "blocked"
+        if new == "ready" and g["status"] == "blocked":
+            newly.append(gid)
+        g["status"] = new
+    return newly
+
+
+def load(slug):
+    path = state_dir(slug) / "state.json"
+    if not path.exists():
+        raise OrchError(f"no orchestration named {slug!r} under {root()}")
+    try:
+        state = json.loads(path.read_text())
+    except json.JSONDecodeError as e:
+        raise OrchError(f"state.json is not valid JSON: {e}")
+    problems = validate(state)
+    if problems:
+        raise OrchError("state.json failed validation: " + "; ".join(problems))
+    return state
+
+
+def write_atomic(path, text):
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=path.name + ".")
+    with os.fdopen(fd, "w") as f:
+        f.write(text)
+    os.replace(tmp, path)
+
+
+def save(slug, state, events):
+    d = state_dir(slug)
+    d.mkdir(parents=True, exist_ok=True)
+    write_atomic(d / "state.json", json.dumps(state, indent=2) + "\n")
+    write_atomic(d / "status.md", render(state))
+    with open(d / "events.log", "a") as f:
+        for actor, event, details in events:
+            f.write(f"{now()} {actor} {event} {details}".rstrip() + "\n")
+
+
+def cell(value):
+    return str(value or "").replace("|", "\\|").replace("\n", " ")
+
+
+def render(state):
+    e = state["epic"]
+    goals = state["goals"]
+    counts = {s: sum(1 for g in goals.values() if g["status"] == s) for s in STATES}
+    lines = [
+        f"# {e.get('title') or e['slug']}",
+        "",
+        f"- Slug: `{e['slug']}`",
+        f"- Source: {e.get('source') or '-'}",
+        f"- Manager session: `{state['manager']}`",
+        f"- Worker prefix: `{state['worker_prefix']}`",
+        f"- Unblock policy: dependents start when dependencies are `{state['policy']['unblock_on']}`",
+        "- Progress: " + ", ".join(f"{counts[s]} {s}" for s in STATES if counts[s]),
+        "",
+        "## Goals",
+        "",
+        "| Goal | Title | Status | Worker | PR | Reason |",
+        "|---|---|---|---|---|---|",
+    ]
+    for gid, g in goals.items():
+        pr = (g.get("handoff") or {}).get("pr")
+        lines.append(f"| {gid} | {cell(g['title'])} | {g['status']} | {cell(g['worker'])} | {cell(pr)} | {cell(g['reason'])} |")
+    lines += ["", "## Dependencies", ""]
+    deps = [f"- {gid} ← {', '.join(g['depends_on'])}" for gid, g in goals.items() if g["depends_on"]]
+    lines += deps or ["- none"]
+    lines += [
+        "",
+        "## Workers",
+        "",
+        f"Liveness checked: {state.get('live_checked') or 'never'}",
+        "",
+        "| Worker | Current goal | Done so far | Live | Last seen |",
+        "|---|---|---|---|---|",
+    ]
+    live_label = {True: "yes", False: "gone", None: "?"}
+    for name, w in state["workers"].items():
+        lines.append(f"| {name} | {cell(w['current'])} | {cell(', '.join(w['history']))} | {live_label[w.get('live')]} | {w['last_seen']} |")
+    if not state["workers"]:
+        lines.append("| - | - | - | - | - |")
+    return "\n".join(lines) + "\n"
+
+
+def goal(state, gid):
+    if gid not in state["goals"]:
+        raise OrchError(f"unknown goal {gid}")
+    return state["goals"][gid]
+
+
+def init(slug, plan):
+    if (state_dir(slug) / "state.json").exists():
+        raise OrchError(f"orchestration {slug!r} already exists")
+    epic = plan.get("epic") or {}
+    if epic.get("slug") != slug:
+        raise OrchError(f"plan epic.slug {epic.get('slug')!r} does not match {slug!r}")
+    goals = {gid: new_goal(gid, raw) for gid, raw in (plan.get("goals") or {}).items()}
+    state = {
+        "version": VERSION,
+        "epic": epic,
+        "manager": plan.get("manager"),
+        "worker_prefix": plan.get("worker_prefix"),
+        "policy": plan.get("policy") or {"unblock_on": "done"},
+        "board": plan.get("board"),
+        "goals": goals,
+        "workers": {},
+    }
+    problems = validate(state)
+    if problems:
+        raise OrchError("plan failed validation: " + "; ".join(problems))
+    recompute(state)
+    return state
+
+
+ARGS = {
+    "init": [(["--plan"], {"required": True, "help": "path to the confirmed plan JSON"})],
+    "validate": [],
+    "show": [],
+    "get": [(["goal"], {})],
+}
+
+COMMANDS = {
+    "validate": lambda s, a: ({"valid": True, "goals": len(s["goals"])}, []),
+    "get": lambda s, a: (dict({"goal": a.goal}, **goal(s, a.goal)), []),
+}
+
+
+def build_parser():
+    p = argparse.ArgumentParser(prog="orch_state.py")
+    sub = p.add_subparsers(dest="cmd", required=True)
+    for name, args in ARGS.items():
+        sp = sub.add_parser(name)
+        sp.add_argument("slug")
+        for flags, kwargs in args:
+            sp.add_argument(*flags, **kwargs)
+    return p
+
+
+def main(argv=None):
+    a = build_parser().parse_args(argv)
+    try:
+        if a.cmd == "init":
+            state = init(a.slug, json.loads(Path(a.plan).read_text()))
+            save(a.slug, state, [("manager", "INIT", f"{len(state['goals'])} goals")])
+            out = {
+                "initialized": a.slug,
+                "state_dir": str(state_dir(a.slug)),
+                "ready": [g for g, v in state["goals"].items() if v["status"] == "ready"],
+                "blocked": [g for g, v in state["goals"].items() if v["status"] == "blocked"],
+            }
+        elif a.cmd == "show":
+            sys.stdout.write(render(load(a.slug)))
+            return 0
+        else:
+            state = load(a.slug)
+            out, events = COMMANDS[a.cmd](state, a)
+            if events:
+                problems = validate(state)
+                if problems:
+                    raise OrchError("refusing to save invalid state: " + "; ".join(problems))
+                save(a.slug, state, events)
+    except OrchError as e:
+        print(json.dumps({"error": str(e)}))
+        return 2
+    print(json.dumps(out, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
