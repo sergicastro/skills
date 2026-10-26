@@ -353,6 +353,113 @@ def done(state, name, gid, pr, notes):
     return {"goal": gid, "status": "in-review", "newly_ready": newly}, [(name, "DONE", f"{gid} pr={pr or '-'}")]
 
 
+def approve(state, gid):
+    g = goal(state, gid)
+    if g["status"] != "in-review":
+        raise OrchError(f"{gid} is {g['status']}, only in-review goals can be approved")
+    g["status"] = "done"
+    return {"goal": gid, "status": "done", "newly_ready": recompute(state)}, [("user", "APPROVE", gid)]
+
+
+def sendback(state, gid, reason):
+    g = goal(state, gid)
+    if g["status"] != "in-review":
+        raise OrchError(f"{gid} is {g['status']}, only in-review goals can be sent back")
+    name = g["worker"]
+    w = state["workers"].get(name)
+    if w is None:
+        raise OrchError(f"{name} is no longer registered; use release to make {gid} available again")
+    if w["current"]:
+        raise OrchError(f"{name} is busy with {w['current']}; use release to make {gid} available to others")
+    g["status"], g["reason"] = "assigned", f"sent back: {reason}"
+    w["current"] = gid
+    recompute(state)
+    return {"goal": gid, "status": "assigned", "worker": name}, [("user", "SENDBACK", f"{gid} {reason}")]
+
+
+def release(state, gid):
+    g = goal(state, gid)
+    if g["status"] not in ("assigned", "needs-user", "in-review"):
+        raise OrchError(f"{gid} is {g['status']}, nothing to release")
+    w = state["workers"].get(g["worker"])
+    if w and w["current"] == gid:
+        w["current"] = None
+    g["status"], g["worker"], g["reason"] = "blocked", None, None
+    recompute(state)
+    return {"goal": gid, "status": g["status"]}, [("user", "RELEASE", gid)]
+
+
+def set_policy(state, unblock_on):
+    state["policy"]["unblock_on"] = unblock_on
+    newly = recompute(state)
+    return {"unblock_on": unblock_on, "newly_ready": newly}, [("user", "OVERRIDE", f"policy unblock_on={unblock_on}")]
+
+
+def force_start(state, gid):
+    g = goal(state, gid)
+    if g["status"] != "blocked":
+        raise OrchError(f"{gid} is {g['status']}; only blocked goals can be force-started")
+    g["override"] = {"start": True, "at": now()}
+    recompute(state)
+    return {"goal": gid, "status": g["status"]}, [("user", "OVERRIDE", f"start {gid}")]
+
+
+def prioritize(state, gids):
+    for gid in gids:
+        goal(state, gid)
+    order = list(gids) + [gid for gid in state["goals"] if gid not in gids]
+    state["goals"] = {gid: state["goals"][gid] for gid in order}
+    return {"order": order}, [("user", "PRIORITIZE", " ".join(gids))]
+
+
+def add_goal(state, raw):
+    gid = raw.get("id")
+    if not gid:
+        raise OrchError("goal JSON needs an id")
+    if gid in state["goals"]:
+        raise OrchError(f"{gid} already exists")
+    state["goals"][gid] = new_goal(gid, raw)
+    recompute(state)
+    return {"added": gid, "status": state["goals"][gid]["status"]}, [("user", "ADD", gid)]
+
+
+def drop_goal(state, gid):
+    g = goal(state, gid)
+    if g["status"] not in ("blocked", "ready"):
+        raise OrchError(f"{gid} is {g['status']}; only blocked or ready goals can be dropped")
+    dependents = [other for other, o in state["goals"].items() if gid in o["depends_on"]]
+    if dependents:
+        raise OrchError(f"{', '.join(dependents)} depends on {gid}; change those first")
+    del state["goals"][gid]
+    return {"dropped": gid}, [("user", "DROP", gid)]
+
+
+def rename_worker(state, old, new):
+    w = require_worker(state, old)
+    if not new.startswith(state["worker_prefix"]):
+        raise OrchError(f"{new} does not start with worker prefix {state['worker_prefix']!r}")
+    existing = state["workers"].get(new)
+    if existing and (existing["current"] or existing["history"]):
+        raise OrchError(f"{new} already has work recorded; refusing to merge")
+    del state["workers"][old]
+    state["workers"][new] = w
+    for g in state["goals"].values():
+        if g["worker"] == old:
+            g["worker"] = new
+    return {"renamed": old, "to": new, "current": w["current"]}, [("user", "RENAME", f"{old} -> {new}")]
+
+
+def liveness(state, live_csv):
+    alive = {n.strip() for n in live_csv.split(",") if n.strip()}
+    for name, w in state["workers"].items():
+        w["live"] = name in alive
+    state["live_checked"] = now()
+    live = [n for n, w in state["workers"].items() if w["live"]]
+    gone = [n for n, w in state["workers"].items() if not w["live"]]
+    with_goal = [n for n in gone if state["workers"][n]["current"]]
+    return {"live": live, "gone": gone, "gone_with_goal": with_goal}, [("manager", "LIVENESS", ",".join(gone) or "all-live")]
+
+
 ARGS = {
     "init": [(["--plan"], {"required": True, "help": "path to the confirmed plan JSON"})],
     "validate": [],
@@ -379,6 +486,33 @@ COMMANDS.update({
     "request": lambda s, a: request(s, a.worker),
     "status": lambda s, a: report_status(s, a.worker, a.goal, a.state, a.reason),
     "done": lambda s, a: done(s, a.worker, a.goal, a.pr, a.notes),
+})
+
+
+ARGS.update({
+    "approve": [(["goal"], {})],
+    "sendback": [(["goal"], {}), (["--reason"], {"required": True})],
+    "release": [(["goal"], {})],
+    "policy": [(["unblock_on"], {"choices": list(UNBLOCK)})],
+    "start": [(["goal"], {})],
+    "prioritize": [(["goals"], {"nargs": "+"})],
+    "add-goal": [(["--goal-json"], {"required": True})],
+    "drop-goal": [(["goal"], {})],
+    "rename-worker": [(["old"], {}), (["new"], {})],
+    "liveness": [(["--live"], {"default": "", "help": "comma-separated session names from ListAgents"})],
+})
+
+COMMANDS.update({
+    "approve": lambda s, a: approve(s, a.goal),
+    "sendback": lambda s, a: sendback(s, a.goal, a.reason),
+    "release": lambda s, a: release(s, a.goal),
+    "policy": lambda s, a: set_policy(s, a.unblock_on),
+    "start": lambda s, a: force_start(s, a.goal),
+    "prioritize": lambda s, a: prioritize(s, a.goals),
+    "add-goal": lambda s, a: add_goal(s, json.loads(a.goal_json)),
+    "drop-goal": lambda s, a: drop_goal(s, a.goal),
+    "rename-worker": lambda s, a: rename_worker(s, a.old, a.new),
+    "liveness": lambda s, a: liveness(s, a.live),
 })
 
 
@@ -416,7 +550,7 @@ def main(argv=None):
                 if problems:
                     raise OrchError("refusing to save invalid state: " + "; ".join(problems))
                 save(a.slug, state, events)
-    except OrchError as e:
+    except (OrchError, json.JSONDecodeError) as e:
         print(json.dumps({"error": str(e)}))
         return 2
     print(json.dumps(out, indent=2))

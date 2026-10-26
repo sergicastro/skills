@@ -270,5 +270,126 @@ class WorkerTests(Base):
         self.assertIn("handoff notes are required", out["error"])
 
 
+class UserTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.init()
+        self.run_cli("register", "demo", "demo-w-a")
+        self.run_cli("register", "demo", "demo-w-b")
+
+    def finish_g1(self):
+        self.run_cli("request", "demo", "demo-w-a")
+        self.run_cli("done", "demo", "demo-w-a", "g1", "--notes", "n")
+
+    def test_approve_unblocks_dependents(self):
+        self.finish_g1()
+        self.assertEqual(self.run_cli("approve", "demo", "g1"),
+                         (0, {"goal": "g1", "status": "done", "newly_ready": ["g2", "g3"]}))
+        self.assertIn("user APPROVE g1", (Path(self.tmp.name) / "demo" / "events.log").read_text())
+
+    def test_approve_only_from_in_review(self):
+        code, out = self.run_cli("approve", "demo", "g1")
+        self.assertEqual(code, 2)
+        self.assertIn("g1 is ready, only in-review goals can be approved", out["error"])
+
+    def test_request_prefers_goals_related_to_history(self):
+        p = plan({
+            "x1": {"title": "X1", "summary": "s", "depends_on": []},
+            "x2": {"title": "X2", "summary": "s", "depends_on": []},
+            "x4": {"title": "X4", "summary": "s", "depends_on": []},
+            "x3": {"title": "X3", "summary": "s", "depends_on": ["x1"]},
+        })
+        p["epic"]["slug"] = "aff"
+        self.init(p, slug="aff")
+        self.run_cli("register", "aff", "demo-w-a")
+        self.run_cli("register", "aff", "demo-w-b")
+        self.assertEqual(self.run_cli("request", "aff", "demo-w-a")[1]["assigned"], "x1")
+        self.assertEqual(self.run_cli("request", "aff", "demo-w-b")[1]["assigned"], "x2")
+        self.run_cli("done", "aff", "demo-w-a", "x1", "--notes", "n")
+        self.run_cli("approve", "aff", "x1")
+        out = self.run_cli("request", "aff", "demo-w-a")[1]
+        self.assertEqual(out["assigned"], "x3")
+        self.assertEqual(out["upstream"], [{"goal": "x1", "title": "X1", "status": "done", "pr": None, "notes": "n"}])
+
+    def test_sendback_returns_goal_to_same_worker(self):
+        self.finish_g1()
+        self.assertEqual(self.run_cli("sendback", "demo", "g1", "--reason", "add tests"),
+                         (0, {"goal": "g1", "status": "assigned", "worker": "demo-w-a"}))
+        s = self.state()
+        self.assertEqual(s["workers"]["demo-w-a"]["current"], "g1")
+        self.assertEqual(s["goals"]["g1"]["reason"], "sent back: add tests")
+
+    def test_sendback_refuses_busy_worker(self):
+        self.run_cli("policy", "demo", "in-review")
+        self.finish_g1()
+        self.run_cli("request", "demo", "demo-w-a")
+        code, out = self.run_cli("sendback", "demo", "g1", "--reason", "x")
+        self.assertEqual(code, 2)
+        self.assertIn("demo-w-a is busy with g2", out["error"])
+
+    def test_release_frees_worker(self):
+        self.run_cli("request", "demo", "demo-w-a")
+        self.assertEqual(self.run_cli("release", "demo", "g1"), (0, {"goal": "g1", "status": "ready"}))
+        s = self.state()
+        self.assertIsNone(s["workers"]["demo-w-a"]["current"])
+        self.assertIsNone(s["goals"]["g1"]["worker"])
+
+    def test_policy_in_review_unblocks_early(self):
+        self.finish_g1()
+        self.assertEqual(self.run_cli("policy", "demo", "in-review"),
+                         (0, {"unblock_on": "in-review", "newly_ready": ["g2", "g3"]}))
+
+    def test_start_forces_a_blocked_goal(self):
+        self.assertEqual(self.run_cli("start", "demo", "g4"), (0, {"goal": "g4", "status": "ready"}))
+        self.assertTrue(self.state()["goals"]["g4"]["override"]["start"])
+        code, out = self.run_cli("start", "demo", "g4")
+        self.assertEqual(code, 2)
+        self.assertIn("only blocked goals", out["error"])
+
+    def test_prioritize_changes_assignment_order(self):
+        self.finish_g1()
+        self.run_cli("approve", "demo", "g1")
+        self.assertEqual(self.run_cli("prioritize", "demo", "g3")[1], {"order": ["g3", "g1", "g2", "g4"]})
+        self.assertEqual(self.run_cli("request", "demo", "demo-w-b")[1]["assigned"], "g3")
+
+    def test_add_and_drop_goal(self):
+        code, out = self.run_cli("add-goal", "demo", "--goal-json",
+                                 json.dumps({"id": "g5", "title": "Docs", "summary": "s", "depends_on": ["g1"]}))
+        self.assertEqual((code, out), (0, {"added": "g5", "status": "blocked"}))
+        code, out = self.run_cli("add-goal", "demo", "--goal-json", json.dumps({"id": "g5", "title": "t", "summary": "s"}))
+        self.assertIn("g5 already exists", out["error"])
+        code, out = self.run_cli("drop-goal", "demo", "g2")
+        self.assertIn("g4 depends on g2", out["error"])
+        self.assertEqual(self.run_cli("drop-goal", "demo", "g5"), (0, {"dropped": "g5"}))
+
+    def test_drop_refuses_owned_goal(self):
+        self.run_cli("request", "demo", "demo-w-a")
+        code, out = self.run_cli("drop-goal", "demo", "g1")
+        self.assertEqual(code, 2)
+        self.assertIn("only blocked or ready goals can be dropped", out["error"])
+
+    def test_rename_worker_moves_goal(self):
+        self.run_cli("request", "demo", "demo-w-a")
+        self.run_cli("register", "demo", "demo-w-auth")
+        self.assertEqual(self.run_cli("rename-worker", "demo", "demo-w-a", "demo-w-auth"),
+                         (0, {"renamed": "demo-w-a", "to": "demo-w-auth", "current": "g1"}))
+        s = self.state()
+        self.assertNotIn("demo-w-a", s["workers"])
+        self.assertEqual(s["goals"]["g1"]["worker"], "demo-w-auth")
+
+    def test_rename_refuses_busy_target(self):
+        self.run_cli("request", "demo", "demo-w-a")
+        self.run_cli("policy", "demo", "in-review")
+        code, out = self.run_cli("rename-worker", "demo", "demo-w-b", "demo-w-a")
+        self.assertEqual(code, 2)
+        self.assertIn("demo-w-a already has work", out["error"])
+
+    def test_liveness_flags_gone_workers_with_goals(self):
+        self.run_cli("request", "demo", "demo-w-a")
+        code, out = self.run_cli("liveness", "demo", "--live", "demo-w-b,demo-manager")
+        self.assertEqual((code, out), (0, {"live": ["demo-w-b"], "gone": ["demo-w-a"], "gone_with_goal": ["demo-w-a"]}))
+        self.assertIn("| demo-w-a | g1 |  | gone |", self.run_cli("show", "demo")[1])
+
+
 if __name__ == "__main__":
     unittest.main()
