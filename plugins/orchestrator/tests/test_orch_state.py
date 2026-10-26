@@ -10,6 +10,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills" / "orchestrator" / "scripts"))
 import orch_state  # noqa: E402
 
+GOLDEN = Path(__file__).resolve().parent / "golden" / "status.md"
+
 
 def plan(goals=None, **over):
     p = {
@@ -478,6 +480,25 @@ class EdgeCaseTests(Base):
         code, out = self.run_cli("show", "demo")
         self.assertEqual(code, 2)
         self.assertIn("worker demo-w-a: missing history", out["error"])
+
+
+class GoldenTests(Base):
+    def build(self):
+        self.init()
+        for w in ("demo-w-a", "demo-w-b"):
+            self.run_cli("register", "demo", w)
+        self.run_cli("request", "demo", "demo-w-a")
+        self.run_cli("done", "demo", "demo-w-a", "g1", "--pr", "https://github.com/o/r/pull/7", "--notes", "base ready")
+        self.run_cli("approve", "demo", "g1")
+        self.run_cli("request", "demo", "demo-w-b")
+        self.run_cli("status", "demo", "demo-w-b", "g2", "needs-user", "--reason", "pick a | b\nthen go")
+        self.run_cli("request", "demo", "demo-w-a")
+        self.run_cli("liveness", "demo", "--live", "demo-w-a")
+        return orch_state.load("demo")
+
+    def test_status_md_matches_golden(self):
+        state = self.build()
+        self.assertEqual(orch_state.render(state), GOLDEN.read_text())
 
 
 if __name__ == "__main__":
