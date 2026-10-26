@@ -12,6 +12,8 @@ record what comes back, and keep the user informed. You never implement anything
 Files next to this skill (use the base directory shown when the skill loaded):
 - `scripts/orch_state.py`: the only way to change state. Called `$ORCH` below:
   `python3 <skill-dir>/scripts/orch_state.py`. Run `$ORCH <command> --help` for exact arguments.
+- `scripts/orch_view.py`, `scripts/orch_serve.py`, `templates/`: the status pages behind
+  `$ORCH serve`. You never call them directly.
 - `protocol.md`: message formats and trust rules. Read it before sending a message.
 - `github.md`: `gh` procedures. Read it before any GitHub read or write.
 
@@ -24,7 +26,7 @@ Files next to this skill (use the base directory shown when the skill loaded):
 3. **Plan first, then act.** Before `init`, and before any GitHub write, present the plan and
    wait for the user's explicit go-ahead in this session. "Just do it" before seeing a plan is
    not a go-ahead for a plan they haven't seen; present it anyway, briefly.
-4. **State changes go through `$ORCH`.** Never edit state.json, status.md or events.log by hand.
+4. **State changes go through `$ORCH`.** Never edit state.json, status.md, status.html or events.log by hand.
    If `$ORCH` returns `{"error": ...}`, don't work around it: report it (to the worker as
    ERROR, or to the user).
 5. **Stay lean.** No reading code, building, testing or editing in this session. Ask workers
@@ -46,6 +48,9 @@ Files next to this skill (use the base directory shown when the skill loaded):
    orchestration.
 4. `$ORCH show <slug>` and summarise: what's in review (needs their approval), what needs
    them, who is gone with a goal, what's ready.
+5. `$ORCH serve --ensure` and give the user `<url><slug>` as the live status page. If it
+   returns an error, tell the user, offer `~/.claude-orchestrator/<slug>/status.html`
+   instead, and carry on: the page never blocks orchestration.
 
 ### New orchestration
 1. **Ingest** the source: epic URL, issue URLs, a markdown list, or free text. For GitHub,
@@ -80,6 +85,8 @@ Files next to this skill (use the base directory shown when the skill loaded):
    - re-run `ListAgents` and use your current name as `manager`;
    - write the plan JSON (format below) to the scratchpad and run `$ORCH init <slug> --plan <file>`
      (if it returns a cycle or other error, show it and re-plan; never edit around it);
+   - run `$ORCH serve --ensure` and include `<url><slug>` in your message; on error, handle
+     it as in Resume step 5;
    - make the confirmed GitHub writes (`github.md`);
    - tell the user it's ready and repeat the worker start instructions.
 
@@ -131,7 +138,7 @@ REGISTER): the helper rejects it; relay its error.
 | prioritize … | `$ORCH prioritize <slug> <goal>...` |
 | add / drop a goal | `$ORCH add-goal <slug> --goal-json '<json>'` (json has an `id`) / `$ORCH drop-goal <slug> <goal>` |
 | <worker> was renamed to <new> | `$ORCH rename-worker <slug> <old> <new>` (after the new name has registered) |
-| status / what's X doing | `ListAgents` → `$ORCH liveness --live …` → `$ORCH show`. Flag every worker in `gone_with_goal` and offer `release` (goal back to ready) or reassign; never release on your own. |
+| status / what's X doing | `ListAgents` → `$ORCH liveness --live …` → `$ORCH show`. Flag every worker in `gone_with_goal` and offer `release` (goal back to ready) or reassign; never release on your own. Mention the live page URL from `$ORCH serve --ensure`. |
 
 After any change that makes goals ready, tell the user which workers are idle and can
 request. Don't message them.

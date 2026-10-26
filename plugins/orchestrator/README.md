@@ -41,7 +41,20 @@ To try a branch, point the symlinks at its worktree instead, then back.
 3. In a worker, say "next" to get a goal. When it reports done, review the work and, in the manager session, type
    `approve <goal>` (or `send <goal> back`). Then say "next" in the worker again.
 4. Ask the manager "status" at any time. State lives in `~/.claude-orchestrator/<slug>/`
-   (`status.md` is the readable view).
+   (`status.md` is the readable view; the manager also gives you a live page).
+
+## Live status page
+
+The manager starts a small local server the first time you create or resume an
+orchestration, and gives you its URL (default `http://127.0.0.1:8765/`). The index lists
+every orchestration; each one has a page with its dependency graph, goals, workers and
+recent events, updated within a second of each change.
+
+    python3 skills/orchestrator/scripts/orch_state.py serve --ensure   # start if needed
+    python3 skills/orchestrator/scripts/orch_state.py serve --stop     # stop it
+
+Without the server, open `~/.claude-orchestrator/<slug>/status.html`; it reloads every
+3 seconds.
 
 ## Tests
 
