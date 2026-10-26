@@ -17,4 +17,36 @@ working on related goals from one epic or task list:
   context holds only its own goal and a short upstream summary, and the manager
   never sees code, diffs or logs, so no session carries the whole epic's history.
 
+## Layout
+
+- `skills/orchestrator/`: manager skill, plus `scripts/orch_state.py` (state helper)
+- `skills/orchestrator-worker/`: worker skill
+- `skills/shared/`: `protocol.md` and `github.md`, symlinked into both skills
+- `tests/`: helper unit tests, skill pressure scenarios, dry-run notes
+
+## Install
+
+```bash
+ln -s ~/workspace/claude-orchestrator/skills/orchestrator ~/.agents/skills/orchestrator
+ln -s ~/workspace/claude-orchestrator/skills/orchestrator-worker ~/.agents/skills/orchestrator-worker
+```
+To try a branch, point the symlinks at its worktree instead, then back.
+
+## Use
+
+1. Open a manager session (`claude -n <slug>-manager`) and run `/orchestrator <epic URL, issue list or text>`.
+   Review the plan and reply "go".
+2. Open worker sessions named with the prefix the manager gives (`claude -n <slug>-w-<anything>`)
+   and run `/orchestrator-worker <manager name>` in each.
+3. In a worker, say "next" to get a goal. When it reports done, review the work and tell the
+   manager `approve <goal>` (or `send <goal> back`). Then say "next" in the worker again.
+4. Ask the manager "status" at any time. State lives in `~/.claude-orchestrator/<slug>/`
+   (`status.md` is the readable view).
+
+## Tests
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
 See `docs/specs/` for the design.
