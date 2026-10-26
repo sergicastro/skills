@@ -60,7 +60,9 @@ cycle; `orch_serve.py` imports both and is loaded only by the `serve` command.
 ### 2.3 Server
 
 `orch_state.py serve` runs a `ThreadingHTTPServer` bound to `127.0.0.1`, default
-port 8765. It is read-only and answers GET only.
+port 8765. It is read-only and answers GET only. It answers only requests whose
+`Host` header is `127.0.0.1:<port>` or `localhost:<port>` and returns 403 for any
+other host, so a web page using DNS rebinding can't read the state.
 
 | Path | Response |
 |---|---|
@@ -164,6 +166,7 @@ time of the last event. Sorted by most recent activity. Each card links to
 | Concurrent `--ensure` | Lock file serialises starts; the second caller prints the same URL |
 | Client disconnects | Broken pipe ends that handler quietly; browser reconnects after 2 s |
 | Bad slug in URL | Must match `SLUG_RE` and exist under root, else 404 (no path traversal) |
+| `Host` header not `127.0.0.1:<port>` or `localhost:<port>` | 403 on every path, including `/healthz` and the streams |
 
 Every value taken from state or events is passed through `html.escape` before it is
 placed in HTML or SVG. Only markup built by the helper itself is inserted unescaped.

@@ -1,3 +1,4 @@
+import http.client
 import http.server
 import json
 import os
@@ -77,6 +78,27 @@ class ServerTests(Base):
         self.assertEqual(code, 200)
         self.assertIn('data-goal="g1" data-status="ready"', page)
         self.assertIn('data-stream="/events/demo"', page)
+
+    def get_with_host(self, path, host):
+        conn = http.client.HTTPConnection("127.0.0.1", self.server.server_address[1], timeout=5)
+        self.addCleanup(conn.close)
+        conn.request("GET", path, headers={"Host": host})
+        r = conn.getresponse()
+        return r.status, r.read().decode()
+
+    def test_foreign_host_header_is_refused(self):
+        port = self.server.server_address[1]
+        for host in (f"evil.example:{port}", "evil.example", f"127.0.0.1:{port + 1}", ""):
+            for path in ("/", "/demo", "/events", "/events/demo", "/healthz"):
+                code, body = self.get_with_host(path, host)
+                self.assertEqual(code, 403, (host, path))
+                self.assertNotIn("Demo epic", body)
+
+    def test_loopback_host_headers_are_accepted(self):
+        port = self.server.server_address[1]
+        for host in (f"127.0.0.1:{port}", f"localhost:{port}", f"LOCALHOST:{port}"):
+            code, _ = self.get_with_host("/healthz", host)
+            self.assertEqual(code, 200, host)
 
     def test_unknown_or_unsafe_paths_are_404(self):
         for path in ("/nope", "/..%2f..%2fetc%2fpasswd", "/events/nope", "/demo/", "/events/..%2fdemo", "/demo%0a", "/events/demo%0a"):

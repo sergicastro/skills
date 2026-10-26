@@ -94,6 +94,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         pass  # one line per poll would flood server.log
 
     def do_GET(self):
+        if not self.host_allowed():
+            return self.send_body(403, "text/plain; charset=utf-8", "forbidden host\n")
         path = unquote(urlsplit(self.path).path)
         srv = self.server
         if path == "/healthz":
@@ -111,6 +113,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send_page(title, main, f"/events/{path[1:]}")
         self.send_body(404, "text/html; charset=utf-8",
                        orch_view.render_page("Not found", '<p class="empty">No such orchestration.</p>', ""))
+
+    def host_allowed(self):
+        # a DNS-rebinding page reaches 127.0.0.1 under its own hostname; only answer loopback names
+        port = self.server.server_address[1]
+        host = (self.headers.get("Host") or "").lower()
+        return host in (f"127.0.0.1:{port}", f"localhost:{port}")
 
     def send_page(self, title, main, stream):
         self.send_body(200, "text/html; charset=utf-8", orch_view.render_page(title, main, stream))
