@@ -1,7 +1,7 @@
 # Orchestrator skills — design
 
 Date: 2026-10-26
-Status: draft, pending user review
+Status: approved 2026-10-26
 
 ## 1. Purpose
 
