@@ -1,6 +1,7 @@
 import contextlib
 import io
 import json
+from unittest import mock
 import os
 import sys
 import tempfile
@@ -559,6 +560,14 @@ class ViewModelTests(Base):
         self.assertEqual(orch_state.read_events(d / "missing"), [])
         (d / "events.log").write_text("2026-10-26T10:00:00Z user APPROVE\n")
         self.assertEqual(orch_state.read_events(d)[0]["details"], "")
+
+    def test_events_include_the_command_that_just_ran(self):
+        self.init()
+        with mock.patch.object(orch_view, "render_md", wraps=orch_view.render_md) as render:
+            self.run_cli("register", "demo", "demo-w-a")
+        vm = render.call_args[0][0]
+        self.assertEqual(vm["events"][0]["event"], "REGISTER")
+        self.assertEqual(vm["events"][0]["actor"], "demo-w-a")
 
 
 if __name__ == "__main__":

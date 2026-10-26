@@ -188,10 +188,10 @@ def save(slug, state, events):
     d = state_dir(slug)
     d.mkdir(parents=True, exist_ok=True)
     write_atomic(d / "state.json", json.dumps(state, indent=2) + "\n")
-    write_views(d, state)
     with open(d / "events.log", "a") as f:
         for actor, event, details in events:
             f.write(f"{now()} {actor} {event} {details}".rstrip() + "\n")
+    write_views(d, state)
 
 
 def write_views(d, state):
