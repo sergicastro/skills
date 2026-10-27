@@ -76,3 +76,7 @@ python3 -m unittest discover -s tests -v
 ```
 
 See `docs/specs/` for the design.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
