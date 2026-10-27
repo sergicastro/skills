@@ -61,7 +61,7 @@ Taken from the Claude Code docs (sessions, cross-session messaging):
    - proposed state → board-status mapping
    - the exact GitHub writes it intends to make (see §6)
    - the manager's own session name (suggest `/rename <slug>-manager` if the name is generic)
-   - the worker name prefix (e.g. `oas-w-`)
+   - the worker name prefix (e.g. `recipes-w-`)
 4. **Wait for an explicit go-ahead.** The user can edit goals, dependencies, the
    mapping, the policy, or the planned writes.
 5. **Commit**: create the state directory, make the confirmed GitHub writes, then
@@ -156,27 +156,28 @@ Workers may read these files but never write them.
 ```json
 {
   "version": 1,
-  "epic": { "slug": "oas", "title": "...", "source": "https://github.com/org/repo/issues/100",
+  "epic": { "slug": "recipes", "title": "...", "source": "https://github.com/example/recipes/issues/100",
             "owned_by_manager": true },
-  "manager": "oas-manager",
-  "worker_prefix": "oas-w-",
+  "manager": "recipes-manager",
+  "worker_prefix": "recipes-w-",
   "policy": { "unblock_on": "done" },
-  "board": { "project": "org/12", "field": "Status",
+  "board": { "project": "example/12", "field": "Status",
              "mapping": { "ready": "Todo", "assigned": "In Progress",
                           "in-review": "In Review", "done": "Done" } },
   "goals": {
-    "oas-1": {
+    "recipes-1": {
       "title": "...", "summary": "...", "acceptance": ["..."],
-      "depends_on": [], "repo": "org/repo", "links": ["https://github.com/org/repo/issues/101"],
-      "status": "done", "worker": "oas-w-auth",
+      "depends_on": [], "repo": "example/recipes",
+      "links": ["https://github.com/example/recipes/issues/101"],
+      "status": "done", "worker": "recipes-w-search",
       "reason": null,
-      "handoff": { "pr": "https://github.com/org/repo/pull/210", "notes": "..." },
+      "handoff": { "pr": "https://github.com/example/recipes/pull/210", "notes": "..." },
       "override": null
     }
   },
   "workers": {
-    "oas-w-auth": { "registered": "2026-10-26T10:02:00Z", "current": null,
-                    "history": ["oas-1"], "last_seen": "2026-10-26T12:40:00Z" }
+    "recipes-w-search": { "registered": "2026-10-26T10:02:00Z", "current": null,
+                          "history": ["recipes-1"], "last_seen": "2026-10-26T12:40:00Z" }
   }
 }
 ```
@@ -197,7 +198,7 @@ epic live in a browser. See `2026-10-26-status-html-design.md`.
 ### 5.3 `events.log`
 
 `<ISO timestamp> <actor> <event> <details>`, e.g.
-`2026-10-26T12:41:00Z oas-w-auth DONE oas-1 pr=...#210`.
+`2026-10-26T12:41:00Z recipes-w-search DONE recipes-1 pr=...#210`.
 
 ## 6. GitHub responsibilities
 
@@ -233,7 +234,7 @@ epic: <slug>
 | `NONE_READY` | M→W | `epic, reason` |
 | `STATUS` | W→M | `epic, goal, state` (`needs-user`, `blocked`, `assigned` to resume), `reason` |
 | `DONE` | W→M | `epic, goal, pr` (optional), `notes` |
-| `ACK` | M→W | `epic, re` (e.g. `DONE oas-2 → in-review`) |
+| `ACK` | M→W | `epic, re` (e.g. `DONE recipes-2 → in-review`) |
 | `ERROR` | M→W | `epic, re, reason` (unknown worker, wrong goal, bad message) |
 
 ### Trust rules
