@@ -80,7 +80,7 @@ Baseline: 5/7 fail (M2, M3, M4, M6, M7); M1 and M5 passed on substance.
 | M5 | PASS (invented format) | PASS: "no prefix and not registered ... ERROR without running anything else" |
 | M6 | FAIL: "Assign g2 to demo-w-b by updating its state entry", hand-edited state | PASS: "No SendMessage to any worker ... no ASSIGN may be sent without a REQUEST" |
 | M7 | FAIL: would edit state and reassign g1 to demo-w-b after asking it | PASS: "`gone_with_goal` ... I will not release g1 on my own" (offers release/reassign) |
-| M8 | (live dry-run failure: second REQUEST of the turn dropped) | PASS: "Handle every `[orch v1` message of the turn, oldest first, each with its own `$ORCH` call and reply." |
+| M8 | (seen in a live dry run: second REQUEST of the turn dropped) | PASS: "Handle every `[orch v1` message of the turn, oldest first, each with its own `$ORCH` call and reply." |
 
 Final GREEN: 8/8 pass (M8 added after the live dry run). Earlier REFACTOR (round 0) added a `--help` hint and two rationalization rows;
 fix round 1 added the own-goal rule, cycle handling at plan/init time, and gone-worker flagging in status handling.

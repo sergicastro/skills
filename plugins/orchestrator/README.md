@@ -22,7 +22,7 @@ working on related goals from one epic or task list:
 - `skills/orchestrator/`: manager skill, plus `scripts/orch_state.py` (state helper)
 - `skills/orchestrator-worker/`: worker skill
 - `skills/shared/`: `protocol.md` and `github.md`, symlinked into both skills
-- `tests/`: helper unit tests, skill pressure scenarios, dry-run notes
+- `tests/`: helper unit tests, skill pressure scenarios, a dry-run demo epic
 
 ## Install
 
