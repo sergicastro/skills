@@ -1798,7 +1798,6 @@ git commit -m "feat: add orchestrator worker skill"
 **Files:**
 - Modify: `README.md`
 - Create: `tests/dry-run/demo-epic.md`
-- Create: `tests/dry-run/RESULTS.md`
 
 **Interfaces:**
 - Consumes: both skills and the helper.
@@ -1879,7 +1878,7 @@ ln -s $W/skills/orchestrator-worker ~/.agents/skills/orchestrator-worker
 
 - [ ] **Step 6: Guide the user through the dry run**
 
-The user creates the sessions. Give them these steps and record each outcome in `tests/dry-run/RESULTS.md` (pass/fail + notes):
+The user creates the sessions. Give them these steps and note each outcome (pass/fail + notes):
 
 1. Session `dry-manager`: `/orchestrator <contents of tests/dry-run/demo-epic.md>` → plan shown, nothing written until "go". After "go", `~/.claude-orchestrator/<slug>/` exists.
 2. Sessions `<slug>-w-one` and `<slug>-w-two`: `/orchestrator-worker dry-manager` → both registered (ACK).
@@ -1890,7 +1889,7 @@ The user creates the sessions. Give them these steps and record each outcome in 
 7. Manager: "status" → table matches reality.
 8. Try a session not using the prefix (`/orchestrator-worker dry-manager`) → told to rename.
 
-- [ ] **Step 7: Fix and record**
+- [ ] **Step 7: Fix failures**
 
 For any failure, fix the skill or helper (re-run unit tests and the affected pressure scenario), and repeat the failing dry-run step. Then clean up: `rm -rf ~/.claude-orchestrator/<slug> ~/tmp-orch-dry-run`, and ask the user whether to keep or remove the temporary symlinks.
 
@@ -1898,7 +1897,7 @@ For any failure, fix the skill or helper (re-run unit tests and the affected pre
 
 ```bash
 git add tests/dry-run
-git commit -m "test: record orchestrator live dry run"
+git commit -m "test: add orchestrator dry-run demo epic"
 ```
 
 - [ ] **Step 9: Finish the branch**
