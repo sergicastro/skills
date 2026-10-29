@@ -1,1 +1,1 @@
-../shared/github.md
+../../shared/github.md

@@ -1,1 +1,1 @@
-../shared/protocol.md
+../../shared/protocol.md

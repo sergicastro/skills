@@ -1,0 +1,8 @@
+{
+  "name": "orchestrator",
+  "version": "0.1.0",
+  "description": "Coordinate several user-created Claude sessions working on one epic: a manager session plans goals and dependencies, worker sessions take goals in parallel.",
+  "author": { "name": "Sergi Castro" },
+  "license": "MIT",
+  "keywords": ["orchestration", "multi-session", "epic", "github"]
+}

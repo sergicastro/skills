@@ -1,4 +1,4 @@
-# claude-orchestrator
+# orchestrator
 
 A pair of Claude Code skills that coordinate several user-created Claude sessions
 working on related goals from one epic or task list:
@@ -21,16 +21,22 @@ working on related goals from one epic or task list:
 
 - `skills/orchestrator/`: manager skill, plus `scripts/orch_state.py` (state helper)
 - `skills/orchestrator-worker/`: worker skill
-- `skills/shared/`: `protocol.md` and `github.md`, symlinked into both skills
+- `shared/`: `protocol.md` and `github.md`, symlinked into both skills
 - `tests/`: helper unit tests, skill pressure scenarios, a dry-run demo epic
 
 ## Install
 
-```bash
-ln -s ~/workspace/claude-orchestrator/skills/orchestrator ~/.agents/skills/orchestrator
-ln -s ~/workspace/claude-orchestrator/skills/orchestrator-worker ~/.agents/skills/orchestrator-worker
-```
-To try a branch, point the symlinks at its worktree instead, then back.
+In Claude Code:
+
+    /plugin install orchestrator --marketplace sergicastro/skills
+
+On Claude Code older than 2.1.275, add the marketplace first:
+
+    /plugin marketplace add sergicastro/skills
+    /plugin install orchestrator@sergicastro-skills
+
+To work on the skills, run Claude Code with the local copy instead:
+`claude --plugin-dir plugins/orchestrator` from the repo root.
 
 ## Use
 
@@ -63,13 +69,15 @@ recent events, updated within a second of each change.
 
 The screenshots use made-up data.
 
-    python3 skills/orchestrator/scripts/orch_state.py serve --ensure   # start if needed
-    python3 skills/orchestrator/scripts/orch_state.py serve --stop     # stop it
+    python3 plugins/orchestrator/skills/orchestrator/scripts/orch_state.py serve --ensure   # start if needed
+    python3 plugins/orchestrator/skills/orchestrator/scripts/orch_state.py serve --stop     # stop it
 
 Without the server, open `~/.claude-orchestrator/<slug>/status.html`; it reloads every
 3 seconds.
 
 ## Tests
+
+From `plugins/orchestrator/`:
 
 ```bash
 python3 -m unittest discover -s tests -v
@@ -79,4 +87,4 @@ See `docs/specs/` for the design.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](../../LICENSE).

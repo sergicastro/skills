@@ -1,0 +1,14 @@
+{
+  "name": "sergicastro-skills",
+  "owner": { "name": "Sergi Castro" },
+  "metadata": { "description": "Claude Code skills by Sergi Castro" },
+  "plugins": [
+    {
+      "name": "orchestrator",
+      "source": "./plugins/orchestrator",
+      "description": "Coordinate several user-created Claude sessions working on one epic: a manager session plans goals and dependencies, worker sessions take goals in parallel.",
+      "category": "productivity",
+      "keywords": ["orchestration", "multi-session", "epic", "github"]
+    }
+  ]
+}
