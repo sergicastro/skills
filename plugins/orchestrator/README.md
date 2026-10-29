@@ -66,6 +66,11 @@ orchestration, and gives you its URL (default `http://127.0.0.1:8765/`). The ind
 every orchestration; each one has a page with its dependency graph, goals, workers and
 recent events, updated within a second of each change.
 
+A worker reports each PR as soon as it opens it, so the PR column fills in while the goal
+is still in progress, and a goal can list several PRs:
+
+![A goal gaining its first and second PR, then moving to in-review](docs/images/status-pr-visibility.gif)
+
 ![Epic page: dependency graph, goals, workers and recent events](docs/images/status-epic-light.png)
 
 <details>
