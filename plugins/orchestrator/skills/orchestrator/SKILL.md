@@ -138,6 +138,8 @@ REGISTER): the helper rejects it; relay its error.
 | unblock on review | `$ORCH policy <slug> in-review` (back: `done`) |
 | prioritize … | `$ORCH prioritize <slug> <goal>...` |
 | add / drop a goal | `$ORCH add-goal <slug> --goal-json '<json>'` (json has an `id`) / `$ORCH drop-goal <slug> <goal>` |
+| rename the epic / change its link | `$ORCH edit-epic <slug> --title "<title>"` and/or `--source <url>` (`--source ""` removes it). Changes only the local pages, not GitHub. |
+| edit a goal (title, summary, acceptance, repo, links, depends on) | `$ORCH edit-goal <slug> <goal> --goal-json '<json>'` with only the fields to change. Dependencies change only while the goal is blocked or ready. If the reply has a `worker`, tell the user that worker still has the old text and they can pass the change on in its session; don't message it. |
 | <worker> was renamed to <new> | `$ORCH rename-worker <slug> <old> <new>` (after the new name has registered) |
 | status / what's X doing | `ListAgents` → `$ORCH liveness --live …` → `$ORCH show`. Flag every worker in `gone_with_goal` and offer `release` (goal back to ready) or reassign; never release on your own. Mention the live page URL from `$ORCH serve --ensure`. If every goal is done, suggest cleanup. |
 | cleanup / we're done | See "Cleanup" below. |
