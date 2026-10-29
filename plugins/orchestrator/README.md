@@ -67,11 +67,19 @@ every orchestration; each one has a page with its dependency graph, goals, worke
 recent events, updated within a second of each change.
 
 A worker reports each PR as soon as it opens it, so the PR column fills in while the goal
-is still in progress, and a goal can list several PRs:
+is still in progress, and a goal can list several PRs. A bullet after each PR link shows
+its health, read from GitHub with the `gh` CLI every minute or so:
 
-![A goal gaining its first and second PR, then moving to in-review](docs/images/status-pr-visibility.gif)
+- green: ready to merge (checks pass, no review blocking it)
+- yellow: waiting (a draft, checks running, or a review required)
+- red: needs action (a check failed, changes requested, a merge conflict, or closed unmerged)
+- purple: merged
+- grey: unknown (`gh` missing, not logged in, offline, or not a GitHub PR)
 
-![Epic page: dependency graph, goals, workers and recent events](docs/images/status-epic-light.png)
+Hover a bullet for the reason. Set `ORCH_PR_STATUS=off` to skip the GitHub calls; every
+bullet is then grey. `status.md` and the static `status.html` have no bullets.
+
+![Epic page: dependency graph, goals, workers and recent events, with PRs gaining health bullets](docs/images/status-pr-bullets.gif)
 
 <details>
 <summary>Dark mode and the index page</summary>
