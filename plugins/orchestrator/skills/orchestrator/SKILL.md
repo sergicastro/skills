@@ -140,7 +140,8 @@ REGISTER): the helper rejects it; relay its error.
 | prioritize … | `$ORCH prioritize <slug> <goal>...` |
 | add / drop a goal | `$ORCH add-goal <slug> --goal-json '<json>'` (json has an `id`) / `$ORCH drop-goal <slug> <goal>` |
 | rename the epic / change its link | `$ORCH edit-epic <slug> --title "<title>"` and/or `--source <url>` (`--source ""` removes it). Changes only the local pages, not GitHub. |
-| edit a goal (title, summary, acceptance, repo, links, depends on) | `$ORCH edit-goal <slug> <goal> --goal-json '<json>'` with only the fields to change. Dependencies change only while the goal is blocked or ready. If the reply has a `worker`, tell the user that worker still has the old text and they can pass the change on in its session; don't message it. |
+| edit a goal (title, summary, acceptance, repo, links, depends on) | `$ORCH edit-goal <slug> <goal> --goal-json '<json>'` with only the fields to change. Dependencies change only while the goal is blocked or ready. If the reply has a `worker`, that worker still has the old text; offer a notice (see
+  "Notices"), and send nothing until the user approves. |
 | <worker> was renamed to <new> | `$ORCH rename-worker <slug> <old> <new>` (after the new name has registered) |
 | status / what's X doing | `ListAgents` → `$ORCH liveness --live …` → `$ORCH show`. Flag every worker in `gone_with_goal` and offer `release` (goal back to ready) or reassign; never release on your own. Mention the live page URL from `$ORCH serve --ensure`. If every goal is done, suggest cleanup. |
 | tell <worker(s)> that … / notify | See "Notices" below. |
@@ -154,8 +155,8 @@ request. Don't message them.
 A notice tells workers that something changed which may affect their goal. Never send one on
 your own.
 
-**Propose one** after any of: `add-goal`, `drop-goal`, `prioritize`, `sendback`, or an
-edit the user makes to a goal; `approve` of a goal whose handoff notes mention an interface
+**Propose one** after any of: `add-goal`, `drop-goal`, `prioritize`, `sendback`, `edit-goal`, or
+any other edit the user makes to a goal; `approve` of a goal whose handoff notes mention an interface
 or design decision; a decision the user states in chat that touches goals in progress. Skip it
 for routine state changes. The user can also ask for one ("tell demo-w-a that …") and can widen
 the recipients to every registered worker.
@@ -168,12 +169,17 @@ the recipients to every registered worker.
    to get the recipients, and show the user the recipients and the exact text. Idle workers
    are added only if the user asks (`--to`). Then wait for the go-ahead. If the user changes the
    text or the recipients, run `--dry-run` again and show the result before sending.
-3. On go: run it again without `--dry-run` (same arguments, plus any `--to` the user changed). It returns `id`,
-   `to` and the text. Send one `[orch v1 NOTICE]` per name in `to` (`protocol.md`). If a send
+   For `kind: dropped`, run the dry run BEFORE `drop-goal`, or pass `--to` naming the affected
+   workers.
+3. On go: run `notify` without `--dry-run` and ALWAYS pass `--to <the exact names from the dry
+   run, comma-separated>` (with `--goal`, `--kind` and `--summary` unchanged), so the recorded
+   recipients are the ones the user approved. It returns `id`, `to` and the text. Send one `[orch v1 NOTICE]` per name in `to` (`protocol.md`). If a send
    fails, say which worker, and leave it pending.
 4. Each recipient answers NOTICED; run `$ORCH noticed` for it. `$ORCH pending-notices <slug>`
-   lists who has not. On resume, mention pending notices and offer to resend; never resend on
-   your own.
+   lists who has not (with each notice's id, goal, kind and summary). On resume, mention
+   pending notices and offer to resend; never resend on your own. To resend, send the same
+   `[orch v1 NOTICE]` with the SAME id, goal, kind and summary (from `$ORCH pending-notices
+   <slug>`) to the names still pending; do NOT run `notify` again (that would create a new id).
 
 ## Cleanup
 

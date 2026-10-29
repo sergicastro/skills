@@ -1,7 +1,7 @@
 # Orchestrator: change notices to workers — design
 
 Date: 2026-10-29
-Status: draft, awaiting review
+Status: approved 2026-10-29
 Extends: `2026-10-26-orchestrator-design.md` (protocol v1)
 
 ## 1. Purpose
@@ -64,7 +64,8 @@ id: <n>
 
 After any of these, the manager considers whether a live worker could be affected:
 
-- the user edits, adds, drops or reprioritizes a goal (`add-goal`, `drop-goal`, `prioritize`);
+- the user edits, adds, drops or reprioritizes a goal (`add-goal`, `drop-goal`, `prioritize`, `edit-goal`);
+- the user sends a goal back to its worker (`sendback`);
 - the user approves a goal whose handoff notes mention an interface or design decision;
 - the user states a decision in chat that touches goals already in progress.
 

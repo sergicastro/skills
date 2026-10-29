@@ -491,7 +491,7 @@ class NoticeTests(Base):
     def test_unknown_goal_without_to_is_an_error(self):
         code, out = self.notify("--goal", "nope")
         self.assertEqual(code, 2)
-        self.assertIn("unknown goal nope", out["error"])
+        self.assertIn("unknown goal nope; for a dropped goal pass --to", out["error"])
 
     def test_unknown_goal_with_to_is_allowed_for_dropped_goals(self):
         code, out = self.run_cli("notify", "demo", "--kind", "dropped", "--summary", "g9 removed",
@@ -519,7 +519,9 @@ class NoticeTests(Base):
         self.assertEqual(code, 0, out)
         self.assertEqual(out["pending"], ["demo-w-b"])
         code, out = self.run_cli("pending-notices", "demo")
-        self.assertEqual(out, [{"id": 1, "goal": None, "kind": "changed", "pending": ["demo-w-b"]}])
+        self.assertEqual(out, [{"id": 1, "goal": None, "kind": "changed",
+                                "summary": out[0]["summary"], "pending": ["demo-w-b"]}])
+        self.assertTrue(out[0]["summary"])
         self.run_cli("noticed", "demo", "demo-w-b", "1")
         self.assertEqual(self.run_cli("pending-notices", "demo")[1], [])
 

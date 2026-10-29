@@ -487,7 +487,10 @@ def notify(state, kind, summary, gid, to, dry_run=False):
         names = list(dict.fromkeys(to))
     else:
         if gid is not None:
-            goal(state, gid)  # unknown goal: pass --to explicitly (e.g. for a dropped goal)
+            try:
+                goal(state, gid)
+            except OrchError as e:
+                raise OrchError(f"{e}; for a dropped goal pass --to")
         names = default_recipients(state, gid)
         if not names:
             raise OrchError("no recipients: no live worker is affected; pass --to to choose some")
@@ -519,7 +522,8 @@ def pending_notices(state):
     for n in state.get("notices", []):
         pending = [k for k, v in n["to"].items() if not v["acked"]]
         if pending:
-            out.append({"id": n["id"], "goal": n["goal"], "kind": n["kind"], "pending": pending})
+            out.append({"id": n["id"], "goal": n["goal"], "kind": n["kind"],
+                        "summary": n["summary"], "pending": pending})
     return out
 
 
