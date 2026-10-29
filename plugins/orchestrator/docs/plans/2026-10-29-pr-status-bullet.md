@@ -680,9 +680,9 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
 
 **Files:**
 - Modify: `README.md` ("Live status page" section)
-- Create: `docs/images/status-pr-bullets.gif`
-- Modify: `docs/images/status-epic-light.png`, `docs/images/status-epic-dark.png`
-- Delete: `docs/images/status-pr-visibility.gif` (replaced by the new GIF)
+- Create: `docs/images/status-pr-bullets.gif` (a full-page GIF; it replaces the light epic screenshot in the README)
+- Modify: `docs/images/status-epic-dark.png` (retaken)
+- Delete: `docs/images/status-epic-light.png` (the GIF replaces it), `docs/images/status-pr-visibility.gif` (the older, cropped GIF)
 
 **Interfaces:**
 - Consumes: the working server and bullets from Tasks 1-3.
@@ -771,38 +771,42 @@ frame 4 $L; frame 4-dark
 ls -la $WORK/f
 ```
 
-Expected: `1.png`, `2.png`, `3.png`, `4.png`, `4-dark.png`. Open each with the Read tool and check: frame 1 shows `#218` with a yellow bullet; frame 2 `#218` green and `#221` yellow; frame 3 `#221` red; frame 4 `#218` purple, `#221` green, goal `in-review`; finished goals (#211, #214, #215) purple; the legend line is visible under "Goals". If a bullet is grey, the fake `gh` was not on the server's `PATH` or the 3 s sleep was too short.
+Expected: `1.png`, `2.png`, `3.png`, `4.png`, `4-dark.png`, each 1200 x 1450 (the same size as the current `status-epic-light.png`; check with `file`). Open each with the Read tool and check: frame 1 shows `#218` with a yellow bullet; frame 2 `#218` green and `#221` yellow; frame 3 `#221` red; frame 4 `#218` purple, `#221` green, goal `in-review`; finished goals (#211, #214, #215) purple; the legend line is visible under "Goals". If a bullet is grey, the fake `gh` was not on the server's `PATH` or the 3 s sleep was too short.
 
-- [ ] **Step 3: Make the GIF and replace the screenshots**
+- [ ] **Step 3: Make the GIF and replace the images**
+
+The GIF replaces the light epic screenshot in the README, so its frames are the whole page at
+the screenshot's size (1200 x 1450): dependency graph, goals, workers and recent events. Do not crop.
 
 ```bash
 cd $WORK/f
-for n in 1 2 3 4; do ffmpeg -loglevel error -y -i $n.png -vf "crop=1100:520:50:215" c$n.png; done
 cat > list.txt <<'EOF'
-file 'c1.png'
+file '1.png'
 duration 2.4
-file 'c2.png'
+file '2.png'
 duration 2.4
-file 'c3.png'
+file '3.png'
 duration 2.4
-file 'c4.png'
+file '4.png'
 duration 3.2
-file 'c4.png'
+file '4.png'
 EOF
-ffmpeg -loglevel error -y -f concat -i list.txt -vf "scale=900:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96[p];[b][p]paletteuse=dither=none" -loop 0 pr-bullets.gif
+ffmpeg -loglevel error -y -f concat -i list.txt -vf "split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];[b][p]paletteuse=dither=none" -loop 0 pr-bullets.gif
 cd - >/dev/null
 command cp -f $WORK/f/pr-bullets.gif docs/images/status-pr-bullets.gif
-command cp -f $WORK/f/4.png docs/images/status-epic-light.png
 command cp -f $WORK/f/4-dark.png docs/images/status-epic-dark.png
-git rm -q docs/images/status-pr-visibility.gif
-ls -la docs/images
+git rm -q docs/images/status-epic-light.png docs/images/status-pr-visibility.gif
+file docs/images/status-pr-bullets.gif; ls -la docs/images
 ```
 
-Expected: `status-pr-bullets.gif` under 150 KB. `cp` may be aliased to prompt; `command cp -f` avoids that.
+Expected: the GIF reports `1200 x 1450`. If it is over about 600 KB, lower `max_colors` to 96 before reducing anything else; never crop or shrink it.
+Check a middle frame: `ffmpeg -loglevel error -y -i docs/images/status-pr-bullets.gif -vf "select=eq(n\,2)" -vframes 1 $WORK/check.png`, then view `$WORK/check.png` and confirm all four sections are visible and the bullet colours are right. `cp` may be aliased to prompt; `command cp -f` avoids that.
 
 - [ ] **Step 4: Update the README**
 
-In the "Live status page" section, replace the sentence that introduces the old GIF and its image line with:
+In the "Live status page" section, the GIF takes the place of the current light screenshot line
+(`![Epic page: dependency graph, goals, workers and recent events](docs/images/status-epic-light.png)`)
+and of the older PR-visibility GIF with its introducing sentence. Replace both with:
 
 ```markdown
 A worker reports each PR as soon as it opens it, so the PR column fills in while the goal
@@ -818,10 +822,10 @@ its health, read from GitHub with the `gh` CLI every minute or so:
 Hover a bullet for the reason. Set `ORCH_PR_STATUS=off` to skip the GitHub calls; every
 bullet is then grey. `status.md` and the static `status.html` have no bullets.
 
-![PRs gaining bullets: checks running, approved, a draft, failing, merged](docs/images/status-pr-bullets.gif)
+![Epic page: dependency graph, goals, workers and recent events, with PRs gaining health bullets](docs/images/status-pr-bullets.gif)
 ```
 
-Keep the existing epic screenshot line after it, and make sure no reference to `status-pr-visibility.gif` remains: `grep -rn "status-pr-visibility" README.md docs` must print nothing outside `docs/plans` and `docs/specs`.
+Leave the `<details>` block (dark mode and the index) as it is. Then `grep -n "status-epic-light\|status-pr-visibility" README.md` must print nothing, and every image the README references must exist.
 
 - [ ] **Step 5: Verify, scan and commit**
 
@@ -831,7 +835,7 @@ Expected: OK.
 Run: `git diff --cached --stat; git diff -- README.md | grep -nE '/Users/|@[a-z0-9.-]+\.[a-z]+'` (expect no output). View the final light screenshot with the Read tool and confirm it shows only demo data (`acme/recipe-site`, `recipes-*`).
 
 ```bash
-git add README.md docs/images
+git add -A README.md docs/images
 git commit -S -s -m "docs(orchestrator): document PR status bullets and retake the demo images
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
