@@ -126,6 +126,11 @@
   .step.wide .look { margin: 16px 0; }
   .step.wide .visual svg { max-width: 720px; max-height: 40vh; }
 
+  /* Context card (step 1): the question, the setting, why it matters, what you need first, the running example */
+  .ctx { margin: 0 0 16px; padding: 4px 16px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); }
+  .ctx dt { font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; margin-top: 12px; }
+  .ctx dd { margin: 2px 0 12px; }
+  .ctx ul { margin: 4px 0 0; padding-left: 20px; }
   .analogy { display: flex; gap: 10px; padding: 10px 14px; margin: 16px 0; border-radius: 10px; background: var(--accent-soft); font-size: .95rem; }
   .analogy::before { content: "💡"; }
   .analogy span::before { content: "Think of it like: "; font-weight: 600; }
@@ -197,6 +202,7 @@
     background: var(--card); border-left: 1px solid var(--line); padding: 16px 20px; overflow-y: auto;
     transform: translateX(100%); visibility: hidden; transition: transform .2s, visibility .2s; box-shadow: -8px 0 24px rgb(0 0 0 / .12); }
   body.gloss #gloss { transform: none; visibility: visible; }
+  #gloss h3 { font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 16px 0 8px; }
   #gloss dt { font-weight: 600; } #gloss dd { margin: 0 0 12px; color: var(--muted); font-size: .92rem; }
 
   /* ---------- Medium: stack read/look ---------- */
@@ -299,6 +305,14 @@ const META = {
   bigPicture: "One sentence: what this is and why it matters.",
 };
 
+/* Who's who: every project-specific name used on the page (services, files, functions, teams), each with a one-liner
+   saying what it is / does. Shown first in the Glossary drawer; <dfn> tooltips look here too. */
+const CAST = {
+  // "name": "What it is, in one line.",
+  "orders-svc": "The service that returns a customer's orders.",
+  "Gateway": "The front door every request passes through; it checks tokens before forwarding.",
+};
+
 const GLOSSARY = {
   // "term": "Plain-language definition.",
   "example term": "A short definition shown on hover and in the glossary.",
@@ -324,9 +338,22 @@ const DIAGRAM = `<svg viewBox="0 0 640 170" role="img" aria-label="A request goe
    quiz.options: plain strings, or { t, why } where why explains that specific wrong answer on the retry. */
 const STEPS = [
   {
+    title: "What we're figuring out",
+    summary: "why GET /orders returns 401",
+    context: {
+      question: "Why does <code>GET /orders</code> come back <strong>401</strong> when the token has expired?",
+      setting: "Every request to our API passes the <dfn>Gateway</dfn> before it reaches a service such as <dfn>orders-svc</dfn>.",
+      why: "If you don't know where the check happens, you'll go looking for the bug in the wrong service.",
+      prereqs: ["<dfn>example term</dfn>: a one-line refresher of what the reader needs first."],
+      example: "A client calls <code>GET /orders</code> with a token that expired 5 minutes ago.",
+    },
+    body: `<p>The next steps follow that one request from the client to the reply.</p>`,
+    diagram: {},
+  },
+  {
     title: "The client sends a request",
     summary: "GET /orders leaves the client",
-    body: `<p>We follow one request: <strong>GET /orders with an expired token</strong>. It starts at the highlighted <mark>Client</mark> and heads for the <dfn>example term</dfn>.</p>`,
+    body: `<p>Our request starts at the highlighted <mark>Client</mark>: <strong>GET /orders with an expired token</strong>, heading for the <dfn>Gateway</dfn>. We start here because everything after this reacts to what the client sent.</p>`,
     diagram: { hl: ["client", "req"] },
     analogy: "A real-world comparison in one line (say which part maps to which).",
     code: null,
@@ -335,7 +362,7 @@ const STEPS = [
   {
     title: "The gateway checks the token",
     summary: "the first stop is a check",
-    body: `<p>The <mark>Gateway</mark> looks at the token <strong>before</strong> anything reaches the service.</p>`,
+    body: `<p>Once the request arrives, the <mark>Gateway</mark> looks at the token <strong>before</strong> anything reaches the service.</p>`,
     diagram: { hl: ["gw"] },
     code: `Authorization: Bearer eyJ…   // ← checked here`,
     quiz: { q: "What does the gateway do with the request first?",
@@ -367,7 +394,7 @@ const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const esc = s => s.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 const N = STEPS.length, LAST = N - 1;
-const terms = Object.keys(GLOSSARY);
+const terms = Object.keys(GLOSSARY), cast = Object.keys(CAST);
 document.title = META.title;
 $("#title").textContent = META.title;
 $$(".bigpic-text").forEach(e => e.textContent = META.bigPicture);
@@ -394,6 +421,11 @@ function diagramFor(i) {
   });
   return box.innerHTML + (recap ? "" : `<div class="legend"><span><i class="new"></i>new in this step</span><span><i></i>already introduced</span><span><i class="soon"></i>coming later</span></div>`);
 }
+// Context card: the fixed questions a newcomer needs answered before the mechanism starts
+const CTX = [["question", "The question"], ["setting", "Where this happens"], ["why", "Why it matters"],
+  ["prereqs", "What you need to know first"], ["example", "The example we'll follow"]];
+const contextHtml = c => `<dl class="ctx">${CTX.filter(([k]) => c[k] && c[k].length).map(([k, label]) =>
+  `<dt>${label}</dt><dd>${Array.isArray(c[k]) ? `<ul>${c[k].map(x => `<li>${x}</li>`).join("")}</ul>` : c[k]}</dd>`).join("")}</dl>`;
 // Code lines carrying a "←" marker get the diagram's highlight colour
 const codeHtml = c => esc(c).split("\n").map(l => `<span class="ln${l.includes("←") ? " hl-line" : ""}">${l || " "}</span>`).join("");
 
@@ -409,6 +441,7 @@ $("#stage").innerHTML = STEPS.map((s, i) => {
     <h2 id="h-${i}" tabindex="-1">${s.title}</h2>
     <div class="cols">
       <div class="read">
+        ${s.context ? contextHtml(s.context) : ""}
         <div class="body">${s.body || ""}</div>
         ${s.analogy ? `<div class="analogy"><span>${s.analogy}</span></div>` : ""}
         ${wide && look ? `<div class="look">${look}</div>` : ""}
@@ -424,7 +457,7 @@ $("#stage").innerHTML = STEPS.map((s, i) => {
           <h3>You made it to the end</h3><p id="score"></p>
           <div class="acts"><button class="primary" data-finish="restart">↺ Start over</button>
           <button data-finish="all">Review all steps</button>
-          ${terms.length ? `<button data-finish="gloss">Open glossary</button>` : ""}</div></section>` : ""}
+          ${terms.length || cast.length ? `<button data-finish="gloss">Open glossary</button>` : ""}</div></section>` : ""}
       </div>
       ${split ? `<div class="look">${look}</div>` : ""}
     </div>
@@ -433,7 +466,7 @@ $("#stage").innerHTML = STEPS.map((s, i) => {
 
 // Glossary: tooltips that stay on-screen, plus a drawer
 const tip = $("#tip");
-const GL = Object.fromEntries(terms.map(t => [t.toLowerCase(), GLOSSARY[t]]));
+const GL = Object.fromEntries([...cast.map(t => [t.toLowerCase(), CAST[t]]), ...terms.map(t => [t.toLowerCase(), GLOSSARY[t]])]);
 // <dfn data-term="token">tokens</dfn> names the entry explicitly; otherwise the text, then its singular, is looked up
 const findTerm = d => { const k = (d.dataset.term || d.textContent).trim().toLowerCase(); return GL[k] ?? GL[k.replace(/(es|s)$/, "")] ?? GL[k.replace(/s$/, "")]; };
 $$("dfn").forEach(d => {
@@ -450,9 +483,12 @@ $$("dfn").forEach(d => {
   d.addEventListener("mouseenter", show); d.addEventListener("focus", show);
   d.addEventListener("mouseleave", hide); d.addEventListener("blur", hide);
 });
+const dl = (keys, src) => "<dl>" + keys.map(t => `<dt>${t}</dt><dd>${src[t]}</dd>`).join("") + "</dl>";
 $("#gloss").innerHTML = `<div class="dhead"><h2>Glossary</h2><button class="x" data-close aria-label="Close glossary">×</button></div>` +
-  (terms.length ? "<dl>" + terms.map(t => `<dt>${t}</dt><dd>${GLOSSARY[t]}</dd>`).join("") + "</dl>" : "<p>No terms.</p>");
-if (!terms.length) $$('[data-act="gloss"]').forEach(b => b.hidden = true);
+  (cast.length ? `<h3>Who's who</h3>${dl(cast, CAST)}` : "") +
+  (terms.length ? `${cast.length ? "<h3>Terms</h3>" : ""}${dl(terms, GLOSSARY)}` : "") +
+  (terms.length || cast.length ? "" : "<p>No terms.</p>");
+if (!terms.length && !cast.length) $$('[data-act="gloss"]').forEach(b => b.hidden = true);
 
 // Panels and modes: every [data-act] button has a twin (top bar on desktop, ☰ menu on phones)
 let opener = null;   // what had focus before a drawer opened, so closing returns there
