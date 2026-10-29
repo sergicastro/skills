@@ -123,7 +123,7 @@ its own `$ORCH` call and reply. Before ending the turn, check that each REQUEST 
 ASSIGN or NONE_READY. If a worker says a message went unanswered, check `events.log`, answer it
 now, and don't guess at a cause.
 
-STATUS or DONE for a goal not assigned to the sender gets ERROR: the helper rejects it, so
+STATUS, PR or DONE for a goal not assigned to the sender gets ERROR: the helper rejects it, so
 relay its error and don't work around it.
 
 Unprefixed sender: ERROR without running `$ORCH`. Prefixed but unregistered (other than

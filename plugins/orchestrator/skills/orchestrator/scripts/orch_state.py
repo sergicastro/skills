@@ -438,9 +438,11 @@ def done(state, name, gid, pr, notes):
     if not notes:
         raise OrchError("handoff notes are required")
     g["status"], g["reason"] = "in-review", None
+    prs = goal_prs(g)
+    if pr and pr not in prs:
+        prs.append(pr)
+    g["prs"] = prs
     g["handoff"] = {"pr": pr, "notes": notes}
-    if pr:
-        g["prs"] = goal_prs(g)
     w["current"] = None
     if gid not in w["history"]:
         w["history"].append(gid)

@@ -323,6 +323,33 @@ class WorkerTests(Base):
         self.run_cli("done", "demo", "demo-w-b", "g2", "--pr", "https://example.com/pull/9", "--notes", "n")
         self.assertEqual(self.state()["goals"]["g2"]["prs"], ["https://example.com/pull/9"])
 
+    def test_done_appends_final_pr_after_earlier_ones(self):
+        self.start_g1()
+        self.run_cli("pr", "demo", "demo-w-a", "g1", "--url", "https://example.com/pull/1")
+        self.run_cli("pr", "demo", "demo-w-a", "g1", "--url", "https://example.com/pull/2")
+        self.run_cli("done", "demo", "demo-w-a", "g1", "--pr", "https://example.com/pull/3", "--notes", "n")
+        self.assertEqual(self.state()["goals"]["g1"]["prs"], [f"https://example.com/pull/{i}" for i in (1, 2, 3)])
+
+    def _legacy_resent_goal(self):
+        self.start_g1()
+        path = Path(self.tmp.name) / "demo" / "state.json"
+        st = json.loads(path.read_text())
+        g = st["goals"]["g1"]
+        g.pop("prs", None)
+        g["handoff"] = {"pr": "https://example.com/pull/1", "notes": "n"}
+        path.write_text(json.dumps(st))
+
+    def test_done_keeps_legacy_pr_when_resent_with_new_pr(self):
+        self._legacy_resent_goal()
+        self.run_cli("done", "demo", "demo-w-a", "g1", "--pr", "https://example.com/pull/2", "--notes", "n")
+        self.assertEqual(self.state()["goals"]["g1"]["prs"],
+                         ["https://example.com/pull/1", "https://example.com/pull/2"])
+
+    def test_done_keeps_legacy_pr_when_resent_without_pr(self):
+        self._legacy_resent_goal()
+        self.run_cli("done", "demo", "demo-w-a", "g1", "--notes", "n")
+        self.assertEqual(self.state()["goals"]["g1"]["prs"], ["https://example.com/pull/1"])
+
     def test_goal_prs_reads_legacy_handoff_pr(self):
         legacy = {"handoff": {"pr": "https://example.com/pull/3", "notes": "n"}}
         self.assertEqual(orch_state.goal_prs(legacy), ["https://example.com/pull/3"])

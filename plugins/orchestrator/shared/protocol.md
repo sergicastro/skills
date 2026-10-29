@@ -72,7 +72,7 @@ repo: <owner/repo or path, or ->
 links:
   - <url>
 upstream:
-  - <goal id> (<status>): pr <url or ->; notes: <notes>
+  - <goal id> (<status>): pr <urls, comma-separated, or ->; notes: <notes>
 board: <project> / <field>: set "<start value>" when you start, "<done value>" when you finish   (or: board: none)
 state_dir: <path>   (read-only for workers)
 ```
