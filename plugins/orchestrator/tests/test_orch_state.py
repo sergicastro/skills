@@ -293,7 +293,7 @@ class UserTests(Base):
     def test_approve_unblocks_dependents(self):
         self.finish_g1()
         self.assertEqual(self.run_cli("approve", "demo", "g1"),
-                         (0, {"goal": "g1", "status": "done", "newly_ready": ["g2", "g3"]}))
+                         (0, {"goal": "g1", "status": "done", "newly_ready": ["g2", "g3"], "all_done": False}))
         self.assertIn("user APPROVE g1", (Path(self.tmp.name) / "demo" / "events.log").read_text())
 
     def test_approve_only_from_in_review(self):
@@ -487,6 +487,62 @@ class EdgeCaseTests(Base):
         code, out = self.run_cli("show", "demo")
         self.assertEqual(code, 2)
         self.assertIn("worker demo-w-a: missing history", out["error"])
+
+
+class CleanupTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.init(plan({"g1": {"title": "Only", "summary": "s"}}))
+        self.run_cli("register", "demo", "demo-w-a")
+        self.run_cli("register", "demo", "demo-w-b")
+        self.run_cli("request", "demo", "demo-w-a")
+        self.run_cli("done", "demo", "demo-w-a", "g1", "--notes", "n")
+
+    def stub_stop(self):
+        stop = mock.Mock(return_value={"stopped": True, "pid": 1})
+        patcher = mock.patch.dict(sys.modules, {"orch_serve": mock.Mock(stop=stop)})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return stop
+
+    def test_approve_reports_all_done(self):
+        self.assertEqual(self.run_cli("approve", "demo", "g1"),
+                         (0, {"goal": "g1", "status": "done", "newly_ready": [], "all_done": True}))
+
+    def test_refuses_while_goals_are_open(self):
+        code, out = self.run_cli("cleanup", "demo", "--delete")
+        self.assertEqual(code, 2)
+        self.assertIn("g1 (in-review)", out["error"])
+        self.assertTrue((Path(self.tmp.name) / "demo" / "state.json").exists())
+
+    def test_without_flags_only_lists_workers(self):
+        self.run_cli("approve", "demo", "g1")
+        self.assertEqual(self.run_cli("cleanup", "demo"), (0, {
+            "cleaned": "demo", "deleted": False, "server_stopped": False,
+            "workers": ["demo-w-a", "demo-w-b"]}))
+        self.assertTrue((Path(self.tmp.name) / "demo" / "state.json").exists())
+
+    def test_delete_removes_state_dir(self):
+        self.run_cli("approve", "demo", "g1")
+        code, out = self.run_cli("cleanup", "demo", "--delete")
+        self.assertEqual((code, out["deleted"], out["workers"]), (0, True, ["demo-w-a", "demo-w-b"]))
+        self.assertFalse((Path(self.tmp.name) / "demo").exists())
+
+    def test_stop_server_when_no_other_orchestration(self):
+        stop = self.stub_stop()
+        self.run_cli("approve", "demo", "g1")
+        code, out = self.run_cli("cleanup", "demo", "--delete", "--stop-server")
+        self.assertEqual((code, out["server_stopped"]), (0, True))
+        stop.assert_called_once_with()
+
+    def test_server_kept_while_another_orchestration_exists(self):
+        stop = self.stub_stop()
+        self.init(plan(epic={"slug": "other", "title": "Other"}), slug="other")
+        self.run_cli("approve", "demo", "g1")
+        code, out = self.run_cli("cleanup", "demo", "--delete", "--stop-server")
+        self.assertEqual((code, out["server_stopped"]), (0, False))
+        self.assertIn("other", out["server_reason"])
+        stop.assert_not_called()
 
 
 class GoldenTests(Base):

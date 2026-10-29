@@ -48,6 +48,9 @@ To work on the skills, run Claude Code with the local copy instead:
    `approve <goal>` (or `send <goal> back`). Then say "next" in the worker again.
 4. Ask the manager "status" at any time. State lives in `~/.claude-orchestrator/<slug>/`
    (`status.md` is the readable view; the manager also gives you a live page).
+5. Once every goal is approved, the manager suggests a cleanup. Say "cleanup" and pick
+   what to do: delete the state directory, stop the status server (if no other
+   orchestration is left), and tell the workers they can end their sessions.
 
 ## Live status page
 
