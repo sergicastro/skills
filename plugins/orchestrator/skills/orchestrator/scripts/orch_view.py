@@ -72,10 +72,29 @@ def pr_label(url):
     return f"#{tail}" if "/pull/" in str(url) and tail.isdigit() else str(url)
 
 
-def prs_html(urls):
+def pr_dot(result):
+    health, reason = result
+    return (f'<span class="pr-dot h-{esc(health)}" role="img" aria-label="{esc(reason)}" '
+            f'title="{esc(reason)}"></span>')
+
+
+def prs_html(urls, health=None):
     if not urls:
         return "-"
-    return " ".join(link(u, pr_label(u)) for u in urls)
+    health = health or {}
+    out = []
+    for u in urls:
+        entry = link(u, pr_label(u))
+        if u in health:
+            entry = f'<span class="pr">{entry}{pr_dot(health[u])}</span>'
+        out.append(entry)
+    return " ".join(out)
+
+
+PR_LEGEND = '<p class="legend">PR bullets: ' + " · ".join(
+    f'<span class="pr-dot h-{h}"></span> {text}'
+    for h, text in (("green", "ready to merge"), ("yellow", "waiting"), ("red", "needs action"),
+                    ("merged", "merged"), ("unknown", "unknown"))) + "</p>"
 
 
 def time_html(iso):
@@ -147,7 +166,7 @@ def graph_svg(vm):
     )
 
 
-def main_html(vm):
+def main_html(vm, health=None):
     title = link(vm["source"], vm["title"]) if vm["source"] else esc(vm["title"])
     pending = vm.get("notices") or []
     notices = ""
@@ -156,10 +175,11 @@ def main_html(vm):
             f'<li>#{n["id"]} <code>{esc(n["kind"])}</code> {esc(n["goal"] or "epic-wide")}: '
             f'waiting on {esc(", ".join(n["pending"]))}</li>' for n in pending)
         notices = f'<section><h2>Pending notices</h2><ul>{items}</ul></section>'
+    legend = PR_LEGEND if health is not None and any(g["prs"] for g in vm["goals"]) else ""
     goal_rows = "".join(
         f'<tr id="goal-{esc(g["id"])}" data-goal="{esc(g["id"])}" data-status="{esc(g["status"])}">'
         f'<td>{esc(g["id"])}</td><td>{esc(g["title"])}</td><td>{badge(g["status"])}</td>'
-        f'<td>{esc(g["worker"] or "-")}</td><td>{prs_html(g["prs"])}</td>'
+        f'<td>{esc(g["worker"] or "-")}</td><td>{prs_html(g["prs"], health)}</td>'
         f'<td>{esc(g["reason"] or "")}</td></tr>'
         for g in vm["goals"])
     worker_rows = "".join(
@@ -181,7 +201,7 @@ def main_html(vm):
         + progress_html(vm["counts"])
         + f'<p class="updated">Last updated {time_html(vm["updated"])}</p></header>'
         + f'<section><h2>Dependencies</h2>{graph_svg(vm)}</section>'
-        + '<section><h2>Goals</h2><div class="table"><table><thead><tr><th>Goal</th><th>Title</th>'
+        + f'<section><h2>Goals</h2>{legend}<div class="table"><table><thead><tr><th>Goal</th><th>Title</th>'
         + '<th>Status</th><th>Worker</th><th>PR</th><th>Reason</th></tr></thead>'
         + f'<tbody>{goal_rows}</tbody></table></div></section>'
         + f'<section><h2>Workers</h2><p class="meta">Liveness checked {checked}</p>'

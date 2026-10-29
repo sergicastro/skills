@@ -956,6 +956,40 @@ class ViewModelTests(Base):
         self.assertEqual(orch_view.prs_html([]), "-")
         self.assertNotIn("<a ", orch_view.prs_html(["javascript:alert(1)"]))
 
+    def test_prs_html_without_health_has_no_bullets(self):
+        out = orch_view.prs_html(["https://github.com/acme/recipe-site/pull/12"])
+        self.assertNotIn("pr-dot", out)
+        self.assertNotIn('class="pr"', out)
+
+    def test_prs_html_adds_a_bullet_to_each_pr_that_has_a_result(self):
+        a, b, c = (f"https://github.com/acme/recipe-site/pull/{n}" for n in (12, 15, 16))
+        out = orch_view.prs_html([a, b, c], {a: ("green", "ready to merge"), b: ("red", "checks failing")})
+        self.assertIn(f'<span class="pr"><a href="{a}">#12</a>'
+                      '<span class="pr-dot h-green" role="img" aria-label="ready to merge" title="ready to merge"></span></span>', out)
+        self.assertIn('class="pr-dot h-red"', out)
+        self.assertEqual(out.count("pr-dot"), 2)
+        self.assertIn(f'<a href="{c}">#16</a>', out)
+        self.assertNotIn(f'<span class="pr"><a href="{c}">', out)
+
+    def test_pr_dot_escapes_the_reason(self):
+        out = orch_view.pr_dot(("red", '<b>"x"'))
+        self.assertNotIn("<b>", out)
+        self.assertIn("&lt;b&gt;", out)
+
+    def test_main_html_shows_bullets_and_legend_only_with_health_and_a_pr(self):
+        url = "https://github.com/acme/recipe-site/pull/12"
+        state = orch_state.init("demo", plan())
+        no_prs = orch_state.view_model(state, [])
+        self.assertNotIn("PR bullets", orch_view.main_html(no_prs, {}))
+        state["goals"]["g1"]["prs"] = [url]
+        vm = orch_state.view_model(state, [])
+        page = orch_view.main_html(vm, {url: ("merged", "merged")})
+        self.assertIn("h-merged", page)
+        self.assertIn("PR bullets", page)
+        plain = orch_view.main_html(vm)
+        self.assertNotIn("PR bullets", plain)
+        self.assertNotIn("pr-dot", plain)
+
 
 class HtmlTests(Base):
     def page(self, p=None):

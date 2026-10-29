@@ -67,6 +67,12 @@ td a { color: var(--s-ready); }
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: var(--s-blocked); }
 .dot.live { background: var(--s-done); }
 .dot.gone { background: var(--s-needs-user); }
+.pr { white-space: nowrap; }
+.pr-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin: 0 2px 0 4px; background: var(--s-blocked); }
+.pr-dot.h-green { background: var(--s-done); }
+.pr-dot.h-yellow { background: var(--s-assigned); }
+.pr-dot.h-red { background: var(--s-needs-user); }
+.pr-dot.h-merged { background: var(--s-in-review); }
 .events { list-style: none; padding: 0; margin: 0; font-size: 13px; }
 .events li { padding: 5px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
 .events time { color: var(--muted); display: inline-block; min-width: 90px; }
