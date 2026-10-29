@@ -43,7 +43,7 @@ Each step object has:
 | `analogy` | Optional one-liner real-world analogy. Say which part maps to which; put "where the analogy breaks down" in `deeper`. |
 | `code` | Optional minimal snippet (≤ 15 lines) — only the lines that matter. Lines containing `←` (e.g. `// ← this`) are highlighted in the diagram's colour. |
 | `deeper` | Optional "go deeper" detail, hidden behind a toggle. Edge cases and nuance go here, NOT in `body`. |
-| `quiz` | Optional `{q, options[], answer, why}` — for the confusing steps. Use 3–4 options: the reader gets one retry before the answer is revealed, and with only 2 options the retry would give it away. Ask a **prediction** ("what happens if…", "which component…"), not recall of the text. An option may be `{t, why}`: `why` is shown on the retry and explains why *that* answer is wrong (name the misconception). `why` on the quiz explains the right answer and names the trap. A quiz may sit on the step *after* a concept is introduced, to apply it. |
+| `quiz` | Optional `{q, options[], answer, why}` — for the confusing steps. Use 3–4 options: the reader gets one retry before the answer is revealed, and with only 2 options the retry would give it away. Ask a **prediction** ("what happens if…", "which component…"), not recall of the text. An option may be `{t, why}`: `why` is shown on the retry and explains why *that* answer is wrong (name the misconception). `why` on the quiz explains the right answer and names the trap. A quiz may sit on the step *after* a concept is introduced, to apply it. The page shuffles the options on display, so write them in any order and don't try to vary the right answer's position yourself. |
 | `wide` | Optional `true` — puts `visual`/`code` under the text at full width instead of beside it. Use for very wide diagrams. The Recap is always wide. |
 
 Global rules:
@@ -67,7 +67,7 @@ Global rules:
 - **Ending**: on the last step Next becomes "Finish ✓" and jumps to the finish panel (score, Start over, Review all steps, Open glossary).
 - **Shared diagram**: one `DIAGRAM`, per-step `diagram.hl` lighting, auto-ghosting of parts not yet introduced, legend, staged `build` reveals, diagram kit classes (`.label .zone .lifeline .bad .ok .flow .dim`), arrowheads that follow the theme.
 - **Orientation**: every step shows "Step n of N"; steps slide in from the direction of travel; code lines with `←` are highlighted.
-- **Quiz**: one retry before the answer is revealed, with option-specific hints; results show in the sidebar and the Recap.
+- **Quiz**: options shown in a shuffled (but stable across reloads) order; one retry before the answer is revealed, with option-specific hints; results show in the sidebar and the Recap.
 - **Progress is remembered** per page (localStorage): visited steps, quiz answers, last step.
 - "Show all" for skimming / printing; the sidebar and counter follow the scroll position.
 - **Context card** on step 1 (`context` field) and a **Who's who** section (`CAST`) shown first in the Glossary drawer; `<dfn>` tooltips look up both `CAST` and `GLOSSARY`.
