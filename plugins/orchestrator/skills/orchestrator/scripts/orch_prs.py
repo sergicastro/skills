@@ -17,7 +17,6 @@ TIMEOUT = 10
 UNKNOWN = ("unknown", "status unavailable")
 CLOSED = ("red", "closed without merging")
 FAILED_RUN = {"FAILURE", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED", "STARTUP_FAILURE"}
-PENDING_RUN = {"QUEUED", "IN_PROGRESS", "WAITING", "PENDING", "REQUESTED"}
 
 
 def parse_pr(url):
@@ -35,7 +34,7 @@ def check_state(check):
         return "pending" if state in ("PENDING", "EXPECTED") else "ok"
     if check.get("conclusion") in FAILED_RUN:
         return "failed"
-    return "pending" if check.get("status") in PENDING_RUN else "ok"
+    return "pending" if check.get("status") not in (None, "COMPLETED") else "ok"
 
 
 def classify(info):
@@ -100,7 +99,7 @@ class HealthCache:
             if done.returncode != 0:
                 return UNKNOWN
             return classify(json.loads(done.stdout))
-        except (OSError, subprocess.SubprocessError, ValueError, AttributeError, TypeError):
+        except Exception:
             return UNKNOWN
 
     def refresh_due(self):

@@ -74,6 +74,12 @@ class ClassifyTests(unittest.TestCase):
             self.assertEqual(orch_prs.classify(info(statusCheckRollup=[ctx(state)])), ("yellow", "checks running"), state)
         self.assertEqual(orch_prs.classify(info(reviewDecision="REVIEW_REQUIRED")), ("yellow", "waiting on review"))
 
+    def test_unknown_run_status_is_pending_and_missing_status_is_ok(self):
+        self.assertEqual(orch_prs.classify(info(statusCheckRollup=[run("", "SOMETHING_NEW")])),
+                         ("yellow", "checks running"))
+        self.assertEqual(orch_prs.classify(info(statusCheckRollup=[{"conclusion": "SUCCESS"}])),
+                         ("green", "ready to merge"))
+
     def test_green(self):
         self.assertEqual(orch_prs.classify(info()), ("green", "ready to merge"))
         ok = [run("SUCCESS"), run("SKIPPED"), run("NEUTRAL"), ctx("SUCCESS")]
@@ -180,6 +186,18 @@ class CacheTests(unittest.TestCase):
         self.now[0] = 60
         c.refresh_due()
         self.assertEqual(c.snapshot(), {URL: ("green", "ready to merge")})
+
+    def test_one_bad_pr_does_not_abort_the_batch(self):
+        bad, good = "https://github.com/acme/recipe-site/pull/1", "https://github.com/acme/recipe-site/pull/2"
+
+        def runner(args, **kw):
+            if args[3] == "1":
+                raise RecursionError("boom")
+            return types.SimpleNamespace(returncode=0, stdout=json.dumps(info()), stderr="")
+        c = self.cache(runner)
+        c.track("demo", [bad, good])
+        self.assertEqual(c.refresh_due(), 2)
+        self.assertEqual(c.snapshot(), {bad: orch_prs.UNKNOWN, good: ("green", "ready to merge")})
 
     def test_non_github_urls_never_reach_gh(self):
         runner = Runner(info())

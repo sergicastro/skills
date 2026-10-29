@@ -254,7 +254,10 @@ def stop():
 def refresh_loop(server):
     """Keep PR health fresh until the server closes. One gh call at a time, off the request threads."""
     while not server.closing.wait(1):
-        server.health.refresh_due()
+        try:
+            server.health.refresh_due()
+        except Exception:
+            pass
 
 
 def serve(port):

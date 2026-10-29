@@ -77,7 +77,8 @@ its health, read from GitHub with the `gh` CLI every minute or so:
 - grey: unknown (`gh` missing, not logged in, offline, or not a GitHub PR)
 
 Hover a bullet for the reason. Set `ORCH_PR_STATUS=off` to skip the GitHub calls; every
-bullet is then grey. `status.md` and the static `status.html` have no bullets.
+bullet is then grey. The server reads it at startup, so set it before the server starts or
+restart it (`orch_state.py serve --stop`, then `--ensure`). `status.md` and the static `status.html` have no bullets.
 
 ![Epic page: dependency graph, goals, workers and recent events, with PRs gaining health bullets](docs/images/status-pr-bullets.gif)
 

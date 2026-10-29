@@ -229,6 +229,24 @@ class ServerTests(Base):
         t.join(timeout=3)
         self.assertFalse(t.is_alive())
 
+    def test_refresh_loop_survives_a_failing_refresh(self):
+        calls = []
+
+        def refresh_due():
+            calls.append(1)
+            if len(calls) == 1:
+                raise RuntimeError("boom")
+        self.server.health = types.SimpleNamespace(refresh_due=refresh_due, version=0)
+        t = threading.Thread(target=orch_serve.refresh_loop, args=(self.server,), daemon=True)
+        t.start()
+        deadline = time.monotonic() + 5
+        while len(calls) < 2 and time.monotonic() < deadline:
+            time.sleep(0.05)
+        self.assertGreaterEqual(len(calls), 2)
+        self.server.closing.set()
+        t.join(timeout=3)
+        self.assertFalse(t.is_alive())
+
 
 class IndexHtmlTests(unittest.TestCase):
     def test_empty_index(self):
