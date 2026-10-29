@@ -20,6 +20,7 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
+import orch_prs
 import orch_state
 import orch_view
 
@@ -47,6 +48,7 @@ class StatusServer(http.server.ThreadingHTTPServer):
         self.closing = threading.Event()
         self.lock = threading.Lock()
         self.last_good = {}
+        self.health = orch_prs.HealthCache()
 
     def epic_exists(self, slug):
         return bool(orch_state.SLUG_RE.fullmatch(slug)) and (orch_state.root() / slug / "state.json").is_file()
@@ -67,7 +69,8 @@ class StatusServer(http.server.ThreadingHTTPServer):
         try:
             state = json.loads((d / "state.json").read_text())
             vm = orch_state.view_model(state, orch_state.read_events(d), orch_state.validate(state))
-            view = (vm["title"], orch_view.main_html(vm))
+            self.health.track(slug, [u for g in vm["goals"] for u in g["prs"]])
+            view = (vm["title"], orch_view.main_html(vm, self.health.snapshot()))
         except Exception as e:  # unreadable or malformed state: keep showing the last good page
             with self.lock:
                 title, main = self.last_good.get(slug, (slug, ""))
@@ -107,7 +110,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path.startswith("/events/"):
             slug = path[len("/events/"):]
             if srv.epic_exists(slug):
-                return self.stream(lambda: srv.epic_signature(slug), lambda: srv.epic_view(slug)[1])
+                return self.stream(lambda: srv.epic_signature(slug) + (srv.health.version,),
+                                   lambda: srv.epic_view(slug)[1])
         elif srv.epic_exists(path[1:]):
             title, main = srv.epic_view(path[1:])
             return self.send_page(title, main, f"/events/{path[1:]}")
@@ -247,9 +251,16 @@ def stop():
     return {"stopped": True, "pid": rec["pid"]}
 
 
+def refresh_loop(server):
+    """Keep PR health fresh until the server closes. One gh call at a time, off the request threads."""
+    while not server.closing.wait(1):
+        server.health.refresh_due()
+
+
 def serve(port):
     orch_state.root().mkdir(parents=True, exist_ok=True)
     server = StatusServer(port)
+    threading.Thread(target=refresh_loop, args=(server,), daemon=True).start()
     rec = {"pid": os.getpid(), "port": server.server_address[1]}
     orch_state.write_atomic(server_file(), json.dumps(rec) + "\n")
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))

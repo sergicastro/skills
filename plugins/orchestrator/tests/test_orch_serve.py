@@ -6,6 +6,7 @@ import socket
 import subprocess
 import sys
 import threading
+import types
 import time
 import unittest
 from unittest import mock
@@ -17,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_orch_state import Base  # noqa: E402
 
 import orch_serve  # noqa: E402
+import orch_prs  # noqa: E402
 import orch_view  # noqa: E402
 
 SCRIPT = Path(__file__).resolve().parents[1] / "skills" / "orchestrator" / "scripts" / "orch_state.py"
@@ -154,6 +156,78 @@ class ServerTests(Base):
         code, page = self.get("/demo")
         self.assertEqual(code, 200)
         self.assertIn("g1: invalid status weird", page)
+
+    URL = "https://github.com/acme/recipe-site/pull/12"
+
+    def report_pr(self):
+        self.run_cli("register", "demo", "demo-w-a")
+        self.run_cli("request", "demo", "demo-w-a")
+        self.run_cli("pr", "demo", "demo-w-a", "g1", "--url", self.URL)
+
+    def fake_gh(self, info=None, exc=None):
+        now = [0.0]
+
+        def runner(args, **kw):
+            if exc:
+                raise exc
+            return types.SimpleNamespace(returncode=0, stdout=json.dumps(info), stderr="")
+
+        self.server.health = orch_prs.HealthCache(runner=runner, clock=lambda: now[0], enabled=True)
+        return now
+
+    def test_epic_page_shows_the_pr_bullet_once_fetched(self):
+        self.report_pr()
+        info = {"state": "OPEN", "isDraft": False, "reviewDecision": "REVIEW_REQUIRED",
+                "mergeable": "MERGEABLE", "statusCheckRollup": []}
+        self.fake_gh(info)
+        _, page = self.get("/demo")
+        self.assertIn('aria-label="status unavailable"', page)
+        self.assertEqual(self.server.health.tracked["demo"], {self.URL})
+        self.server.health.refresh_due()
+        _, page = self.get("/demo")
+        self.assertIn('class="pr-dot h-yellow"', page)
+        self.assertIn('aria-label="waiting on review"', page)
+        self.assertNotIn('aria-label="status unavailable"', page)
+
+    def test_stream_pushes_when_a_bullet_changes(self):
+        self.report_pr()
+        info = {"state": "OPEN", "isDraft": False, "reviewDecision": "REVIEW_REQUIRED",
+                "mergeable": "MERGEABLE", "statusCheckRollup": []}
+        now = self.fake_gh(info)
+        self.get("/demo")
+        self.server.health.refresh_due()
+        resp = urllib.request.urlopen(self.base + "/events/demo", timeout=5)
+        self.addCleanup(resp.close)
+        self.assertIn("h-yellow", self.read_event(resp))
+        info["reviewDecision"] = "APPROVED"
+        now[0] = 61
+        start = time.monotonic()
+        self.server.health.refresh_due()
+        second = self.read_event(resp)
+        self.assertLess(time.monotonic() - start, 2)
+        self.assertIn("h-green", second)
+
+    def test_page_survives_gh_being_unavailable(self):
+        self.report_pr()
+        self.fake_gh(exc=FileNotFoundError("gh"))
+        self.get("/demo")
+        self.server.health.refresh_due()
+        code, page = self.get("/demo")
+        self.assertEqual(code, 200)
+        self.assertIn('aria-label="status unavailable"', page)
+
+    def test_refresh_loop_runs_until_the_server_closes(self):
+        calls = []
+        self.server.health = types.SimpleNamespace(refresh_due=lambda: calls.append(1), version=0)
+        t = threading.Thread(target=orch_serve.refresh_loop, args=(self.server,), daemon=True)
+        t.start()
+        deadline = time.monotonic() + 5
+        while not calls and time.monotonic() < deadline:
+            time.sleep(0.05)
+        self.assertTrue(calls)
+        self.server.closing.set()
+        t.join(timeout=3)
+        self.assertFalse(t.is_alive())
 
 
 class IndexHtmlTests(unittest.TestCase):
