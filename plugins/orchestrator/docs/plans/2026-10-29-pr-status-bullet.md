@@ -747,7 +747,9 @@ C="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 mkdir -p $WORK/f
 frame() { # frame <name> [extra chrome flags]
   FAKE_GH_DIR=$WORK/gh PATH=$WORK/bin:$PATH nohup python3 $PWD/skills/orchestrator/scripts/orch_state.py serve --port 8799 >$WORK/serve.log 2>&1 &
-  sleep 3
+  sleep 2
+  curl -s -o /dev/null http://127.0.0.1:8799/recipes   # the first page request registers the URLs to fetch
+  sleep 4                                                 # then the server fetches them
   timeout 40 "$C" --headless=new --disable-gpu --hide-scrollbars --window-size=1200,1450 \
     --user-data-dir=$WORK/chrome ${@:2} --screenshot=$WORK/f/$1.png http://127.0.0.1:8799/recipes >/dev/null 2>&1
   python3 $PWD/skills/orchestrator/scripts/orch_state.py serve --stop >/dev/null
@@ -771,7 +773,7 @@ frame 4 $L; frame 4-dark
 ls -la $WORK/f
 ```
 
-Expected: `1.png`, `2.png`, `3.png`, `4.png`, `4-dark.png`, each 1200 x 1450 (the same size as the current `status-epic-light.png`; check with `file`). Open each with the Read tool and check: frame 1 shows `#218` with a yellow bullet; frame 2 `#218` green and `#221` yellow; frame 3 `#221` red; frame 4 `#218` purple, `#221` green, goal `in-review`; finished goals (#211, #214, #215) purple; the legend line is visible under "Goals". If a bullet is grey, the fake `gh` was not on the server's `PATH` or the 3 s sleep was too short.
+Expected: `1.png`, `2.png`, `3.png`, `4.png`, `4-dark.png`, each 1200 x 1450 (the same size as the current `status-epic-light.png`; check with `file`). Open each with the Read tool and check: frame 1 shows `#218` with a yellow bullet; frame 2 `#218` green and `#221` yellow; frame 3 `#221` red; frame 4 `#218` purple, `#221` green, goal `in-review`; finished goals (#211, #214, #215) purple; the legend line is visible under "Goals". If a bullet is grey, the fake `gh` was not on the server's `PATH`, or the page was not requested once (and given a few seconds) before the screenshot: the server only learns which PRs to fetch when a page is rendered.
 
 - [ ] **Step 3: Make the GIF and replace the images**
 
