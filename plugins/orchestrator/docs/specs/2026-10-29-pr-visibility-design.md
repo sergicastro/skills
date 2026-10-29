@@ -93,5 +93,4 @@ the final PR as before.
   moves the goal to `in-review` on `PR`; forgets to tell the user.
 - Pressure scenarios, worker: opens a PR and does not report it until `DONE`;
   sends `PR` for a goal it wasn't assigned.
-- `protocol.md` exists in three copies (`shared/` and one under each skill); all
-  three are updated together.
+- `protocol.md` is a single file: `shared/protocol.md`, symlinked into both skills.
