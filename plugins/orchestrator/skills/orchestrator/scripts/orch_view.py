@@ -72,6 +72,12 @@ def pr_label(url):
     return f"#{tail}" if "/pull/" in str(url) and tail.isdigit() else str(url)
 
 
+def prs_html(urls):
+    if not urls:
+        return "-"
+    return " ".join(link(u, pr_label(u)) for u in urls)
+
+
 def time_html(iso):
     if not iso:
         return "-"
@@ -153,7 +159,7 @@ def main_html(vm):
     goal_rows = "".join(
         f'<tr id="goal-{esc(g["id"])}" data-goal="{esc(g["id"])}" data-status="{esc(g["status"])}">'
         f'<td>{esc(g["id"])}</td><td>{esc(g["title"])}</td><td>{badge(g["status"])}</td>'
-        f'<td>{esc(g["worker"] or "-")}</td><td>{link(g["prs"][0] if g["prs"] else None, pr_label(g["prs"][0]) if g["prs"] else None)}</td>'
+        f'<td>{esc(g["worker"] or "-")}</td><td>{prs_html(g["prs"])}</td>'
         f'<td>{esc(g["reason"] or "")}</td></tr>'
         for g in vm["goals"])
     worker_rows = "".join(

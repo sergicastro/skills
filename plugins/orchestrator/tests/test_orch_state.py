@@ -912,6 +912,23 @@ class ViewModelTests(Base):
         self.assertEqual(vm["events"][0]["event"], "REGISTER")
         self.assertEqual(vm["events"][0]["actor"], "demo-w-a")
 
+    def test_view_model_exposes_prs(self):
+        state = orch_state.init("demo", plan())
+        state["goals"]["g1"]["prs"] = ["https://example.com/acme/recipe-site/pull/12"]
+        state["goals"]["g2"]["handoff"] = {"pr": "https://example.com/acme/recipe-site/pull/3", "notes": "n"}
+        by_id = {g["id"]: g for g in orch_state.view_model(state, [])["goals"]}
+        self.assertEqual(by_id["g1"]["prs"], ["https://example.com/acme/recipe-site/pull/12"])
+        self.assertEqual(by_id["g2"]["prs"], ["https://example.com/acme/recipe-site/pull/3"])
+        self.assertEqual(by_id["g3"]["prs"], [])
+
+    def test_html_shows_every_pr_as_a_link(self):
+        urls = ["https://example.com/acme/recipe-site/pull/12", "https://example.com/acme/recipe-site/pull/15"]
+        out = orch_view.prs_html(urls)
+        self.assertIn('<a href="https://example.com/acme/recipe-site/pull/12">#12</a>', out)
+        self.assertIn('<a href="https://example.com/acme/recipe-site/pull/15">#15</a>', out)
+        self.assertEqual(orch_view.prs_html([]), "-")
+        self.assertNotIn("<a ", orch_view.prs_html(["javascript:alert(1)"]))
+
 
 class HtmlTests(Base):
     def page(self, p=None):
