@@ -1,0 +1,702 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TOPIC TITLE</title>
+<script>try { const t = localStorage.getItem("explain-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+<style>
+  :root {
+    --bg: #f6f5f1; --card: #ffffff; --fg: #1f2328; --muted: #5d656e; --line: #dcdfe3;
+    --accent: #2f6fd6; --accent-soft: #e8f0ff; --ok: #1a7f37; --ok-soft: #dafbe1;
+    --bad: #cf222e; --bad-soft: #ffebe9; --hl: #b25e00; --hl-soft: #fff4e0; --code-bg: #f3f1ec; --on-accent: #ffffff; --label: #454d56;
+    --side: 260px; --top: 56px; --foot: 64px; color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0d0f12; --card: #1d2127; --fg: #e6e8eb; --muted: #b4bcc6; --line: #48515c;
+      --accent: #6ea8ff; --accent-soft: #1f3354; --ok: #4ac26b; --ok-soft: #164028;
+      --bad: #ff7b72; --bad-soft: #4a2020; --hl: #ffb547; --hl-soft: #4a3512; --code-bg: #272c34; --on-accent: #0b1a33; --label: #d3d9e0; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d0f12; --card: #1d2127; --fg: #e6e8eb; --muted: #b4bcc6; --line: #48515c;
+    --accent: #6ea8ff; --accent-soft: #1f3354; --ok: #4ac26b; --ok-soft: #164028;
+    --bad: #ff7b72; --bad-soft: #4a2020; --hl: #ffb547; --hl-soft: #4a3512; --code-bg: #272c34; --on-accent: #0b1a33; --label: #d3d9e0; color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--fg); overflow: hidden;
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  /* ---------- App shell: top bar / sidebar + stage / footer — always fits the viewport ---------- */
+  .app { display: grid; height: 100dvh;
+    grid-template: "top top" var(--top) "side stage" 1fr "side foot" var(--foot) / var(--side) minmax(0, 1fr); }
+  .top { grid-area: top; display: flex; align-items: center; gap: 12px; padding: 0 20px;
+    border-bottom: 1px solid var(--line); background: var(--card); position: relative; }
+  .top h1 { font-size: 1rem; margin: 0; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .top .count { display: none; color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .top .bar { position: absolute; left: 0; bottom: -1px; height: 3px; background: var(--accent); width: 0; transition: width .3s; }
+  .tbtn { border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 5px 12px; font-size: .85rem; white-space: nowrap; }
+  .tbtn[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+  .top .theme { min-width: 34px; padding: 5px 8px; }
+  #menu { display: none; }
+
+  /* Sidebar: big picture + step outline with titles (so you always know where you are) */
+  .side { grid-area: side; border-right: 1px solid var(--line); overflow-y: auto; padding: 20px 14px; background: var(--bg); }
+  .side > .side-head, .side > .side-tools { display: none; }
+  .bigpic { font-size: .9rem; color: var(--muted); margin: 0 6px 18px; padding: 10px 12px;
+    border-left: 3px solid var(--accent); background: var(--card); border-radius: 0 8px 8px 0; }
+  .bigpic b { display: block; color: var(--fg); font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
+  .step .bigpic { margin: 0 0 20px; font-size: 1rem; max-width: 72ch; }
+  body.first:not(.all) .side .bigpic { display: none; }   /* step 1 shows it in the page itself */
+  .outline { list-style: none; margin: 0; padding: 0; }
+  .outline button { display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: left; border: 0; background: none;
+    padding: 7px 8px; border-radius: 8px; font-size: .9rem; line-height: 1.35; color: var(--muted); }
+  .outline button:hover { background: var(--card); }
+  .outline .t { flex: 1; }
+  .outline .n { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+    font-size: .75rem; font-weight: 600; border: 1.5px solid var(--line); background: var(--card); }
+  .outline .done .n { border-color: var(--accent); color: var(--accent); }
+  .outline .cur { background: var(--card); color: var(--fg); font-weight: 600; box-shadow: inset 3px 0 var(--accent); }
+  .outline .cur .n { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .outline .mk { flex: none; font-size: .8rem; font-weight: 700; }
+  .outline .mk.ok { color: var(--ok); } .outline .mk.miss { color: var(--bad); }
+
+  /* Stage: one step at a time, scrolls internally only if a step is taller than the screen */
+  .stage { grid-area: stage; position: relative; overflow-y: auto; padding: 28px clamp(16px, 4vw, 48px); scroll-behavior: smooth; }
+  .step { display: none; max-width: 1180px; margin: 0 auto; animation: in .2s ease; }
+  .step.active, body.all .step { display: block; }
+  body.all .step { padding-bottom: 32px; margin-bottom: 32px; border-bottom: 1px solid var(--line); }
+  /* --dx is set by go(): the step slides in from the direction of travel */
+  @keyframes in { from { opacity: 0; transform: translateX(var(--dx, 12px)); } }
+  .eyebrow { font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+  .step h2 { margin: 0 0 14px; font-size: clamp(1.3rem, 2.2vw, 1.7rem); line-height: 1.25; text-wrap: balance; }
+  .step h2:focus { outline: none; }
+  .step .body > :first-child { margin-top: 0; }
+  /* Only <mark> uses the highlight colour (the same one as the diagram's .hl), so text ↔ picture is unambiguous; key ideas are just bold */
+  .step .body strong { font-weight: 700; }
+  mark { color: inherit; background: var(--hl-soft); box-shadow: inset 0 -2px var(--hl); padding: 0 2px; border-radius: 2px; }
+
+  /* Two columns when there is something to look at: read on the left, look on the right */
+  .cols { display: grid; gap: 28px; align-items: start; }
+  .cols > * { min-width: 0; }
+  .step.split .cols { grid-template-columns: minmax(300px, 1fr) minmax(0, 1.25fr); }
+  .step.split .look { position: sticky; top: 0; }
+  .read { max-width: 64ch; }
+  .step.wide .read { max-width: none; }
+
+  .visual { padding: 18px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); overflow-x: auto; }
+  .visual svg { display: block; width: 100%; height: auto; max-height: 52vh; margin: 0 auto; }
+  /* ---- Diagram kit (documented in SKILL.md / diagram-recipes.md) ----
+     shapes: .box .arrow .zone .lifeline   text: .label (edge/arrow labels, 12px)
+     state:  .hl new this step · .dim not introduced yet / de-emphasised · .hidden gone · .bad / .ok rejected / accepted
+     motion: .flow animates direction of travel · [data-b="n"] appears on the n-th "Reveal" click (see `build`) */
+  .visual svg text { fill: var(--fg); font: 16px system-ui, sans-serif; }
+  .visual svg .label { fill: var(--label); font-size: 14px; }
+  .visual svg .box { fill: var(--card); stroke: var(--muted); stroke-width: 1.5; }
+  .visual svg .zone { fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 5 4; }
+  .visual svg .lifeline { stroke: var(--muted); opacity: .6; stroke-width: 1.5; stroke-dasharray: 3 4; }
+  .visual svg .arrow { stroke: var(--muted); stroke-width: 1.5; fill: none; marker-end: url(#arrowhead); }
+  .visual svg .hl:not(g) { stroke: var(--hl); stroke-width: 2.5; }
+  .visual svg .box.hl, .visual svg g.hl .box { stroke: var(--hl); stroke-width: 2.5; fill: var(--hl-soft); }
+  .visual svg .arrow.hl, .visual svg g.hl .arrow { stroke: var(--hl); stroke-width: 2.5; marker-end: url(#arrowhead-hl); }
+  .visual svg .box.bad, .visual svg g .box.bad { stroke: var(--bad); fill: var(--bad-soft); }
+  .visual svg .box.ok, .visual svg g .box.ok { stroke: var(--ok); fill: var(--ok-soft); }
+  .visual svg .arrow.bad, .visual svg g.hl .arrow.bad { stroke: var(--bad); marker-end: url(#arrowhead-bad); }
+  .visual svg .arrow.ok, .visual svg g.hl .arrow.ok { stroke: var(--ok); marker-end: url(#arrowhead-ok); }
+  .visual svg .dim { opacity: .6; }
+  .visual svg .hidden { visibility: hidden; }
+  .visual svg .flow { stroke-dasharray: 6 6; animation: flow 1s linear infinite; }
+  .step.active .visual svg g.hl, .step.active .visual svg .hl:not(g) { animation: pop .6s ease; }
+  @keyframes flow { to { stroke-dashoffset: -12; } }
+  @keyframes pop { from { opacity: .25; } }
+  .visual [data-b] { transition: opacity .3s; }
+  .visual .pend { opacity: 0; visibility: hidden; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 10px; font-size: .8rem; color: var(--label); }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; border: 1.5px solid var(--muted); vertical-align: -2px; margin-right: 5px; }
+  .legend .new { border-color: var(--hl); background: var(--hl-soft); } .legend .soon { opacity: .5; }
+  /* Code lines carrying a "←" marker share the diagram's highlight colour */
+  pre .ln { display: block; }
+  pre .ln.hl-line { background: var(--hl-soft); box-shadow: inset 3px 0 var(--hl); margin: 0 -14px; padding: 0 14px; }
+  .look pre { margin: 14px 0 0; }
+  .step.wide .look { margin: 16px 0; }
+  .step.wide .visual svg { max-width: 720px; max-height: 40vh; }
+
+  /* Context card (step 1): the question, the setting, why it matters, what you need first, the running example */
+  .ctx { margin: 0 0 16px; padding: 4px 16px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); }
+  .ctx dt { font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; margin-top: 12px; }
+  .ctx dd { margin: 2px 0 12px; }
+  .ctx ul { margin: 4px 0 0; padding-left: 20px; }
+  .analogy { display: flex; gap: 10px; padding: 10px 14px; margin: 16px 0; border-radius: 10px; background: var(--accent-soft); font-size: .95rem; }
+  .analogy::before { content: "💡"; }
+  .analogy span::before { content: "Think of it like: "; font-weight: 600; }
+  pre { background: var(--code-bg); padding: 12px 14px; border-radius: 10px; font-size: .82rem; line-height: 1.5; margin: 16px 0;
+    white-space: pre-wrap; overflow-wrap: anywhere; }   /* wrap instead of clipping in the narrow column */
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  :not(pre) > code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; font-size: .88em; }
+  details { margin: 16px 0; border-top: 1px solid var(--line); padding-top: 10px; }
+  summary { cursor: pointer; font-weight: 600; color: var(--accent); font-size: .92rem; }
+  details[open] summary { margin-bottom: 6px; }
+
+  .quiz { margin-top: 20px; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); }
+  .quiz p { margin: 0 0 10px; font-weight: 600; }
+  .quiz p::before { content: "Check: "; color: var(--accent); }
+  .quiz .opts { display: grid; gap: 6px; }
+  .quiz button { text-align: left; padding: 8px 12px; font-size: .95rem;
+    border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+  .quiz button:hover:not(:disabled) { border-color: var(--accent); }
+  .quiz button:disabled { cursor: default; }
+  .quiz.answered button:not(.right):not(.wrong) { opacity: .6; }
+  .quiz button.right { background: var(--ok-soft); border-color: var(--ok); opacity: 1; }
+  .quiz button.wrong { background: var(--bad-soft); border-color: var(--bad); text-decoration: line-through; text-decoration-color: var(--bad); }
+  .quiz .retry { display: none; margin: 10px 0 0; color: var(--bad); font-size: .92rem; font-weight: 600; }
+  .quiz.retrying .retry { display: block; }
+  .quiz .why { display: none; margin-top: 10px; font-size: .92rem; }
+  .quiz.answered .why { display: block; }
+  .quiz .verdict { font-weight: 700; }
+  .quiz.ok .verdict { color: var(--ok); } .quiz.miss .verdict { color: var(--bad); }
+
+  /* Recap: clickable step list + end-of-journey panel */
+  .recap-list { list-style: none; padding: 0; margin: 18px 0; display: grid; gap: 6px; counter-reset: r; }
+  .recap-list button { display: flex; gap: 12px; width: 100%; text-align: left; padding: 10px 14px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--card); line-height: 1.4; }
+  .recap-list button:hover { border-color: var(--accent); }
+  .recap-list .n { flex: none; color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .recap-list .s { color: var(--muted); }
+  .recap-list .mk { margin-left: auto; font-weight: 700; } .recap-list .mk.ok { color: var(--ok); } .recap-list .mk.miss { color: var(--bad); }
+  .finish { margin-top: 24px; padding: 18px 20px; border-radius: 12px; background: var(--accent-soft); }
+  .finish h3 { margin: 0 0 4px; font-size: 1.1rem; }
+  .finish p { margin: 0 0 14px; }
+  .finish .acts { display: flex; flex-wrap: wrap; gap: 8px; }
+  .finish .acts button { padding: 8px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); }
+  .finish .acts button.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 600; }
+  .finish a { color: var(--accent); }
+
+  dfn { font-style: normal; border-bottom: 1.5px dotted var(--accent); cursor: help; position: relative; }
+  #tip { position: fixed; z-index: 60; max-width: 300px; padding: 8px 10px; border-radius: 8px; font-size: .85rem; line-height: 1.4;
+    background: var(--fg); color: var(--bg); pointer-events: none; opacity: 0; transition: opacity .12s; }
+  #tip.on { opacity: 1; }
+
+  /* Footer: navigation right under the content, with a preview of what's next */
+  .foot { grid-area: foot; display: flex; align-items: center; gap: 12px; padding: 0 clamp(16px, 4vw, 48px);
+    border-top: 1px solid var(--line); background: var(--card); }
+  .foot .nav { padding: 9px 18px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); white-space: nowrap; }
+  .foot .nav.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 600; }
+  .foot .nav .sub { display: none; }
+  .foot .upnext { flex: 1; min-width: 0; text-align: right; color: var(--muted); font-size: .85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .foot kbd { font: .75rem ui-monospace, monospace; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+  #prev.gone { visibility: hidden; }
+  body.all .foot .nav, body.all .foot .upnext { display: none; }
+
+  /* Drawers (glossary; steps menu on phones): visible close button + dimmed backdrop */
+  .scrim { display: none; position: fixed; inset: var(--top) 0 0 0; z-index: 35; background: rgb(0 0 0 / .35); }
+  body.gloss .scrim { display: block; }
+  .dhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+  .dhead h2, .dhead b { font-size: 1rem; margin: 0; }
+  .x { border: 1px solid var(--line); background: var(--card); border-radius: 8px; width: 32px; height: 32px; font-size: 1.1rem; line-height: 1; }
+  #gloss { position: fixed; top: var(--top); right: 0; bottom: 0; width: min(360px, 100%); z-index: 40;
+    background: var(--card); border-left: 1px solid var(--line); padding: 16px 20px; overflow-y: auto;
+    transform: translateX(100%); visibility: hidden; transition: transform .2s, visibility .2s; box-shadow: -8px 0 24px rgb(0 0 0 / .12); }
+  body.gloss #gloss { transform: none; visibility: visible; }
+  #gloss h3 { font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 16px 0 8px; }
+  #gloss dt { font-weight: 600; } #gloss dd { margin: 0 0 12px; color: var(--muted); font-size: .92rem; }
+
+  /* ---------- Medium: stack read/look ---------- */
+  @media (max-width: 1100px) {
+    /* flatten so the picture sits right after the text it illustrates, before "go deeper" and the quiz */
+    .step.split .cols { display: flex; flex-direction: column; align-items: stretch; gap: 0; }
+    .step.split .read { display: contents; }
+    .step.split .look { position: static; order: 3; margin: 4px 0 8px; }
+    .step.split details { order: 4; } .step.split .quiz { order: 5; }
+    .read { max-width: none; }
+  }
+  /* ---------- Narrow: sidebar becomes a slide-over menu that also holds the page tools ---------- */
+  @media (max-width: 760px) {
+    :root { --top: 52px; --foot: 64px; }
+    .app { grid-template: "top" var(--top) "stage" 1fr "foot" var(--foot) / minmax(0, 1fr); }
+    #menu { display: inline-block; }
+    .top { padding: 0 12px; gap: 10px; }
+    .top .count { display: inline; }
+    .top .tool { display: none; }
+    .side { position: fixed; top: var(--top); left: 0; bottom: 0; width: min(300px, 86%); z-index: 40; padding-top: 14px;
+      transform: translateX(-100%); visibility: hidden; transition: transform .2s, visibility .2s; box-shadow: 8px 0 24px rgb(0 0 0 / .15); }
+    body.menu .side { transform: none; visibility: visible; }
+    body.menu .scrim { display: block; }
+    .side > .side-head { display: flex; padding: 0 6px; }
+    .side > .side-tools { display: flex; flex-wrap: wrap; gap: 6px; margin: 18px 6px 0; padding-top: 14px; border-top: 1px solid var(--line); }
+    .stage { padding: 20px 16px; }
+    .foot { padding: 0 12px; }
+    .foot .upnext, .foot .keys { display: none; }
+    .foot .nav { flex: 1; min-width: 0; padding: 6px 12px; line-height: 1.25; }
+    .foot .nav .sub { display: block; font-size: .72rem; font-weight: 400; opacity: .85; overflow: hidden; text-overflow: ellipsis; }
+    .visual { padding: 10px; }
+    .visual svg { min-width: 440px; }   /* keep diagram text legible; scroll sideways instead of shrinking */
+  }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+  @media print {
+    body { overflow: visible; } .app { display: block; height: auto; }
+    .top button, .side, .foot, #gloss, .scrim, .finish { display: none; }
+    .stage { overflow: visible; } .step { display: block; break-inside: avoid; margin-bottom: 24px; animation: none; }
+    .visual svg { max-height: none; } .step.split .look { position: static; }
+    .visual .pend { opacity: 1 !important; visibility: visible !important; }   /* print shows every build stage */
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <button class="tbtn" id="menu" aria-label="Steps and tools" aria-expanded="false">☰</button>
+    <h1 id="title"></h1>
+    <span class="count" id="count"></span>
+    <button class="tbtn tool" data-act="gloss" aria-pressed="false">Glossary</button>
+    <button class="tbtn tool" data-act="all" aria-pressed="false">Show all</button>
+    <button class="tbtn tool theme" data-act="theme"></button>
+    <div class="bar" id="bar"></div>
+  </header>
+  <aside class="side" id="side" aria-label="Steps">
+    <div class="dhead side-head"><b>Steps</b><button class="x" data-close aria-label="Close menu">×</button></div>
+    <div class="bigpic"><b>Big picture</b><span class="bigpic-text"></span></div>
+    <ol class="outline" id="outline"></ol>
+    <div class="side-tools">
+      <button class="tbtn" data-act="gloss" aria-pressed="false">Glossary</button>
+      <button class="tbtn" data-act="all" aria-pressed="false">Show all</button>
+      <button class="tbtn" data-act="theme" data-long></button>
+    </div>
+  </aside>
+  <main class="stage" id="stage"></main>
+  <footer class="foot">
+    <button class="nav" id="prev">← Back</button>
+    <span class="upnext" id="upnext"></span>
+    <button class="nav primary" id="next"><span class="lbl"></span><span class="sub"></span></button>
+  </footer>
+</div>
+<div class="scrim" data-close></div>
+<aside id="gloss" role="dialog" aria-modal="true" aria-label="Glossary"></aside>
+<div id="tip" role="tooltip"></div>
+<div id="live" class="sr" aria-live="polite"></div>
+
+<!-- Shared SVG defs (arrowheads) usable by every diagram -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <!-- style="fill: var(--x)" (not the fill attribute) so the heads follow the light/dark theme in every browser -->
+    <marker id="arrowhead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" style="fill: var(--muted)"/>
+    </marker>
+    <marker id="arrowhead-hl" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" style="fill: var(--hl)"/>
+    </marker>
+    <marker id="arrowhead-bad" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" style="fill: var(--bad)"/>
+    </marker>
+    <marker id="arrowhead-ok" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" style="fill: var(--ok)"/>
+    </marker>
+  </defs>
+</svg>
+
+<script>
+/* ===================== FILL THIS DATA ===================== */
+const META = {
+  title: "TOPIC TITLE",
+  bigPicture: "One sentence: what this is and why it matters.",
+};
+
+/* Who's who: every project-specific name used on the page (services, files, functions, teams), each with a one-liner
+   saying what it is / does. Shown first in the Glossary drawer; <dfn> tooltips look here too. */
+const CAST = {
+  // "name": "What it is, in one line.",
+  "orders-svc": "The service that returns a customer's orders.",
+  "Gateway": "The front door every request passes through; it checks tokens before forwarding.",
+};
+
+const GLOSSARY = {
+  // "term": "Plain-language definition.",
+  "example term": "A short definition shown on hover and in the glossary.",
+};
+
+/* ONE diagram for the whole page. Every part that a step can light up is a <g data-id="…"> (data-id, not id: the
+   SVG is cloned once per step). Elements keep the same position in every step; steps only choose what to light up.
+   viewBox width 560–720 keeps the 14px text near its real size. Replace this example (client → gateway → service). */
+const DIAGRAM = `<svg viewBox="0 0 640 170" role="img" aria-label="A request goes from the client through the gateway to orders-svc">
+  <g data-id="client"><rect class="box" x="10" y="50" width="130" height="60" rx="8"/><text x="75" y="85" text-anchor="middle">Client</text></g>
+  <g data-id="gw"><rect class="box" x="255" y="50" width="130" height="60" rx="8"/><text x="320" y="85" text-anchor="middle">Gateway</text></g>
+  <g data-id="svc"><rect class="box" x="500" y="50" width="130" height="60" rx="8"/><text x="565" y="85" text-anchor="middle">orders-svc</text></g>
+  <g data-id="req"><line class="arrow" x1="140" y1="70" x2="253" y2="70"/><text class="label" x="197" y="62" text-anchor="middle">GET /orders</text></g>
+  <g data-id="deny"><line class="arrow bad" x1="253" y1="95" x2="142" y2="95"/><text class="label" x="197" y="115" text-anchor="middle">401 expired token</text></g>
+  <g data-id="fwd"><line class="arrow ok" x1="385" y1="80" x2="498" y2="80"/><text class="label" x="442" y="72" text-anchor="middle">GET /orders</text></g>
+</svg>`;
+
+/* Step fields: see SKILL.md. Visual options, in order of preference:
+   diagram: { hl: ["ids new in this step"], hide: [...], dim: [...], build: ["id", ["id","id"], …] }
+     → clones DIAGRAM; ids lit in earlier steps look normal, ids not introduced yet are ghosted, the Recap shows all.
+     build = parts that appear one per "Reveal" click (Next / → ) before the step advances; keep it ≤ 4.
+   visual: "<svg>…</svg>"  → escape hatch for a step that needs its own picture (put data-b="1".. on parts to stage them).
+   quiz.options: plain strings, or { t, why } where why explains that specific wrong answer on the retry. */
+const STEPS = [
+  {
+    title: "What we're figuring out",
+    summary: "why GET /orders returns 401",
+    context: {
+      question: "Why does <code>GET /orders</code> come back <strong>401</strong> when the token has expired?",
+      setting: "Every request to our API passes the <dfn>Gateway</dfn> before it reaches a service such as <dfn>orders-svc</dfn>.",
+      why: "If you don't know where the check happens, you'll go looking for the bug in the wrong service.",
+      prereqs: ["<dfn>example term</dfn>: a one-line refresher of what the reader needs first."],
+      example: "A client calls <code>GET /orders</code> with a token that expired 5 minutes ago.",
+    },
+    body: `<p>The next steps follow that one request from the client to the reply.</p>`,
+    diagram: {},
+  },
+  {
+    title: "The client sends a request",
+    summary: "GET /orders leaves the client",
+    body: `<p>Our request starts at the highlighted <mark>Client</mark>: <strong>GET /orders with an expired token</strong>, heading for the <dfn>Gateway</dfn>. We start here because everything after this reacts to what the client sent.</p>`,
+    diagram: { hl: ["client", "req"] },
+    analogy: "A real-world comparison in one line (say which part maps to which).",
+    code: null,
+    deeper: null,
+  },
+  {
+    title: "The gateway checks the token",
+    summary: "the first stop is a check",
+    body: `<p>Once the request arrives, the <mark>Gateway</mark> looks at the token <strong>before</strong> anything reaches the service.</p>`,
+    diagram: { hl: ["gw"] },
+    code: `Authorization: Bearer eyJ…   // ← checked here`,
+    quiz: { q: "What does the gateway do with the request first?",
+      options: [{ t: "Forwards it to orders-svc", why: "That would skip the check; forwarding only happens after it passes." }, "Checks the token", "Logs it and replies 200"],
+      answer: 1, why: "Nothing is forwarded until the token is valid." },
+  },
+  {
+    title: "A bad token stops here",
+    summary: "expired tokens get a 401",
+    body: `<p>Press <kbd>→</kbd> to reveal the reply. The expired token is rejected with a <mark>401</mark> and never reaches the service.</p>`,
+    diagram: { hl: ["deny"], build: ["deny"] },
+  },
+  {
+    title: "A good token passes through",
+    summary: "valid tokens are forwarded",
+    body: `<p>With a valid token the gateway forwards the request on to <mark>orders-svc</mark>.</p>`,
+    diagram: { hl: ["fwd", "svc"] },
+  },
+  // ... more steps; the LAST one is always the Recap (its numbered step list is generated automatically)
+  {
+    title: "Recap",
+    body: `<p>How it all fits, in one or two sentences.</p>`,
+    diagram: {},
+  },
+];
+/* ========================================================== */
+
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const esc = s => s.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+const N = STEPS.length, LAST = N - 1;
+const terms = Object.keys(GLOSSARY), cast = Object.keys(CAST);
+document.title = META.title;
+$("#title").textContent = META.title;
+$$(".bigpic-text").forEach(e => e.textContent = META.bigPicture);
+
+// Saved progress (visited steps, quiz answers, last step) — per page, in this browser only
+const KEY = "explain-progress:" + location.pathname + ":" + META.title;
+let saved = {}; try { saved = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
+let results = saved.results || {}, maxSeen = saved.maxSeen || 0, cur = 0;
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify({ cur, maxSeen, results })); } catch (e) {} };
+
+// Shared diagram: clone DIAGRAM for step i. New parts get .hl, parts not introduced yet are ghosted (.dim), the Recap shows all.
+const buildStages = STEPS.map(s => Math.max(s.build || 0, ((s.diagram || {}).build || []).length));
+function diagramFor(i) {
+  const d = STEPS[i].diagram || {}, recap = i === LAST && N > 1;
+  const seen = new Set(); STEPS.slice(0, i).forEach(t => ((t.diagram || {}).hl || []).forEach(x => seen.add(x)));
+  const hl = new Set(d.hl || []), hide = new Set(d.hide || []), dim = new Set(d.dim || []);
+  const box = document.createElement("div"); box.innerHTML = DIAGRAM;
+  box.querySelectorAll("[data-id]").forEach(el => {
+    const id = el.dataset.id;
+    if (hide.has(id)) el.classList.add("hidden");
+    else if (hl.has(id)) el.classList.add("hl");
+    else if (dim.has(id) || (!recap && !seen.has(id))) el.classList.add("dim");
+    (d.build || []).forEach((stage, n) => { if ([].concat(stage).includes(id)) el.setAttribute("data-b", n + 1); });
+  });
+  return box.innerHTML + (recap ? "" : `<div class="legend"><span><i class="new"></i>new in this step</span><span><i></i>already introduced</span><span><i class="soon"></i>coming later</span></div>`);
+}
+// Context card: the fixed questions a newcomer needs answered before the mechanism starts
+const CTX = [["question", "The question"], ["setting", "Where this happens"], ["why", "Why it matters"],
+  ["prereqs", "What you need to know first"], ["example", "The example we'll follow"]];
+const contextHtml = c => `<dl class="ctx">${CTX.filter(([k]) => c[k] && c[k].length).map(([k, label]) =>
+  `<dt>${label}</dt><dd>${Array.isArray(c[k]) ? `<ul>${c[k].map(x => `<li>${x}</li>`).join("")}</ul>` : c[k]}</dd>`).join("")}</dl>`;
+// Code lines carrying a "←" marker get the diagram's highlight colour
+const codeHtml = c => esc(c).split("\n").map(l => `<span class="ln${l.includes("←") ? " hl-line" : ""}">${l || " "}</span>`).join("");
+
+$("#stage").innerHTML = STEPS.map((s, i) => {
+  const recap = i === LAST && N > 1, wide = s.wide || recap;
+  const vis = s.visual || (s.diagram && DIAGRAM ? diagramFor(i) : "");
+  const look = (vis ? `<div class="visual">${vis}</div>` : "") + (s.code ? `<pre><code>${codeHtml(s.code)}</code></pre>` : "");
+  const split = look && !wide;
+  return `
+  <article class="step${split ? " split" : ""}${wide ? " wide" : ""}" id="step-${i + 1}" aria-labelledby="h-${i}">
+    ${i === 0 ? `<div class="bigpic"><b>Big picture</b>${esc(META.bigPicture)}</div>` : ""}
+    <div class="eyebrow">Step ${i + 1} of ${N}</div>
+    <h2 id="h-${i}" tabindex="-1">${s.title}</h2>
+    <div class="cols">
+      <div class="read">
+        ${s.context ? contextHtml(s.context) : ""}
+        <div class="body">${s.body || ""}</div>
+        ${s.analogy ? `<div class="analogy"><span>${s.analogy}</span></div>` : ""}
+        ${wide && look ? `<div class="look">${look}</div>` : ""}
+        ${recap ? `<ol class="recap-list">${STEPS.slice(0, LAST).map((t, j) => `<li><button data-go="${j}">
+          <span class="n">${j + 1}</span><span><b>${t.title}</b>${t.summary ? ` <span class="s">— ${t.summary}</span>` : ""}</span>
+          <span class="mk" data-mk="${j}"></span></button></li>`).join("")}</ol>` : ""}
+        ${s.deeper ? `<details><summary>Go deeper</summary>${s.deeper}</details>` : ""}
+        ${s.quiz ? `<div class="quiz" data-step="${i}" data-answer="${s.quiz.answer}"><p>${s.quiz.q}</p>
+          <div class="opts">${s.quiz.options.map((o, j) => `<button data-i="${j}">${typeof o === "string" ? o : o.t}</button>`).join("")}</div>
+          <div class="retry">Not quite, one more try.</div>
+          <div class="why"><span class="verdict"></span> ${s.quiz.why}</div></div>` : ""}
+        ${recap ? `<section class="finish" aria-label="Finished">
+          <h3>You made it to the end</h3><p id="score"></p>
+          <div class="acts"><button class="primary" data-finish="restart">↺ Start over</button>
+          <button data-finish="all">Review all steps</button>
+          ${terms.length || cast.length ? `<button data-finish="gloss">Open glossary</button>` : ""}</div></section>` : ""}
+      </div>
+      ${split ? `<div class="look">${look}</div>` : ""}
+    </div>
+  </article>`;
+}).join("");
+
+// Glossary: tooltips that stay on-screen, plus a drawer
+const tip = $("#tip");
+const GL = Object.fromEntries([...cast.map(t => [t.toLowerCase(), CAST[t]]), ...terms.map(t => [t.toLowerCase(), GLOSSARY[t]])]);
+// <dfn data-term="token">tokens</dfn> names the entry explicitly; otherwise the text, then its singular, is looked up
+const findTerm = d => { const k = (d.dataset.term || d.textContent).trim().toLowerCase(); return GL[k] ?? GL[k.replace(/(es|s)$/, "")] ?? GL[k.replace(/s$/, "")]; };
+$$("dfn").forEach(d => {
+  const text = findTerm(d); if (!text) { console.warn("No glossary entry for <dfn>", d.textContent); return; }
+  d.tabIndex = 0;
+  const show = () => {
+    d.setAttribute("aria-describedby", "tip");
+    tip.textContent = text; tip.classList.add("on");
+    const r = d.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+    tip.style.left = Math.max(8, Math.min(r.left, innerWidth - w - 8)) + "px";
+    tip.style.top = (r.bottom + h + 12 > innerHeight ? r.top - h - 6 : r.bottom + 6) + "px";
+  };
+  const hide = () => { tip.classList.remove("on"); d.removeAttribute("aria-describedby"); };
+  d.addEventListener("mouseenter", show); d.addEventListener("focus", show);
+  d.addEventListener("mouseleave", hide); d.addEventListener("blur", hide);
+});
+const dl = (keys, src) => "<dl>" + keys.map(t => `<dt>${t}</dt><dd>${src[t]}</dd>`).join("") + "</dl>";
+$("#gloss").innerHTML = `<div class="dhead"><h2>Glossary</h2><button class="x" data-close aria-label="Close glossary">×</button></div>` +
+  (cast.length ? `<h3>Who's who</h3>${dl(cast, CAST)}` : "") +
+  (terms.length ? `${cast.length ? "<h3>Terms</h3>" : ""}${dl(terms, GLOSSARY)}` : "") +
+  (terms.length || cast.length ? "" : "<p>No terms.</p>");
+if (!terms.length && !cast.length) $$('[data-act="gloss"]').forEach(b => b.hidden = true);
+
+// Panels and modes: every [data-act] button has a twin (top bar on desktop, ☰ menu on phones)
+let opener = null;   // what had focus before a drawer opened, so closing returns there
+function setMode(cls, on) {
+  const was = document.body.classList.contains(cls);
+  on = document.body.classList.toggle(cls, on);
+  $$(`[data-act="${cls}"]`).forEach(b => b.setAttribute("aria-pressed", on));
+  if (cls === "menu") $("#menu").setAttribute("aria-expanded", on);
+  if (cls === "gloss" || cls === "menu") {
+    const panel = cls === "gloss" ? $("#gloss") : $("#side");
+    if (on && !was) {
+      opener = document.activeElement;
+      if (cls === "menu") { panel.setAttribute("role", "dialog"); panel.setAttribute("aria-modal", "true"); }
+      panel.querySelector(".x").focus({ preventScroll: true });
+    } else if (!on && was) {
+      if (cls === "menu") { panel.removeAttribute("role"); panel.removeAttribute("aria-modal"); }
+      if (opener && opener.isConnected) opener.focus({ preventScroll: true });
+      opener = null;
+    }
+  }
+  if (cls === "all") $$('[data-act="all"]').forEach(b => b.textContent = on ? "Step mode" : "Show all");
+  return on;
+}
+const closePanels = () => { setMode("gloss", false); setMode("menu", false); };
+$$("[data-close]").forEach(b => b.onclick = closePanels);
+$("#menu").onclick = () => { setMode("gloss", false); setMode("menu"); };
+
+// Theme: follows the OS until the reader picks one; the choice is remembered
+const root = document.documentElement, osDark = matchMedia("(prefers-color-scheme: dark)");
+const isDark = () => (root.dataset.theme || (osDark.matches ? "dark" : "light")) === "dark";
+function paintTheme() {
+  const label = isDark() ? "Switch to light mode" : "Switch to dark mode";
+  $$('[data-act="theme"]').forEach(b => {
+    b.textContent = b.hasAttribute("data-long") ? (isDark() ? "☀ Light mode" : "☾ Dark mode") : (isDark() ? "☀" : "☾");
+    b.title = label; b.setAttribute("aria-label", label);
+  });
+}
+osDark.addEventListener("change", paintTheme);
+paintTheme();
+
+$$("[data-act]").forEach(b => b.onclick = () => {
+  const act = b.dataset.act;
+  if (act === "theme") {
+    root.dataset.theme = isDark() ? "light" : "dark";
+    try { localStorage.setItem("explain-theme", root.dataset.theme); } catch (e) {}
+    return paintTheme();
+  }
+  if (act === "gloss") { setMode("menu", false); return setMode("gloss"); }
+  if (act === "all") { closePanels(); setMode("all"); go(cur, { push: false }); }
+});
+
+// Quiz: one retry before the answer is revealed; results feed the sidebar marks and the final score
+const quizzes = $$(".quiz");
+function paintQuiz(q) {
+  const st = results[q.dataset.step] || { picked: [] }, ans = +q.dataset.answer;
+  q.querySelectorAll(".opts button").forEach(b => {
+    const j = +b.dataset.i, picked = st.picked.includes(j);
+    b.classList.toggle("right", (picked || !!st.res) && j === ans);
+    b.classList.toggle("wrong", picked && j !== ans);
+    b.disabled = !!st.res || picked;
+  });
+  q.classList.toggle("answered", !!st.res);
+  q.classList.toggle("ok", st.res === "ok"); q.classList.toggle("miss", st.res === "miss");
+  q.classList.toggle("retrying", !st.res && st.picked.length > 0);
+  q.querySelector(".verdict").textContent = st.res === "ok" ? "Right." : st.res === "miss" ? "Not this time." : "";
+  // Retry hint: if the picked option carries its own `why`, say why THAT answer is wrong
+  const last = st.picked[st.picked.length - 1], o = last == null ? null : STEPS[q.dataset.step].quiz.options[last];
+  q.querySelector(".retry").innerHTML = o && o.why ? `Not quite. ${o.why} One more try.` : "Not quite, one more try.";
+}
+quizzes.forEach(q => q.addEventListener("click", e => {
+  const b = e.target.closest(".opts button"); if (!b || b.disabled) return;
+  const i = q.dataset.step, j = +b.dataset.i, ans = +q.dataset.answer, total = q.querySelectorAll(".opts button").length;
+  const st = results[i] = results[i] || { picked: [] };
+  st.picked.push(j);
+  if (j === ans) st.res = "ok";
+  else if (st.picked.length >= 2 || total - st.picked.length <= 1) st.res = "miss";
+  paintQuiz(q); paintMarks(); save();
+  // Screen readers hear the explanation too, not just right/wrong
+  $("#live").textContent = (st.res ? q.querySelector(".why") : q.querySelector(".retry")).textContent.replace(/\s+/g, " ").trim();
+}));
+function paintMarks() {
+  const mark = (el, i) => {
+    const r = results[i] && results[i].res;
+    el.textContent = r === "ok" ? "✓" : r === "miss" ? "?" : "";
+    el.className = "mk" + (r ? " " + r : "");
+    el.title = r === "ok" ? "Check answered correctly" : r === "miss" ? "Check missed: worth revisiting" : "";
+  };
+  $$("#outline .mk").forEach((el, i) => mark(el, i));
+  $$("[data-mk]").forEach(el => mark(el, el.dataset.mk));
+  const score = $("#score"); if (!score) return;
+  const withQuiz = STEPS.map((s, i) => s.quiz ? i : -1).filter(i => i >= 0);
+  const ok = withQuiz.filter(i => results[i] && results[i].res === "ok");
+  const missed = withQuiz.filter(i => results[i] && results[i].res === "miss");
+  const left = withQuiz.length - ok.length - missed.length;
+  score.innerHTML = !withQuiz.length ? "That's the whole picture."
+    : `You got <b>${ok.length} of ${withQuiz.length}</b> checks right.` +
+      (missed.length ? ` Worth another look: ${missed.map(i => `<a href="#step-${i + 1}" data-go="${i}">${STEPS[i].title}</a>`).join(", ")}.` : "") +
+      (left ? ` ${left} still unanswered.` : "");
+}
+
+// Stepper
+$("#outline").innerHTML = STEPS.map((s, i) => `<li><button data-i="${i}"><span class="n">${i + 1}</span><span class="t">${s.title}</span><span class="mk"></span></button></li>`).join("");
+const items = $$("#outline button"), arts = $$(".step"), stage = $("#stage");
+const isAll = () => document.body.classList.contains("all");
+
+// Update every "where am I" indicator without moving the page
+function mark(i) {
+  cur = i; maxSeen = Math.max(maxSeen, cur);
+  document.body.classList.toggle("first", cur === 0);
+  items.forEach((d, j) => {
+    d.classList.toggle("cur", j === cur); d.classList.toggle("done", j <= maxSeen && j !== cur);
+    if (j === cur) d.setAttribute("aria-current", "step"); else d.removeAttribute("aria-current");
+  });
+  items[cur].scrollIntoView({ block: "nearest" });
+  $("#bar").style.width = ((cur + 1) / N * 100) + "%";
+  $("#count").textContent = `${cur + 1} / ${N}`;
+  paintNav();
+  save();
+}
+// Build stage b of the current step: parts with data-b > b stay hidden until revealed (Show all / print show everything)
+let b = 0;
+function paintBuild() {
+  arts[cur].querySelectorAll("[data-b]").forEach(el => el.classList.toggle("pend", !isAll() && +el.dataset.b > b));
+}
+function paintNav() {
+  const K = isAll() ? 0 : buildStages[cur], building = b < K;
+  $("#prev").classList.toggle("gone", cur === 0 && b === 0);
+  $("#prev").disabled = cur === 0 && b === 0;
+  const last = cur === LAST, next = STEPS[cur + 1];
+  $("#next .lbl").textContent = building ? "Reveal ▸" : last ? "Finish ✓" : "Next →";
+  $("#next .sub").textContent = building ? `part ${b + 1} of ${K}` : last ? "See your summary" : next.title;
+  $("#upnext").innerHTML = building ? `Reveal part ${b + 1} of ${K} <span class="keys">· <kbd>→</kbd></span>`
+    : last ? "Last step: your summary is below" : `Next: ${next.title} <span class="keys">· <kbd>←</kbd> <kbd>→</kbd></span>`;
+}
+// Forward/back first walk through a step's build stages, then move between steps
+function fwd(viaKey) {
+  if (!isAll() && b < buildStages[cur]) { b++; paintBuild(); paintNav(); $("#live").textContent = `Revealed part ${b} of ${buildStages[cur]}`; return; }
+  if (cur < LAST) return go(cur + 1);
+  if (viaKey) return;
+  const f = $(".finish"); if (f) { f.scrollIntoView({ behavior: "smooth" }); f.querySelector("button").focus({ preventScroll: true }); }
+}
+function back() {
+  if (!isAll() && b > 0) { b--; paintBuild(); paintNav(); return; }
+  if (cur > 0) go(cur - 1, { build: "full" });
+}
+let spyPaused = 0;
+function go(i, { push = true, build = 0 } = {}) {
+  i = Math.max(0, Math.min(LAST, i));
+  const moved = i !== cur;
+  if (moved) stage.style.setProperty("--dx", i > cur ? "14px" : "-14px");   // slide in from the direction of travel
+  b = build === "full" ? buildStages[i] : 0;
+  mark(i);
+  arts.forEach((a, j) => a.classList.toggle("active", j === cur));
+  paintBuild();
+  if (isAll()) { spyPaused = Date.now() + 800; arts[cur].scrollIntoView({ behavior: "smooth" }); }
+  else stage.scrollTop = 0;
+  try { history[push && moved ? "pushState" : "replaceState"](null, "", "#step-" + (cur + 1)); } catch (e) {}
+  if (moved) $("#live").textContent = `Step ${cur + 1} of ${N}: ${STEPS[cur].title}`;
+  setMode("menu", false);
+}
+items.forEach((d, i) => d.onclick = () => { go(i); $(`#h-${i}`).focus({ preventScroll: true }); });
+$("#prev").onclick = () => back();
+$("#next").onclick = () => fwd();
+stage.addEventListener("click", e => {
+  const g = e.target.closest("[data-go]");
+  if (g) { e.preventDefault(); if (isAll()) setMode("all", false); go(+g.dataset.go); return; }
+  const f = e.target.closest("[data-finish]"); if (!f) return;
+  if (f.dataset.finish === "restart") { results = {}; maxSeen = 0; quizzes.forEach(paintQuiz); paintMarks(); setMode("all", false); go(0); }
+  if (f.dataset.finish === "all") { setMode("all", true); go(0); }
+  if (f.dataset.finish === "gloss") setMode("gloss", true);
+});
+
+// "Show all": the sidebar and counter follow the scroll position
+stage.addEventListener("scroll", () => {
+  if (!isAll() || Date.now() < spyPaused) return;
+  const atEnd = stage.scrollTop + stage.clientHeight >= stage.scrollHeight - 4;
+  let i = 0; arts.forEach((a, j) => { if (a.offsetTop - stage.scrollTop <= 120) i = j; });
+  if (atEnd) i = LAST;
+  if (i !== cur) { mark(i); try { history.replaceState(null, "", "#step-" + (i + 1)); } catch (e) {} }
+}, { passive: true });
+
+// Browser Back/Forward move between steps
+addEventListener("popstate", () => { const m = location.hash.match(/step-(\d+)/); go(m ? +m[1] - 1 : 0, { push: false }); });
+
+// Swipe left/right on phones (ignored on diagrams and code, which scroll sideways)
+let touch = null;
+stage.addEventListener("touchstart", e => {
+  touch = e.target.closest(".visual, pre") || isAll() ? null : { x: e.touches[0].clientX, y: e.touches[0].clientY };
+}, { passive: true });
+stage.addEventListener("touchend", e => {
+  if (!touch) return;
+  const dx = e.changedTouches[0].clientX - touch.x, dy = e.changedTouches[0].clientY - touch.y; touch = null;
+  if (Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy)) { if (dx < 0) fwd(true); else back(); }
+});
+
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") return closePanels();
+  if (e.target.matches("input, textarea") || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (document.body.classList.contains("gloss") || document.body.classList.contains("menu")) return;   // a drawer is open: don't navigate behind it
+  const sc = e.target.closest && e.target.closest(".visual, pre");
+  if (sc && sc.scrollWidth > sc.clientWidth) return;   // let ←/→ scroll a wide diagram or code block
+  if (e.key === "ArrowRight") fwd(true);
+  if (e.key === "ArrowLeft") back();
+});
+
+quizzes.forEach(paintQuiz); paintMarks();
+const m = location.hash.match(/step-(\d+)/);
+cur = -1; go(m ? +m[1] - 1 : Math.min(saved.cur || 0, LAST), { push: false });
+</script>
+</body>
+</html>

@@ -5,6 +5,7 @@ Claude Code skills, published as a plugin marketplace. Each plugin installs on i
 | Plugin | What it does |
 |---|---|
 | [orchestrator](plugins/orchestrator/) | Coordinate several user-created Claude sessions working on one epic: a manager session plans goals and dependencies, worker sessions take goals in parallel. |
+| [explain-interactive](plugins/explain-interactive/) | Turn a hard-to-follow explanation into a self-contained, step-by-step interactive HTML page with one shared diagram, a glossary and quizzes. |
 
 ## Install
 
