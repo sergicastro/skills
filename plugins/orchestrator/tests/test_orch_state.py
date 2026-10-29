@@ -405,6 +405,148 @@ class UserTests(Base):
         self.assertIn("| demo-w-a | g1 |  | gone |", self.run_cli("show", "demo")[1])
 
 
+class NoticeTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.init()
+        for w in ("demo-w-a", "demo-w-b", "demo-w-c"):
+            self.run_cli("register", "demo", w)
+        self.run_cli("request", "demo", "demo-w-a")  # a: g1
+        self.run_cli("done", "demo", "demo-w-a", "g1", "--notes", "base ready")
+        self.run_cli("approve", "demo", "g1")
+        self.run_cli("request", "demo", "demo-w-a")  # a: g2
+        self.run_cli("request", "demo", "demo-w-b")  # b: g3; c stays idle
+
+    def notify(self, *extra):
+        return self.run_cli("notify", "demo", "--kind", "changed", "--summary", "API renamed", *extra)
+
+    def test_default_recipients_are_related_live_goals(self):
+        code, out = self.notify("--goal", "g1")  # g2 and g3 depend on g1
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out["id"], 1)
+        self.assertEqual(sorted(out["to"]), ["demo-w-a", "demo-w-b"])
+
+    def test_unrelated_goal_is_not_notified(self):
+        code, out = self.notify("--goal", "g2")  # g3 is neither dependent nor dependency of g2
+        self.assertEqual(out["to"], ["demo-w-a"])
+
+    def test_epic_wide_goes_to_every_worker_holding_a_goal(self):
+        code, out = self.notify()
+        self.assertEqual(sorted(out["to"]), ["demo-w-a", "demo-w-b"])
+        self.assertIsNone(out["goal"])
+
+    def test_to_overrides_defaults_and_can_include_idle_worker(self):
+        code, out = self.notify("--goal", "g2", "--to", "demo-w-c")
+        self.assertEqual(out["to"], ["demo-w-c"])
+
+    def test_dry_run_saves_nothing(self):
+        code, out = self.notify("--goal", "g1", "--dry-run")
+        self.assertEqual((code, out["id"], sorted(out["to"])), (0, 1, ["demo-w-a", "demo-w-b"]))
+        self.assertNotIn("notices", self.state())
+        self.assertEqual(self.notify("--goal", "g1")[1]["id"], 1)
+
+    def test_pending_notice_shows_in_status_md_and_html_only_while_pending(self):
+        md_path = Path(self.tmp.name) / "demo" / "status.md"
+        html_path = Path(self.tmp.name) / "demo" / "status.html"
+        self.assertNotIn("Pending notices", md_path.read_text())
+        self.notify()
+        self.assertIn("## Pending notices", md_path.read_text())
+        self.assertIn("- #1 (changed, epic-wide): waiting on demo-w-a, demo-w-b", md_path.read_text())
+        self.assertIn("Pending notices", html_path.read_text())
+        self.run_cli("noticed", "demo", "demo-w-a", "1")
+        self.run_cli("noticed", "demo", "demo-w-b", "1")
+        self.assertNotIn("Pending notices", md_path.read_text())
+        self.assertNotIn("Pending notices", html_path.read_text())
+
+    def test_show_lists_pending_notices(self):
+        self.notify("--goal", "g2")
+        code, out = self.run_cli("show", "demo")
+        self.assertIn("- #1 (changed, g2): waiting on demo-w-a", out)
+
+    def test_rename_worker_rekeys_notice_recipients(self):
+        self.notify()  # epic-wide: demo-w-a and demo-w-b
+        self.assertEqual(self.run_cli("rename-worker", "demo", "demo-w-a", "demo-w-d")[0], 0)
+        code, out = self.run_cli("pending-notices", "demo")
+        pending = [p for n in out for p in n["pending"]]
+        self.assertIn("demo-w-d", pending)
+        self.assertNotIn("demo-w-a", pending)
+        self.assertEqual(self.run_cli("noticed", "demo", "demo-w-d", "1")[0], 0)
+        code, out = self.run_cli("pending-notices", "demo")
+        self.assertEqual([p for n in out for p in n["pending"]], ["demo-w-b"])
+
+    def test_unregistered_recipient_is_rejected(self):
+        code, out = self.notify("--to", "demo-w-zzz")
+        self.assertEqual(code, 2)
+        self.assertIn("demo-w-zzz is not registered", out["error"])
+
+    def test_no_recipients_is_an_error(self):
+        solo = plan({"s1": {"title": "Solo", "summary": "solo work", "depends_on": []}},
+                    epic={"slug": "solo", "title": "Solo epic", "source": None})
+        self.init(solo, slug="solo")
+        self.run_cli("register", "solo", "demo-w-c")
+        code, out = self.run_cli("notify", "solo", "--kind", "added", "--summary", "x", "--goal", "s1")
+        self.assertEqual(code, 2)
+        self.assertIn("no recipients", out["error"])
+
+    def test_unknown_goal_without_to_is_an_error(self):
+        code, out = self.notify("--goal", "nope")
+        self.assertEqual(code, 2)
+        self.assertIn("unknown goal nope; for a dropped goal pass --to", out["error"])
+
+    def test_unknown_goal_with_to_is_allowed_for_dropped_goals(self):
+        code, out = self.run_cli("notify", "demo", "--kind", "dropped", "--summary", "g9 removed",
+                                 "--goal", "g9", "--to", "demo-w-a")
+        self.assertEqual(code, 0, out)
+
+    def test_bad_summary_is_rejected(self):
+        code, out = self.run_cli("notify", "demo", "--kind", "changed", "--summary", " ")
+        self.assertEqual(code, 2)
+        self.assertIn("summary", out["error"])
+        code, out = self.run_cli("notify", "demo", "--kind", "changed", "--summary", "\n".join(["x"] * 12))
+        self.assertEqual(code, 2)
+        self.assertIn("at most 10 lines", out["error"])
+
+    def test_ids_increase_and_event_is_logged(self):
+        self.notify()
+        code, out = self.notify()
+        self.assertEqual(out["id"], 2)
+        log = (Path(self.tmp.name) / "demo" / "events.log").read_text()
+        self.assertIn("manager NOTICE 2 - changed to=demo-w-a,demo-w-b", log)
+
+    def test_noticed_records_ack_and_pending_shrinks(self):
+        self.notify()
+        code, out = self.run_cli("noticed", "demo", "demo-w-a", "1")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out["pending"], ["demo-w-b"])
+        code, out = self.run_cli("pending-notices", "demo")
+        self.assertEqual(out, [{"id": 1, "goal": None, "kind": "changed",
+                                "summary": out[0]["summary"], "pending": ["demo-w-b"]}])
+        self.assertTrue(out[0]["summary"])
+        self.run_cli("noticed", "demo", "demo-w-b", "1")
+        self.assertEqual(self.run_cli("pending-notices", "demo")[1], [])
+
+    def test_noticed_rejects_non_recipient_and_unknown_id(self):
+        self.notify("--goal", "g2")
+        code, out = self.run_cli("noticed", "demo", "demo-w-b", "1")
+        self.assertEqual(code, 2)
+        self.assertIn("not a recipient", out["error"])
+        code, out = self.run_cli("noticed", "demo", "demo-w-a", "9")
+        self.assertEqual(code, 2)
+        self.assertIn("unknown notice 9", out["error"])
+
+    def test_old_state_without_notices_still_loads(self):
+        state = self.state()
+        self.assertNotIn("notices", state)
+        self.assertEqual(self.run_cli("pending-notices", "demo"), (0, []))
+
+    def test_validate_rejects_malformed_notices(self):
+        state = self.state()
+        state["notices"] = [{"id": 1}]
+        self.assertTrue(any("notice" in p for p in orch_state.validate(state)))
+        state["notices"] = "x"
+        self.assertTrue(any("notices must be a list" in p for p in orch_state.validate(state)))
+
+
 class EditTests(Base):
     def setUp(self):
         super().setUp()

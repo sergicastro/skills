@@ -29,7 +29,7 @@ def render_md(vm):
         f"| {w['name']} | {md_cell(w['current'])} | {md_cell(', '.join(w['history']))} | {live_label[w['live']]} | {w['last_seen']} |"
         for w in vm["workers"]
     ] or ["| - | - | - | - | - |"]
-    return template("status.md.tmpl").substitute(
+    text = template("status.md.tmpl").substitute(
         title=vm["title"],
         slug=vm["slug"],
         source=vm["source"] or "-",
@@ -42,6 +42,12 @@ def render_md(vm):
         live_checked=vm["live_checked"] or "never",
         worker_rows="\n".join(worker_rows),
     )
+    pending = vm.get("notices") or []
+    if pending:
+        lines = [f"- #{n['id']} ({n['kind']}, {n['goal'] or 'epic-wide'}): waiting on {', '.join(n['pending'])}"
+                 for n in pending]
+        text = text.rstrip("\n") + "\n\n## Pending notices\n\n" + "\n".join(lines) + "\n"
+    return text
 
 
 NODE_W, NODE_H, GAP_X, GAP_Y, PAD = 200, 58, 72, 16, 8
@@ -137,6 +143,13 @@ def graph_svg(vm):
 
 def main_html(vm):
     title = link(vm["source"], vm["title"]) if vm["source"] else esc(vm["title"])
+    pending = vm.get("notices") or []
+    notices = ""
+    if pending:
+        items = "".join(
+            f'<li>#{n["id"]} <code>{esc(n["kind"])}</code> {esc(n["goal"] or "epic-wide")}: '
+            f'waiting on {esc(", ".join(n["pending"]))}</li>' for n in pending)
+        notices = f'<section><h2>Pending notices</h2><ul>{items}</ul></section>'
     goal_rows = "".join(
         f'<tr id="goal-{esc(g["id"])}" data-goal="{esc(g["id"])}" data-status="{esc(g["status"])}">'
         f'<td>{esc(g["id"])}</td><td>{esc(g["title"])}</td><td>{badge(g["status"])}</td>'
@@ -169,6 +182,7 @@ def main_html(vm):
         + '<div class="table"><table><thead><tr><th>Worker</th><th>Current goal</th><th>Done so far</th>'
         + '<th>Live</th><th>Last seen</th></tr></thead>'
         + f'<tbody>{worker_rows}</tbody></table></div></section>'
+        + notices
         + f'<section><h2>Recent events</h2><ol class="events">{events}</ol></section>'
     )
 

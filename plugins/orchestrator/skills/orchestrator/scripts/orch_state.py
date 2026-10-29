@@ -23,6 +23,9 @@ import orch_view
 VERSION = 1
 STATES = ("blocked", "ready", "assigned", "needs-user", "in-review", "done")
 UNBLOCK = {"done": ("done",), "in-review": ("in-review", "done")}
+NOTICE_KINDS = ("changed", "decision", "dependency-merged", "dropped", "added")
+NOTICE_LIVE = ("assigned", "needs-user", "in-review")
+NOTICE_MAX_LINES = 10
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 EVENTS_SHOWN = 30
 
@@ -146,6 +149,14 @@ def validate(state):
         cur = w.get("current")
         if cur is not None and (cur not in goals or goals[cur].get("worker") != name):
             problems.append(f"worker {name}: current goal {cur} does not belong to it")
+    notices = state.get("notices", [])
+    if not isinstance(notices, list):
+        problems.append("notices must be a list")
+    else:
+        for n in notices:
+            if not (isinstance(n, dict) and isinstance(n.get("id"), int) and n.get("kind") in NOTICE_KINDS
+                    and n.get("summary") and isinstance(n.get("to"), dict)):
+                problems.append(f"malformed notice {n!r}")
     return problems
 
 
@@ -263,6 +274,7 @@ def view_model(state, events, problems=()):
                     for n, w in state["workers"].items()],
         "events": list(events),
         "problems": list(problems),
+        "notices": pending_notices(state),
         "updated": now(),
     }
 
@@ -445,6 +457,76 @@ def release(state, gid):
     return {"goal": gid, "status": g["status"]}, [("user", "RELEASE", gid)]
 
 
+def default_recipients(state, gid):
+    """Registered workers holding a live goal that is `gid`, depends on it or is a dependency of it.
+    gid None means epic-wide: every worker holding a live goal."""
+    goals = state["goals"]
+    if gid is None:
+        related = set(goals)
+    else:
+        related = {gid, *goals[gid]["depends_on"]} | {g for g, v in goals.items() if gid in v["depends_on"]}
+    names = []
+    for g in related:
+        v = goals[g]
+        if v["status"] in NOTICE_LIVE and v["worker"] in state["workers"] and v["worker"] not in names:
+            names.append(v["worker"])
+    return sorted(names)
+
+
+def notify(state, kind, summary, gid, to, dry_run=False):
+    if kind not in NOTICE_KINDS:
+        raise OrchError(f"invalid kind {kind!r}: use one of {', '.join(NOTICE_KINDS)}")
+    if not summary or not summary.strip():
+        raise OrchError("summary is required")
+    if len(summary.strip().splitlines()) > NOTICE_MAX_LINES:
+        raise OrchError(f"summary must be at most {NOTICE_MAX_LINES} lines")
+    if to:
+        for name in to:
+            if name not in state["workers"]:
+                raise OrchError(f"{name} is not registered")
+        names = list(dict.fromkeys(to))
+    else:
+        if gid is not None:
+            try:
+                goal(state, gid)
+            except OrchError as e:
+                raise OrchError(f"{e}; for a dropped goal pass --to")
+        names = default_recipients(state, gid)
+        if not names:
+            raise OrchError("no recipients: no live worker is affected; pass --to to choose some")
+    notices = state.setdefault("notices", [])
+    nid = max((n["id"] for n in notices), default=0) + 1
+    notices.append({"id": nid, "goal": gid, "kind": kind, "summary": summary.strip(), "sent": now(),
+                    "to": {n: {"acked": None} for n in names}})
+    result = {"id": nid, "goal": gid, "kind": kind, "summary": summary.strip(), "to": names}
+    if dry_run:
+        return result, []
+    return result, [("manager", "NOTICE", f"{nid} {gid or '-'} {kind} to={','.join(names)}")]
+
+
+def noticed(state, name, nid):
+    w = require_worker(state, name)
+    n = next((n for n in state.get("notices", []) if n["id"] == nid), None)
+    if n is None:
+        raise OrchError(f"unknown notice {nid}")
+    if name not in n["to"]:
+        raise OrchError(f"{name} is not a recipient of notice {nid}")
+    n["to"][name]["acked"] = now()
+    w["last_seen"] = now()
+    pending = [k for k, v in n["to"].items() if not v["acked"]]
+    return {"id": nid, "acked": name, "pending": pending}, [(name, "NOTICED", str(nid))]
+
+
+def pending_notices(state):
+    out = []
+    for n in state.get("notices", []):
+        pending = [k for k, v in n["to"].items() if not v["acked"]]
+        if pending:
+            out.append({"id": n["id"], "goal": n["goal"], "kind": n["kind"],
+                        "summary": n["summary"], "pending": pending})
+    return out
+
+
 def set_policy(state, unblock_on):
     state["policy"]["unblock_on"] = unblock_on
     newly = recompute(state)
@@ -555,6 +637,9 @@ def rename_worker(state, old, new):
     for g in state["goals"].values():
         if g["worker"] == old:
             g["worker"] = new
+    for n in state.get("notices", []):
+        if old in n["to"]:
+            n["to"][new] = n["to"].pop(old)
     return {"renamed": old, "to": new, "current": w["current"]}, [("user", "RENAME", f"{old} -> {new}")]
 
 
@@ -634,6 +719,13 @@ ARGS.update({
     "edit-goal": [(["goal"], {}), (["--goal-json"], {"required": True, "help": "only the fields to change"})],
     "rename-worker": [(["old"], {}), (["new"], {})],
     "liveness": [(["--live"], {"default": "", "help": "comma-separated session names from ListAgents"})],
+    "notify": [(["--kind"], {"required": True, "choices": list(NOTICE_KINDS)}),
+               (["--summary"], {"required": True}),
+               (["--goal"], {"help": "goal the notice is about; omit for an epic-wide notice"}),
+               (["--to"], {"default": "", "help": "comma-separated worker names; default: affected workers"}),
+               (["--dry-run"], {"action": "store_true", "help": "show recipients and id without recording anything"})],
+    "noticed": [(["worker"], {}), (["id"], {"type": int})],
+    "pending-notices": [],
 })
 
 COMMANDS.update({
@@ -649,6 +741,9 @@ COMMANDS.update({
     "edit-goal": lambda s, a: edit_goal(s, a.goal, json.loads(a.goal_json)),
     "rename-worker": lambda s, a: rename_worker(s, a.old, a.new),
     "liveness": lambda s, a: liveness(s, a.live),
+    "notify": lambda s, a: notify(s, a.kind, a.summary, a.goal, [x for x in a.to.split(",") if x], a.dry_run),
+    "noticed": lambda s, a: noticed(s, a.worker, a.id),
+    "pending-notices": lambda s, a: (pending_notices(s), []),
 })
 
 
