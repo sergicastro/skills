@@ -445,6 +445,35 @@ class NoticeTests(Base):
         self.assertNotIn("notices", self.state())
         self.assertEqual(self.notify("--goal", "g1")[1]["id"], 1)
 
+    def test_pending_notice_shows_in_status_md_and_html_only_while_pending(self):
+        md_path = Path(self.tmp.name) / "demo" / "status.md"
+        html_path = Path(self.tmp.name) / "demo" / "status.html"
+        self.assertNotIn("Pending notices", md_path.read_text())
+        self.notify()
+        self.assertIn("## Pending notices", md_path.read_text())
+        self.assertIn("- #1 (changed, epic-wide): waiting on demo-w-a, demo-w-b", md_path.read_text())
+        self.assertIn("Pending notices", html_path.read_text())
+        self.run_cli("noticed", "demo", "demo-w-a", "1")
+        self.run_cli("noticed", "demo", "demo-w-b", "1")
+        self.assertNotIn("Pending notices", md_path.read_text())
+        self.assertNotIn("Pending notices", html_path.read_text())
+
+    def test_show_lists_pending_notices(self):
+        self.notify("--goal", "g2")
+        code, out = self.run_cli("show", "demo")
+        self.assertIn("- #1 (changed, g2): waiting on demo-w-a", out)
+
+    def test_rename_worker_rekeys_notice_recipients(self):
+        self.notify()  # epic-wide: demo-w-a and demo-w-b
+        self.assertEqual(self.run_cli("rename-worker", "demo", "demo-w-a", "demo-w-d")[0], 0)
+        code, out = self.run_cli("pending-notices", "demo")
+        pending = [p for n in out for p in n["pending"]]
+        self.assertIn("demo-w-d", pending)
+        self.assertNotIn("demo-w-a", pending)
+        self.assertEqual(self.run_cli("noticed", "demo", "demo-w-d", "1")[0], 0)
+        code, out = self.run_cli("pending-notices", "demo")
+        self.assertEqual([p for n in out for p in n["pending"]], ["demo-w-b"])
+
     def test_unregistered_recipient_is_rejected(self):
         code, out = self.notify("--to", "demo-w-zzz")
         self.assertEqual(code, 2)

@@ -274,6 +274,7 @@ def view_model(state, events, problems=()):
                     for n, w in state["workers"].items()],
         "events": list(events),
         "problems": list(problems),
+        "notices": pending_notices(state),
         "updated": now(),
     }
 
@@ -585,6 +586,9 @@ def rename_worker(state, old, new):
     for g in state["goals"].values():
         if g["worker"] == old:
             g["worker"] = new
+    for n in state.get("notices", []):
+        if old in n["to"]:
+            n["to"][new] = n["to"].pop(old)
     return {"renamed": old, "to": new, "current": w["current"]}, [("user", "RENAME", f"{old} -> {new}")]
 
 
