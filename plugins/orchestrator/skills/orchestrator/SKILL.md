@@ -161,9 +161,11 @@ the recipients to every registered worker.
 1. Draft `kind` (`changed | decision | dependency-merged | dropped | added`), the goal id (or
    none for epic-wide) and a summary of at most ~10 lines: what changed and why it may matter.
    No diffs or logs.
-2. Before recording anything, run the same command with `--dry-run` to get the recipients, and show
-   the user the recipients and the exact text. Idle workers are added only if the user asks (`--to`).
-   Then wait for the user's go-ahead.
+2. Before recording anything, run
+   `$ORCH notify <slug> --kind K --summary "…" [--goal G] [--to a,b] --dry-run`
+   to get the recipients, and show the user the recipients and the exact text. Idle workers
+   are added only if the user asks (`--to`). Then wait for the go-ahead. If the user changes the
+   text or the recipients, run `--dry-run` again and show the result before sending.
 3. On go: run it again without `--dry-run` (same arguments, plus any `--to` the user changed). It returns `id`,
    `to` and the text. Send one `[orch v1 NOTICE]` per name in `to` (`protocol.md`). If a send
    fails, say which worker, and leave it pending.

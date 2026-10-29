@@ -8,6 +8,10 @@ working on related goals from one epic or task list:
 - `orchestrator-worker` — a worker session: registers with the manager, asks for a
   goal when the user says so, works it, and reports back.
 
+The manager can also propose a change notice to the affected workers when a goal changes
+or a merged goal settles a design question. It sends the notice only after the user approves;
+workers acknowledge it and change course only on the user's say-so.
+
 ## Goals
 
 - **Easy issue management with concurrent work.** One manager session keeps the
