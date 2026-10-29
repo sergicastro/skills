@@ -9,6 +9,13 @@
       "description": "Coordinate several user-created Claude sessions working on one epic: a manager session plans goals and dependencies, worker sessions take goals in parallel.",
       "category": "productivity",
       "keywords": ["orchestration", "multi-session", "epic", "github"]
+    },
+    {
+      "name": "explain-interactive",
+      "source": "./plugins/explain-interactive",
+      "description": "Turn a hard-to-follow explanation into a self-contained, step-by-step interactive HTML page with one shared diagram, a glossary and quizzes.",
+      "category": "productivity",
+      "keywords": ["explainer", "html", "diagram", "learning"]
     }
   ]
 }

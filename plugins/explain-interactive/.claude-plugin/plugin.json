@@ -1,0 +1,8 @@
+{
+  "name": "explain-interactive",
+  "version": "0.1.0",
+  "description": "Turn a hard-to-follow explanation into a self-contained, step-by-step interactive HTML page with one shared diagram, a glossary and quizzes.",
+  "author": { "name": "Sergi Castro" },
+  "license": "MIT",
+  "keywords": ["explainer", "html", "diagram", "learning"]
+}
