@@ -20,7 +20,7 @@ def md_cell(value):
 
 def render_md(vm):
     goal_rows = [
-        f"| {g['id']} | {md_cell(g['title'])} | {g['status']} | {md_cell(g['worker'])} | {md_cell(g['pr'])} | {md_cell(g['reason'])} |"
+        f"| {g['id']} | {md_cell(g['title'])} | {g['status']} | {md_cell(g['worker'])} | {md_cell(', '.join(g['prs']))} | {md_cell(g['reason'])} |"
         for g in vm["goals"]
     ]
     deps = [f"- {g['id']} ← {', '.join(g['depends_on'])}" for g in vm["goals"] if g["depends_on"]]
@@ -153,7 +153,7 @@ def main_html(vm):
     goal_rows = "".join(
         f'<tr id="goal-{esc(g["id"])}" data-goal="{esc(g["id"])}" data-status="{esc(g["status"])}">'
         f'<td>{esc(g["id"])}</td><td>{esc(g["title"])}</td><td>{badge(g["status"])}</td>'
-        f'<td>{esc(g["worker"] or "-")}</td><td>{link(g["pr"], pr_label(g["pr"]) if g["pr"] else None)}</td>'
+        f'<td>{esc(g["worker"] or "-")}</td><td>{link(g["prs"][0] if g["prs"] else None, pr_label(g["prs"][0]) if g["prs"] else None)}</td>'
         f'<td>{esc(g["reason"] or "")}</td></tr>'
         for g in vm["goals"])
     worker_rows = "".join(

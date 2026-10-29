@@ -278,6 +278,66 @@ class WorkerTests(Base):
         self.assertEqual(code, 2)
         self.assertIn("handoff notes are required", out["error"])
 
+    def start_g1(self):
+        self.run_cli("register", "demo", "demo-w-a")
+        self.run_cli("request", "demo", "demo-w-a")
+
+    def test_pr_is_recorded_without_changing_status(self):
+        self.start_g1()
+        code, out = self.run_cli("pr", "demo", "demo-w-a", "g1", "--url", "https://example.com/acme/recipe-site/pull/12")
+        self.assertEqual((code, out), (0, {"goal": "g1", "prs": ["https://example.com/acme/recipe-site/pull/12"], "added": True}))
+        self.assertEqual(self.state()["goals"]["g1"]["status"], "assigned")
+        log = (Path(self.tmp.name) / "demo" / "events.log").read_text()
+        self.assertIn("demo-w-a PR g1 https://example.com/acme/recipe-site/pull/12", log)
+
+    def test_pr_dedupes_and_keeps_several(self):
+        self.start_g1()
+        self.run_cli("pr", "demo", "demo-w-a", "g1", "--url", "https://example.com/pull/1")
+        code, out = self.run_cli("pr", "demo", "demo-w-a", "g1", "--url", "https://example.com/pull/1")
+        self.assertEqual((code, out["added"], out["prs"]), (0, False, ["https://example.com/pull/1"]))
+        code, out = self.run_cli("pr", "demo", "demo-w-a", "g1", "--url", "https://example.com/pull/2")
+        self.assertEqual(out["prs"], ["https://example.com/pull/1", "https://example.com/pull/2"])
+
+    def test_pr_rejects_wrong_worker_unknown_goal_and_empty_url(self):
+        self.start_g1()
+        self.run_cli("register", "demo", "demo-w-b")
+        code, out = self.run_cli("pr", "demo", "demo-w-b", "g1", "--url", "https://example.com/pull/1")
+        self.assertEqual(code, 2)
+        self.assertIn("g1 is not assigned to demo-w-b", out["error"])
+        code, out = self.run_cli("pr", "demo", "demo-w-a", "nope", "--url", "https://example.com/pull/1")
+        self.assertEqual(code, 2)
+        self.assertIn("unknown goal nope", out["error"])
+        code, out = self.run_cli("pr", "demo", "demo-w-a", "g1", "--url", " ")
+        self.assertEqual(code, 2)
+        self.assertIn("url is required", out["error"])
+        self.assertNotIn("prs", self.state()["goals"]["g1"])
+
+    def test_done_merges_its_pr_into_the_list(self):
+        self.start_g1()
+        self.run_cli("pr", "demo", "demo-w-a", "g1", "--url", "https://example.com/pull/1")
+        self.run_cli("done", "demo", "demo-w-a", "g1", "--pr", "https://example.com/pull/1", "--notes", "n")
+        self.assertEqual(self.state()["goals"]["g1"]["prs"], ["https://example.com/pull/1"])
+        self.run_cli("approve", "demo", "g1")
+        self.run_cli("register", "demo", "demo-w-b")
+        self.run_cli("request", "demo", "demo-w-b")
+        self.run_cli("done", "demo", "demo-w-b", "g2", "--pr", "https://example.com/pull/9", "--notes", "n")
+        self.assertEqual(self.state()["goals"]["g2"]["prs"], ["https://example.com/pull/9"])
+
+    def test_goal_prs_reads_legacy_handoff_pr(self):
+        legacy = {"handoff": {"pr": "https://example.com/pull/3", "notes": "n"}}
+        self.assertEqual(orch_state.goal_prs(legacy), ["https://example.com/pull/3"])
+        self.assertEqual(orch_state.goal_prs({}), [])
+        both = {"prs": ["https://example.com/pull/4"], "handoff": {"pr": "https://example.com/pull/3"}}
+        self.assertEqual(orch_state.goal_prs(both), ["https://example.com/pull/3", "https://example.com/pull/4"])
+
+    def test_validate_checks_prs(self):
+        self.start_g1()
+        state = self.state()
+        state["goals"]["g1"]["prs"] = "https://example.com/pull/1"
+        self.assertIn("g1: prs must be a list of strings", orch_state.validate(state))
+        state["goals"]["g1"]["prs"] = ["https://example.com/pull/1"]
+        self.assertEqual(orch_state.validate(state), [])
+
 
 class UserTests(Base):
     def setUp(self):
@@ -776,6 +836,8 @@ class GoldenTests(Base):
         self.run_cli("request", "demo", "demo-w-b")
         self.run_cli("status", "demo", "demo-w-b", "g2", "needs-user", "--reason", "pick a | b\nthen go")
         self.run_cli("request", "demo", "demo-w-a")
+        self.run_cli("pr", "demo", "demo-w-a", "g3", "--url", "https://github.com/o/r/pull/9")
+        self.run_cli("pr", "demo", "demo-w-a", "g3", "--url", "https://github.com/o/r/pull/10")
         self.run_cli("liveness", "demo", "--live", "demo-w-a")
         return orch_state.load("demo")
 

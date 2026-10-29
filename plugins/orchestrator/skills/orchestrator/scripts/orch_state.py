@@ -127,6 +127,10 @@ def validate(state):
         if not isinstance(g["depends_on"], list):
             problems.append(f"{gid}: depends_on must be a list")
             continue
+        prs = g.get("prs", [])
+        if not isinstance(prs, list) or not all(isinstance(p, str) for p in prs):
+            problems.append(f"{gid}: prs must be a list of strings")
+            continue
         if g.get("status") not in STATES:
             problems.append(f"{gid}: invalid status {g.get('status')}")
         for dep in g.get("depends_on", []):
@@ -244,6 +248,15 @@ def depths(goals):
     return {gid: depth(gid) for gid in goals}
 
 
+def goal_prs(g):
+    """All PR URLs of a goal. Older state files only have handoff.pr."""
+    prs = list(g.get("prs") or [])
+    legacy = (g.get("handoff") or {}).get("pr")
+    if legacy and legacy not in prs:
+        prs.insert(0, legacy)
+    return prs
+
+
 def view_model(state, events, problems=()):
     e = state["epic"]
     goals = state["goals"]
@@ -263,7 +276,7 @@ def view_model(state, events, problems=()):
         "unblock_on": state["policy"].get("unblock_on"),
         "counts": [(s, sum(1 for g in goals.values() if g["status"] == s)) for s in STATES],
         "goals": [{"id": gid, "title": g["title"], "status": g["status"], "worker": g["worker"],
-                   "pr": (g.get("handoff") or {}).get("pr"), "reason": g.get("reason"),
+                   "prs": goal_prs(g), "reason": g.get("reason"),
                    "depends_on": g["depends_on"], "col": col[gid], "row": rows[gid]}
                   for gid, g in goals.items()],
         "edges": [{"from": dep, "to": gid, "met": goals[dep]["status"] in ok}
@@ -346,7 +359,7 @@ def assignment(state, gid):
     for dep in g["depends_on"]:
         handoff = goals[dep]["handoff"] or {}
         upstream.append({"goal": dep, "title": goals[dep]["title"], "status": goals[dep]["status"],
-                         "pr": handoff.get("pr"), "notes": handoff.get("notes")})
+                         "pr": ", ".join(goal_prs(goals[dep])) or None, "notes": handoff.get("notes")})
     board = state.get("board")
     if board:
         board = {"project": board["project"], "field": board["field"],
@@ -405,6 +418,20 @@ def report_status(state, name, gid, new, reason):
     return {"goal": gid, "status": g["status"], "reason": g["reason"]}, [(name, "STATUS", f"{gid} {new} {reason or ''}")]
 
 
+def report_pr(state, name, gid, url):
+    require_worker(state, name)
+    g = owned_goal(state, name, gid)
+    url = (url or "").strip()
+    if not url:
+        raise OrchError("url is required")
+    prs = goal_prs(g)
+    added = url not in prs
+    if added:
+        prs.append(url)
+    g["prs"] = prs
+    return {"goal": gid, "prs": prs, "added": added}, [(name, "PR", f"{gid} {url}")]
+
+
 def done(state, name, gid, pr, notes):
     w = require_worker(state, name)
     g = owned_goal(state, name, gid)
@@ -412,6 +439,8 @@ def done(state, name, gid, pr, notes):
         raise OrchError("handoff notes are required")
     g["status"], g["reason"] = "in-review", None
     g["handoff"] = {"pr": pr, "notes": notes}
+    if pr:
+        g["prs"] = goal_prs(g)
     w["current"] = None
     if gid not in w["history"]:
         w["history"].append(gid)
@@ -696,6 +725,7 @@ ARGS.update({
     "status": [(["worker"], {}), (["goal"], {}),
                (["state"], {"choices": ["needs-user", "blocked", "assigned"]}), (["--reason"], {})],
     "done": [(["worker"], {}), (["goal"], {}), (["--pr"], {}), (["--notes"], {"required": True})],
+    "pr": [(["worker"], {}), (["goal"], {}), (["--url"], {"required": True})],
 })
 
 COMMANDS.update({
@@ -703,6 +733,7 @@ COMMANDS.update({
     "request": lambda s, a: request(s, a.worker),
     "status": lambda s, a: report_status(s, a.worker, a.goal, a.state, a.reason),
     "done": lambda s, a: done(s, a.worker, a.goal, a.pr, a.notes),
+    "pr": lambda s, a: report_pr(s, a.worker, a.goal, a.url),
 })
 
 
