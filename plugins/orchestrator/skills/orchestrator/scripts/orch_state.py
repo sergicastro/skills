@@ -2,6 +2,7 @@
 """State helper for the orchestrator skill. Only the manager session runs it.
 
 Usage: orch_state.py <command> <slug> [args]
+       orch_state.py cleanup <slug> [--delete] [--stop-server]
        orch_state.py serve [--port N] [--ensure | --stop]
 
 Every command prints one JSON object to stdout and exits 0, except `show`, which
@@ -12,6 +13,7 @@ import datetime
 import json
 import os
 import re
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -410,7 +412,9 @@ def approve(state, gid):
     if g["status"] != "in-review":
         raise OrchError(f"{gid} is {g['status']}, only in-review goals can be approved")
     g["status"] = "done"
-    return {"goal": gid, "status": "done", "newly_ready": recompute(state)}, [("user", "APPROVE", gid)]
+    newly = recompute(state)
+    all_done = all(o["status"] == "done" for o in state["goals"].values())
+    return {"goal": gid, "status": "done", "newly_ready": newly, "all_done": all_done}, [("user", "APPROVE", gid)]
 
 
 def sendback(state, gid, reason):
@@ -518,6 +522,29 @@ def liveness(state, live_csv):
     return {"live": live, "gone": gone, "gone_with_goal": with_goal}, [("manager", "LIVENESS", ",".join(gone) or "all-live")]
 
 
+def cleanup(slug, delete, stop_server):
+    state = load(slug)
+    open_goals = [f"{gid} ({g['status']})" for gid, g in state["goals"].items() if g["status"] != "done"]
+    if open_goals:
+        raise OrchError("not every goal is done: " + ", ".join(open_goals))
+    out = {"cleaned": slug, "deleted": False, "server_stopped": False, "workers": list(state["workers"])}
+    if delete:
+        shutil.rmtree(state_dir(slug))
+        out["deleted"] = True
+    if stop_server:
+        r = root()
+        others = sorted(p.name for p in r.iterdir() if p.name != slug and (p / "state.json").is_file())
+        if others:
+            out["server_reason"] = "other orchestrations remain: " + ", ".join(others)
+        else:
+            import orch_serve
+            res = orch_serve.stop()
+            out["server_stopped"] = res.get("stopped", False)
+            if not out["server_stopped"]:
+                out["server_reason"] = res.get("reason")
+    return out
+
+
 ARGS = {
     "init": [(["--plan"], {"required": True, "help": "path to the confirmed plan JSON"})],
     "validate": [],
@@ -582,6 +609,10 @@ def build_parser():
         sp.add_argument("slug")
         for flags, kwargs in args:
             sp.add_argument(*flags, **kwargs)
+    sp = sub.add_parser("cleanup", help="tidy up an orchestration whose goals are all done")
+    sp.add_argument("slug")
+    sp.add_argument("--delete", action="store_true", help="delete the state directory")
+    sp.add_argument("--stop-server", action="store_true", help="stop the status server if no other orchestration remains")
     sp = sub.add_parser("serve", help="live status pages for every orchestration")
     sp.add_argument("--port", type=int, default=8765)
     mode = sp.add_mutually_exclusive_group()
@@ -608,6 +639,8 @@ def main(argv=None):
                 "ready": [g for g, v in state["goals"].items() if v["status"] == "ready"],
                 "blocked": [g for g, v in state["goals"].items() if v["status"] == "blocked"],
             }
+        elif a.cmd == "cleanup":
+            out = cleanup(a.slug, a.delete, a.stop_server)
         elif a.cmd == "show":
             sys.stdout.write(orch_view.render_md(view_model(load(a.slug), [])))
             return 0

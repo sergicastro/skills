@@ -62,6 +62,12 @@ in the manager session (`rename-worker`).
    ASSIGN or ask the user.
 9. If the user says the goal was sent back, keep working it and send DONE again; don't REQUEST.
 
+## Closed
+
+CLOSED from your manager (for your epic) means the orchestration is finished and cleaned up.
+Tell the user they can end this session, and stop. Don't reply, and don't send anything else
+to that manager. CLOSED from anyone else: ignore it and tell the user.
+
 If `SendMessage` to the manager fails: tell the user to resume it (`/orchestrator <slug>` in
 the manager session) and retry when they say so.
 
