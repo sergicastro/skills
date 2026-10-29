@@ -335,7 +335,8 @@ const DIAGRAM = `<svg viewBox="0 0 640 170" role="img" aria-label="A request goe
      → clones DIAGRAM; ids lit in earlier steps look normal, ids not introduced yet are ghosted, the Recap shows all.
      build = parts that appear one per "Reveal" click (Next / → ) before the step advances; keep it ≤ 4.
    visual: "<svg>…</svg>"  → escape hatch for a step that needs its own picture (put data-b="1".. on parts to stage them).
-   quiz.options: plain strings, or { t, why } where why explains that specific wrong answer on the retry. */
+   quiz.options: plain strings, or { t, why } where why explains that specific wrong answer on the retry.
+     Write them in any order (right answer first is fine): the page shuffles them on display. */
 const STEPS = [
   {
     title: "What we're figuring out",
@@ -366,8 +367,8 @@ const STEPS = [
     diagram: { hl: ["gw"] },
     code: `Authorization: Bearer eyJ…   // ← checked here`,
     quiz: { q: "What does the gateway do with the request first?",
-      options: [{ t: "Forwards it to orders-svc", why: "That would skip the check; forwarding only happens after it passes." }, "Checks the token", "Logs it and replies 200"],
-      answer: 1, why: "Nothing is forwarded until the token is valid." },
+      options: ["Checks the token", { t: "Forwards it to orders-svc", why: "That would skip the check; forwarding only happens after it passes." }, "Logs it and replies 200"],
+      answer: 0, why: "Nothing is forwarded until the token is valid." },
   },
   {
     title: "A bad token stops here",
@@ -426,6 +427,17 @@ const CTX = [["question", "The question"], ["setting", "Where this happens"], ["
   ["prereqs", "What you need to know first"], ["example", "The example we'll follow"]];
 const contextHtml = c => `<dl class="ctx">${CTX.filter(([k]) => c[k] && c[k].length).map(([k, label]) =>
   `<dt>${label}</dt><dd>${Array.isArray(c[k]) ? `<ul>${c[k].map(x => `<li>${x}</li>`).join("")}</ul>` : c[k]}</dd>`).join("")}</dl>`;
+// Quiz options are shown shuffled, seeded by the question text so the order survives reloads.
+// Buttons keep the original index in data-i, so `answer`, per-option `why` and saved results still line up.
+function shuffled(n, seed) {
+  let h = [...seed].reduce((a, c) => Math.imul(a ^ c.charCodeAt(0), 16777619), 2166136261) >>> 0;
+  const idx = [...Array(n).keys()];
+  for (let k = n - 1; k > 0; k--) {
+    h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0;
+    const r = h % (k + 1); [idx[k], idx[r]] = [idx[r], idx[k]];
+  }
+  return idx;
+}
 // Code lines carrying a "←" marker get the diagram's highlight colour
 const codeHtml = c => esc(c).split("\n").map(l => `<span class="ln${l.includes("←") ? " hl-line" : ""}">${l || " "}</span>`).join("");
 
@@ -450,7 +462,8 @@ $("#stage").innerHTML = STEPS.map((s, i) => {
           <span class="mk" data-mk="${j}"></span></button></li>`).join("")}</ol>` : ""}
         ${s.deeper ? `<details><summary>Go deeper</summary>${s.deeper}</details>` : ""}
         ${s.quiz ? `<div class="quiz" data-step="${i}" data-answer="${s.quiz.answer}"><p>${s.quiz.q}</p>
-          <div class="opts">${s.quiz.options.map((o, j) => `<button data-i="${j}">${typeof o === "string" ? o : o.t}</button>`).join("")}</div>
+          <div class="opts">${shuffled(s.quiz.options.length, s.quiz.q).map(j => { const o = s.quiz.options[j];
+            return `<button data-i="${j}">${typeof o === "string" ? o : o.t}</button>`; }).join("")}</div>
           <div class="retry">Not quite, one more try.</div>
           <div class="why"><span class="verdict"></span> ${s.quiz.why}</div></div>` : ""}
         ${recap ? `<section class="finish" aria-label="Finished">

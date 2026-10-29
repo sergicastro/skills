@@ -574,6 +574,53 @@ def drop_goal(state, gid):
     return {"dropped": gid}, [("user", "DROP", gid)]
 
 
+EDITABLE = ("title", "summary", "acceptance", "repo", "links", "depends_on")
+
+
+def edit_epic(state, title, source):
+    fields = {}
+    if title is not None:
+        if not title.strip():
+            raise OrchError("title cannot be empty")
+        fields["title"] = title
+    if source is not None:
+        fields["source"] = source or None
+    if not fields:
+        raise OrchError("nothing to edit: pass --title and/or --source")
+    state["epic"].update(fields)
+    return {"epic": state["epic"]["slug"], "fields": list(fields)}, [("user", "EDIT", "epic " + ",".join(fields))]
+
+
+def edit_goal(state, gid, raw):
+    if not isinstance(raw, dict):
+        raise OrchError("goal JSON must be an object")
+    g = goal(state, gid)
+    if not raw:
+        raise OrchError(f"nothing to edit: pass any of {', '.join(EDITABLE)}")
+    for key in raw:
+        if key not in EDITABLE:
+            raise OrchError(f"cannot edit {key}: editable fields are {', '.join(EDITABLE)}")
+    for key in ("title", "summary"):
+        if key in raw and not str(raw[key] or "").strip():
+            raise OrchError(f"{gid}: {key} cannot be empty")
+    if "depends_on" in raw:
+        deps = raw["depends_on"]
+        if not isinstance(deps, list) or not all(isinstance(d, str) for d in deps):
+            raise OrchError(f"{gid}: depends_on must be a list of goal ids")
+        if g["status"] not in ("blocked", "ready"):
+            raise OrchError(f"{gid} is {g['status']}; dependencies can only change while blocked or ready")
+        for dep in deps:
+            if dep not in state["goals"]:
+                raise OrchError(f"{gid}: unknown dependency {dep}")
+        cycle = find_cycle(dict(state["goals"], **{gid: dict(g, depends_on=deps)}))
+        if cycle:
+            raise OrchError("dependency cycle: " + " -> ".join(cycle))
+    g.update(raw)
+    recompute(state)
+    return ({"edited": gid, "fields": list(raw), "status": g["status"], "worker": g["worker"]},
+            [("user", "EDIT", f"{gid} " + ",".join(raw))])
+
+
 def rename_worker(state, old, new):
     w = require_worker(state, old)
     if not new.startswith(state["worker_prefix"]):
@@ -664,6 +711,8 @@ ARGS.update({
     "prioritize": [(["goals"], {"nargs": "+"})],
     "add-goal": [(["--goal-json"], {"required": True})],
     "drop-goal": [(["goal"], {})],
+    "edit-epic": [(["--title"], {}), (["--source"], {"help": "an empty string removes the link"})],
+    "edit-goal": [(["goal"], {}), (["--goal-json"], {"required": True, "help": "only the fields to change"})],
     "rename-worker": [(["old"], {}), (["new"], {})],
     "liveness": [(["--live"], {"default": "", "help": "comma-separated session names from ListAgents"})],
     "notify": [(["--kind"], {"required": True, "choices": list(NOTICE_KINDS)}),
@@ -684,6 +733,8 @@ COMMANDS.update({
     "prioritize": lambda s, a: prioritize(s, a.goals),
     "add-goal": lambda s, a: add_goal(s, json.loads(a.goal_json)),
     "drop-goal": lambda s, a: drop_goal(s, a.goal),
+    "edit-epic": lambda s, a: edit_epic(s, a.title, a.source),
+    "edit-goal": lambda s, a: edit_goal(s, a.goal, json.loads(a.goal_json)),
     "rename-worker": lambda s, a: rename_worker(s, a.old, a.new),
     "liveness": lambda s, a: liveness(s, a.live),
     "notify": lambda s, a: notify(s, a.kind, a.summary, a.goal, [x for x in a.to.split(",") if x], a.dry_run),

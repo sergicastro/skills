@@ -5,6 +5,8 @@ self-contained, step-by-step interactive HTML page. Each page follows one runnin
 example through a single shared diagram, highlights the part each step is about, and
 adds a glossary, a recap and short quizzes.
 
+![A generated page stepping through why an expired token gets a 401: the context card, then one diagram part lit up per step](docs/demo.gif)
+
 ## Use
 
 Ask for it after an explanation, e.g. "show me that as HTML", "walk me through it step

@@ -545,6 +545,84 @@ class NoticeTests(Base):
         self.assertTrue(any("notices must be a list" in p for p in orch_state.validate(state)))
 
 
+class EditTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.init()
+
+    def events(self):
+        return (Path(self.tmp.name) / "demo" / "events.log").read_text()
+
+    def edit_goal(self, gid, **fields):
+        return self.run_cli("edit-goal", "demo", gid, "--goal-json", json.dumps(fields))
+
+    def test_edit_epic_title_and_source(self):
+        code, out = self.run_cli("edit-epic", "demo", "--title", "Renamed", "--source", "https://example.com/epic/1")
+        self.assertEqual((code, out), (0, {"epic": "demo", "fields": ["title", "source"]}))
+        epic = self.state()["epic"]
+        self.assertEqual((epic["title"], epic["source"]), ("Renamed", "https://example.com/epic/1"))
+        self.assertIn("user EDIT epic title,source", self.events())
+        self.assertIn("Renamed", (Path(self.tmp.name) / "demo" / "status.html").read_text())
+
+    def test_edit_epic_clears_source(self):
+        self.run_cli("edit-epic", "demo", "--source", "https://example.com/epic/1")
+        self.assertEqual(self.run_cli("edit-epic", "demo", "--source", "")[0], 0)
+        self.assertIsNone(self.state()["epic"]["source"])
+
+    def test_edit_epic_needs_a_field(self):
+        code, out = self.run_cli("edit-epic", "demo")
+        self.assertEqual(code, 2)
+        self.assertIn("nothing to edit", out["error"])
+
+    def test_edit_epic_rejects_empty_title(self):
+        code, out = self.run_cli("edit-epic", "demo", "--title", " ")
+        self.assertEqual(code, 2)
+        self.assertIn("title cannot be empty", out["error"])
+
+    def test_edit_goal_updates_only_given_fields(self):
+        code, out = self.edit_goal("g2", title="Left side", acceptance=["it works"])
+        self.assertEqual((code, out), (0, {"edited": "g2", "fields": ["title", "acceptance"],
+                                           "status": "blocked", "worker": None}))
+        g = self.state()["goals"]["g2"]
+        self.assertEqual((g["title"], g["summary"], g["acceptance"]), ("Left side", "left work", ["it works"]))
+        self.assertIn("user EDIT g2 title,acceptance", self.events())
+
+    def test_edit_goal_rejects_protected_and_unknown_keys(self):
+        for key in ("status", "worker", "handoff", "colour"):
+            code, out = self.edit_goal("g1", **{key: "x"})
+            self.assertEqual(code, 2)
+            self.assertIn(f"cannot edit {key}", out["error"])
+
+    def test_edit_goal_rejects_empty_or_non_object(self):
+        self.assertIn("nothing to edit", self.edit_goal("g1")[1]["error"])
+        code, out = self.run_cli("edit-goal", "demo", "g1", "--goal-json", "[]")
+        self.assertIn("must be an object", out["error"])
+        self.assertIn("title cannot be empty", self.edit_goal("g1", title="")[1]["error"])
+
+    def test_edit_goal_unknown_goal(self):
+        self.assertIn("unknown goal zz", self.edit_goal("zz", title="t")[1]["error"])
+
+    def test_edit_goal_dependencies_recompute(self):
+        self.assertEqual(self.edit_goal("g2", depends_on=[])[1]["status"], "ready")
+        self.assertEqual(self.edit_goal("g2", depends_on=["g3"])[1]["status"], "blocked")
+
+    def test_edit_goal_rejects_bad_dependencies(self):
+        code, out = self.edit_goal("g2", depends_on=["zz"])
+        self.assertIn("g2: unknown dependency zz", out["error"])
+        code, out = self.edit_goal("g1", depends_on=["g4"])
+        self.assertIn("cycle", out["error"])
+        self.assertIn("g2: depends_on must be a list", self.edit_goal("g2", depends_on="g1")[1]["error"])
+        self.assertEqual(self.state()["goals"]["g1"]["depends_on"], [])
+
+    def test_edit_goal_dependencies_refused_once_assigned(self):
+        self.run_cli("register", "demo", "demo-w-a")
+        self.run_cli("request", "demo", "demo-w-a")
+        code, out = self.edit_goal("g1", depends_on=["g2"])
+        self.assertIn("g1 is assigned", out["error"])
+        code, out = self.edit_goal("g1", summary="sharper")
+        self.assertEqual((code, out["worker"]), (0, "demo-w-a"))
+
+
 class EdgeCaseTests(Base):
     def test_add_goal_requires_id(self):
         self.init()
