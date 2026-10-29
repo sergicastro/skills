@@ -32,10 +32,19 @@ reason: <one line; required unless state is assigned>
 `assigned` means "I'm working again" after a `needs-user` or `blocked` report.
 
 ```
+[orch v1 PR]
+epic: <slug>
+goal: <goal id>
+url: <pr url>
+```
+Sent right after the worker opens a PR for its goal. A goal can have several. It does not
+change the goal's status. The manager answers `ACK` and ignores a URL it already has.
+
+```
 [orch v1 DONE]
 epic: <slug>
 goal: <goal id>
-pr: <url, optional>
+pr: <url of the final PR, optional; merged with PRs already reported>
 notes:
   <at most ~10 lines: decisions, interfaces, facts later goals need.
    No diffs, logs or file contents.>
@@ -63,7 +72,7 @@ repo: <owner/repo or path, or ->
 links:
   - <url>
 upstream:
-  - <goal id> (<status>): pr <url or ->; notes: <notes>
+  - <goal id> (<status>): pr <urls, comma-separated, or ->; notes: <notes>
 board: <project> / <field>: set "<start value>" when you start, "<done value>" when you finish   (or: board: none)
 state_dir: <path>   (read-only for workers)
 ```

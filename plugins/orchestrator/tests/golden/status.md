@@ -13,7 +13,7 @@
 |---|---|---|---|---|---|
 | g1 | Base | done | demo-w-a | https://github.com/o/r/pull/7 |  |
 | g2 | Left | needs-user | demo-w-b |  | pick a \| b then go |
-| g3 | Right | assigned | demo-w-a |  |  |
+| g3 | Right | assigned | demo-w-a | https://github.com/o/r/pull/9, https://github.com/o/r/pull/10 |  |
 | g4 | Join | blocked |  |  |  |
 
 ## Dependencies

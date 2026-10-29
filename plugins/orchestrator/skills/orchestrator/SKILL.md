@@ -113,6 +113,7 @@ that name, formatted per `protocol.md`. If `$ORCH` returns an error, reply
 | REQUEST | `$ORCH request <slug> <sender>` | ASSIGN built from the JSON, or NONE_READY with its `none_ready` text |
 | STATUS | `$ORCH status <slug> <sender> <goal> <state> --reason "<reason>"` | ACK; tell the user if the state is needs-user/blocked |
 | DONE | `$ORCH done <slug> <sender> <goal> --pr <pr> --notes "<notes>"` | ACK `DONE <goal> → in-review`; tell the user it awaits their review; GitHub alignment check (`github.md`) |
+| PR | `$ORCH pr <slug> <sender> <goal> --url <url>` | ACK `PR <goal> → recorded (<n> PRs)` (or `already recorded`); tell the user in one line, e.g. "g1 opened <url>". The goal's status does not change. |
 | NOTICED | `$ORCH noticed <slug> <sender> <id>` | nothing (no ACK); mention it to the user only when no recipient is left pending |
 | other / malformed / wrong epic | nothing | ERROR |
 
@@ -122,7 +123,7 @@ its own `$ORCH` call and reply. Before ending the turn, check that each REQUEST 
 ASSIGN or NONE_READY. If a worker says a message went unanswered, check `events.log`, answer it
 now, and don't guess at a cause.
 
-STATUS or DONE for a goal not assigned to the sender gets ERROR: the helper rejects it, so
+STATUS, PR or DONE for a goal not assigned to the sender gets ERROR: the helper rejects it, so
 relay its error and don't work around it.
 
 Unprefixed sender: ERROR without running `$ORCH`. Prefixed but unregistered (other than

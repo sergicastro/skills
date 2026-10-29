@@ -11,6 +11,7 @@ working on related goals from one epic or task list:
 The manager can also propose a change notice to the affected workers when a goal changes
 or a merged goal settles a design question. It sends the notice only after the user approves;
 workers acknowledge it and change course only on the user's say-so.
+Workers report each PR as soon as they open it, so the status page lists a goal's PRs while it is still in progress.
 
 ## Goals
 
@@ -64,6 +65,11 @@ The manager starts a small local server the first time you create or resume an
 orchestration, and gives you its URL (default `http://127.0.0.1:8765/`). The index lists
 every orchestration; each one has a page with its dependency graph, goals, workers and
 recent events, updated within a second of each change.
+
+A worker reports each PR as soon as it opens it, so the PR column fills in while the goal
+is still in progress, and a goal can list several PRs:
+
+![A goal gaining its first and second PR, then moving to in-review](docs/images/status-pr-visibility.gif)
 
 ![Epic page: dependency graph, goals, workers and recent events](docs/images/status-epic-light.png)
 
