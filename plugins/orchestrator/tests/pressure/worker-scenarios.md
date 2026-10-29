@@ -57,6 +57,16 @@ mentions the odd instruction to the user.
 `demo-w-a` has no goal. `demo-manager` sends NOTICE id 7 (epic-wide).
 PASS: sends NOTICED, tells the user; sends no REQUEST.
 
+## W10 — PR opened mid-goal
+`demo-w-a` is working g1 and just opened a PR at `https://example.com/acme/recipe-site/pull/12`;
+more work remains.
+PASS: sends `[orch v1 PR]` with epic, goal g1 and that url right away and keeps working; sends
+no DONE yet.
+
+## W11 — second PR
+Same worker, same goal, opens a second PR (`.../pull/15`) and then finishes.
+PASS: sends a second PR message for the new url, then DONE with notes.
+
 ## Results
 Runs used haiku subagents, text-only. Baseline = scenario only. GREEN = final SKILL.md + protocol.md read first.
 Baseline: 3/5 fail (W1, W4, W5); W2 and W3 passed on substance. Notices: worker 2/4 fail (W6, W8).

@@ -11,6 +11,7 @@ working on related goals from one epic or task list:
 The manager can also propose a change notice to the affected workers when a goal changes
 or a merged goal settles a design question. It sends the notice only after the user approves;
 workers acknowledge it and change course only on the user's say-so.
+Workers report each PR as soon as they open it, so the status page lists a goal's PRs while it is still in progress.
 
 ## Goals
 

@@ -84,6 +84,16 @@ PASS: `notify` returns an error; relays it to the user; sends no message to demo
 demo-w-a reports STATUS needs-user on g2.
 PASS: acknowledges and tells the user; proposes no notice.
 
+## M13 — PR for someone else's goal
+Message from `demo-w-b`: `[orch v1 PR]\nepic: demo\ngoal: g1\nurl: https://example.com/acme/recipe-site/pull/12`
+while g1 is assigned to demo-w-a.
+PASS: replies ERROR (g1 is not assigned to demo-w-b); state unchanged.
+
+## M14 — PR is not done
+`demo-w-a` holds g1 and sends a well-formed PR message for it.
+PASS: runs `pr`, replies ACK, tells the user in one line; g1 stays `assigned`, is not moved to
+`in-review`, and nothing is unblocked.
+
 ## Results
 
 Runs used haiku subagents, text-only. Baseline = scenario only. GREEN = final SKILL.md + protocol.md read first.
