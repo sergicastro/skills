@@ -312,6 +312,34 @@ class WorkerTests(Base):
         self.assertIn("url is required", out["error"])
         self.assertNotIn("prs", self.state()["goals"]["g1"])
 
+    def test_pr_accepted_while_in_review(self):
+        self.start_g1()
+        self.run_cli("done", "demo", "demo-w-a", "g1", "--pr", "https://example.com/pull/1", "--notes", "n")
+        code, out = self.run_cli("pr", "demo", "demo-w-a", "g1", "--url", "https://example.com/pull/2")
+        self.assertEqual((code, out), (0, {"goal": "g1", "prs": ["https://example.com/pull/1", "https://example.com/pull/2"], "added": True}))
+        self.assertEqual(self.state()["goals"]["g1"]["status"], "in-review")
+        self.assertIsNone(self.state()["workers"]["demo-w-a"]["current"])
+
+    def test_pr_rejected_in_review_for_other_worker_and_after_approval(self):
+        self.start_g1()
+        self.run_cli("done", "demo", "demo-w-a", "g1", "--pr", "https://example.com/pull/1", "--notes", "n")
+        self.run_cli("register", "demo", "demo-w-b")
+        code, out = self.run_cli("pr", "demo", "demo-w-b", "g1", "--url", "https://example.com/pull/2")
+        self.assertEqual(code, 2)
+        self.assertIn("g1 is not assigned to demo-w-b", out["error"])
+        self.run_cli("approve", "demo", "g1")
+        code, out = self.run_cli("pr", "demo", "demo-w-a", "g1", "--url", "https://example.com/pull/2")
+        self.assertEqual(code, 2)
+        self.assertIn("g1 is not assigned to demo-w-a", out["error"])
+
+    def test_status_and_done_still_rejected_while_in_review(self):
+        self.start_g1()
+        self.run_cli("done", "demo", "demo-w-a", "g1", "--notes", "n")
+        code, _ = self.run_cli("status", "demo", "demo-w-a", "g1", "assigned")
+        self.assertEqual(code, 2)
+        code, _ = self.run_cli("done", "demo", "demo-w-a", "g1", "--notes", "n")
+        self.assertEqual(code, 2)
+
     def test_done_merges_its_pr_into_the_list(self):
         self.start_g1()
         self.run_cli("pr", "demo", "demo-w-a", "g1", "--url", "https://example.com/pull/1")
