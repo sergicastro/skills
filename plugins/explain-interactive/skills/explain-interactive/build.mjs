@@ -9,11 +9,13 @@
 //                                                           or from a page made with the old template.html
 //
 // The content file is a plain script that declares META, STEPS and optionally CAST, GLOSSARY, DIAGRAM,
-// and DECISION, HYPOTHESES or LAYERS for the page types that need them (see examples/ and SKILL.md). The build checks it first; problems are listed and nothing is written.
+// and DECISION, HYPOTHESES or LAYERS for the page types that need them (see examples/ and SKILL.md). A DIAGRAM spec object is laid out here (engine/layout.mjs) into an SVG;
+// an <svg> string is used as written. The build checks it first; problems are listed and nothing is written.
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { render as renderDiagram } from "./engine/layout.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ENGINE_DIR = join(HERE, "engine");
@@ -43,7 +45,9 @@ const EXTERNAL = [
 
 export function check(c) {
   const errors = [], warnings = [];
-  const { META, STEPS } = c, CAST = c.CAST || {}, GLOSSARY = c.GLOSSARY || {}, DIAGRAM = c.DIAGRAM || "";
+  const { META, STEPS } = c, CAST = c.CAST || {}, GLOSSARY = c.GLOSSARY || {};
+  const spec = c.DIAGRAM && typeof c.DIAGRAM === "object" ? c.DIAGRAM : null;
+  let DIAGRAM = typeof c.DIAGRAM === "string" ? c.DIAGRAM : "";
   if (!META || typeof META !== "object") errors.push("META is missing (const META = { title, bigPicture })");
   else {
     if (!META.title) errors.push("META.title is missing");
@@ -52,10 +56,17 @@ export function check(c) {
   if (!Array.isArray(STEPS) || !STEPS.length) { errors.push("STEPS is missing or empty"); return { errors, warnings }; }
   for (const [name, v] of [["CAST", c.CAST], ["GLOSSARY", c.GLOSSARY]])
     if (v !== undefined && (typeof v !== "object" || v === null || Array.isArray(v))) errors.push(`${name} must be an object of "name": "one-liner"`);
-  if (c.DIAGRAM !== undefined && typeof c.DIAGRAM !== "string") errors.push("DIAGRAM must be a string (an <svg>…</svg> template literal)");
+  if (c.DIAGRAM !== undefined && typeof c.DIAGRAM !== "string" && !spec)
+    errors.push("DIAGRAM must be a spec object { layout, label, nodes, edges } or an <svg>…</svg> string");
+  let ids;
+  if (spec) {
+    const r = renderDiagram(spec);
+    errors.push(...r.errors); warnings.push(...r.warnings);
+    DIAGRAM = r.svg || "";
+    ids = new Set([...(Array.isArray(spec.nodes) ? spec.nodes : []), ...(Array.isArray(spec.edges) ? spec.edges : [])]
+      .filter(x => x && typeof x === "object").map(x => x.id ?? `${x.from}-${x.to}`));
+  } else ids = new Set([...DIAGRAM.matchAll(/data-id\s*=\s*["']([^"']+)["']/g)].map(m => m[1]));
   const type = checkType(c, errors, warnings);
-
-  const ids = new Set([...DIAGRAM.matchAll(/data-id\s*=\s*["']([^"']+)["']/g)].map(m => m[1]));
   if (/<[^>]+\sid\s*=/.test(DIAGRAM.replace(/data-id\s*=/g, ""))) warnings.push("DIAGRAM uses id=…; use data-id (the SVG is cloned once per step, so ids would repeat)");
   if (/<animate/i.test(DIAGRAM)) warnings.push("DIAGRAM uses SMIL <animate>; use the .flow class (reduced-motion can't stop SMIL)");
   const known = new Set([...Object.keys(CAST), ...Object.keys(GLOSSARY)].map(k => k.toLowerCase()));
@@ -70,7 +81,7 @@ export function check(c) {
     if (i < STEPS.length - 1 && !s.summary) warnings.push(`${at}: summary is missing (shown in the Recap list)`);
     const d = s.diagram;
     if (d && typeof d === "object") {
-      if (!DIAGRAM) errors.push(`${at}: has diagram but DIAGRAM is empty`);
+      if (!DIAGRAM && !spec) errors.push(`${at}: has diagram but DIAGRAM is empty`);
       for (const k of ["hl", "hide", "dim", "build"]) {
         if (d[k] === undefined) continue;
         if (!Array.isArray(d[k])) { errors.push(`${at}: diagram.${k} must be an array`); continue; }
@@ -102,10 +113,10 @@ export function check(c) {
 
   checkTypeCoverage(type, c, warnings);
   // `code`, `diff` and `evidence` are shown escaped, so a snippet about <script src> is fine; everything else is rendered as HTML
-  const all = JSON.stringify({ META, CAST, GLOSSARY, DECISION: c.DECISION, HYPOTHESES: c.HYPOTHESES, LAYERS: c.LAYERS,
+  const all = JSON.stringify({ META, CAST, GLOSSARY, spec, DECISION: c.DECISION, HYPOTHESES: c.HYPOTHESES, LAYERS: c.LAYERS,
     STEPS: STEPS.map(s => ({ ...s, code: undefined, diff: undefined, evidence: s.evidence && { ...s.evidence, text: undefined } })) }) + DIAGRAM;
   for (const [re, what] of EXTERNAL) if (re.test(all.replace(/\\"/g, '"'))) errors.push(`content loads an external resource (${what}); pages must work offline`);
-  return { errors, warnings };
+  return { errors, warnings, svg: spec ? DIAGRAM : null };
 }
 
 // ---------- Size and focus: each step fits one screen and is about one thing ----------
@@ -268,17 +279,20 @@ function checkTypeCoverage(type, c, warnings) {
 export function build(code, file) {
   const content = loadContent(code, file);
   const result = check(content);
-  if (result.errors.length) return { ...result, html: null };
+  if (result.errors.length) { const { svg, ...rest } = result; return { ...rest, html: null }; }
   const shell = readFileSync(join(ENGINE_DIR, "page.html"), "utf8");
   const parts = {
     TITLE: esc(content.META.title),
     CSS: inlineStyle(readFileSync(join(ENGINE_DIR, "engine.css"), "utf8").trimEnd()),
     CONTENT: inlineScript(code.trim()),
     ENGINE: inlineScript(readFileSync(join(ENGINE_DIR, "engine.js"), "utf8").trimEnd()),
+    // A laid-out spec goes in an inert <template> the engine reads, so the content script stays exactly as written
+    DIAGRAM: result.svg ? `<template id="explain-diagram">\n${result.svg}\n</template>` : "",
   };
   // Function replacer: content may contain "$&" and friends, which a string replacement would expand
-  const html = shell.replace(/\{\{(TITLE|CSS|CONTENT|ENGINE)\}\}/g, (_, k) => parts[k]);
-  return { ...result, html };
+  const html = shell.replace(/\{\{(TITLE|CSS|CONTENT|ENGINE|DIAGRAM)\}\}/g, (_, k) => parts[k]);
+  const { svg, ...rest } = result;
+  return { ...rest, html };
 }
 
 // ---------- Extract ----------

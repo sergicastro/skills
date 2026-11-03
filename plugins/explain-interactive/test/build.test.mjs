@@ -57,6 +57,43 @@ const STEPS = [
   assert.ok(warnings.some(w => /bigPicture/.test(w)));
 });
 
+const specContent = (diagram, steps) => `const META = { title: "T", bigPicture: "B" };
+const DIAGRAM = ${diagram};
+const STEPS = ${steps || '[{ title: "One", summary: "s", body: "<p><mark>A</mark> calls B</p>", diagram: { hl: ["a", "e"] } }, { title: "Recap", body: "<p>y</p>", diagram: {} }]'};`;
+const SPEC = `{ layout: "chain", label: "A calls B", nodes: [{ id: "a", label: "A" }, { id: "b", label: "B" }], edges: [{ id: "e", from: "a", to: "b", label: "GET /x" }] }`;
+
+test("a DIAGRAM spec is laid out into a template the engine reads; the content script keeps the spec", () => {
+  const { html, errors, warnings } = build(specContent(SPEC));
+  assert.deepEqual(errors, []);
+  assert.deepEqual(warnings, []);
+  const tpl = html.match(/<template id="explain-diagram">([\s\S]*?)<\/template>/);
+  assert.ok(tpl, "template");
+  assert.match(tpl[1], /<svg viewBox="0 0 \d+ \d+" role="img" aria-label="A calls B">/);
+  assert.match(tpl[1], /<g data-id="a">[\s\S]*<g data-id="e">/);
+  assert.match(extract(html), /layout: "chain"/);
+});
+
+test("a raw <svg> DIAGRAM gets no template", () => {
+  const { html, errors } = build(minimal());
+  assert.deepEqual(errors, []);
+  assert.doesNotMatch(html, /<template id="explain-diagram">/);
+});
+
+test("spec problems and step ids missing from the spec are build errors", () => {
+  let { errors } = build(specContent(SPEC, '[{ title: "One", summary: "s", body: "<p>x</p>", diagram: { hl: ["ghost"] } }, { title: "R", body: "<p>y</p>" }]'));
+  assert.ok(errors.some(e => /"ghost", which is not a data-id/.test(e)), errors.join("\n"));
+  ({ errors } = build(specContent(`{ layout: "chain", nodes: [{ id: "a", label: "A" }], edges: [{ from: "a", to: "zz", label: "l" }] }`)));
+  assert.ok(errors.some(e => /DIAGRAM.label is missing/.test(e)), errors.join("\n"));
+  assert.ok(errors.some(e => /which is not a node id/.test(e)), errors.join("\n"));
+  ({ errors } = build(specContent("42")));
+  assert.ok(errors.some(e => /DIAGRAM must be a spec object/.test(e)), errors.join("\n"));
+});
+
+test("a spec label that loads a remote resource is refused", () => {
+  const { errors } = build(specContent(`{ layout: "chain", label: "x", nodes: [{ id: "a", label: "<img src='https://example.com/x.png'>" }] }`, '[{ title: "R", body: "<p>y</p>" }]'));
+  assert.ok(errors.some(e => /external resource/.test(e)), errors.join("\n"));
+});
+
 test("a code snippet about <script src> is not an external resource", () => {
   const { errors } = build(minimal().replace('"<p>x</p>"', '"<p>x</p>", code: "<script src=\\"https://cdn.example.com/a.js\\"></script>"'));
   assert.deepEqual(errors, []);

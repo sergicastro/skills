@@ -151,6 +151,30 @@ test("built sample: features work in a browser", { skip }, async () => {
   assert.deepEqual(requests.filter(u => !u.startsWith("file:") && !u.startsWith("data:")), [], "external requests");
 });
 
+test("spec diagrams: every layout renders, a wide one puts its steps full width, a raw <svg> still works", { skip }, async () => {
+  const boxes = `[...document.querySelectorAll(".step.active .visual [data-id]")].map(g => g.getBBox()).filter(b => b.width && b.height)`;
+  for (const [f, wide] of [["filter-chain", true], ["config-push", false], ["api-lifecycle", false], ["token-401", false]]) {
+    const page = join(tmp, f + ".html");
+    writeFileSync(page, build(readFileSync(join(SKILL, "examples", f + ".content.js"), "utf8")).html);
+    await open(page); await js("localStorage.clear()"); await open(page);
+    await js(`document.querySelector("#next").click()`);
+    assert.equal(await js(`document.querySelector(".step.active").classList.contains("wide")`), wide, f);
+    // the diagram is drawn: parts have real size, and its text stays at least 11px on screen
+    assert.ok(await js(`${boxes}.length`) > 2, f);
+    const px = await js(`(s => s.getBoundingClientRect().width / s.viewBox.baseVal.width * 14)(document.querySelector(".step.active .visual svg"))`);
+    assert.ok(px >= 11, `${f}: label text renders at ${px.toFixed(1)}px`);
+  }
+  // raw <svg> escape hatch: a hand-written DIAGRAM still takes hl/dim from the step
+  const raw = join(tmp, "raw.html");
+  writeFileSync(raw, build(`const META = { title: "Raw", bigPicture: "B" };
+const DIAGRAM = \`<svg viewBox="0 0 600 100" role="img" aria-label="two boxes"><g data-id="a"><rect class="box" x="10" y="10" width="100" height="40"/></g><g data-id="b"><rect class="box" x="300" y="10" width="100" height="40"/></g></svg>\`;
+const STEPS = [{ title: "One", summary: "s", body: "<p>x</p>", diagram: { hl: ["a"] } }, { title: "Recap", body: "<p>y</p>", diagram: {} }];`).html);
+  await open(raw); await js("localStorage.clear()"); await open(raw);
+  assert.ok(await js(`document.querySelector('#step-1 [data-id=a]').classList.contains("hl") && document.querySelector('#step-1 [data-id=b]').classList.contains("dim")`));
+  assert.equal(await js(`document.querySelectorAll("template#explain-diagram").length`), 0);
+  assert.deepEqual(problems, [], "console errors/warnings");
+});
+
 test("a page from the old template.html renders the same after extract + rebuild", { skip }, async t => {
   let old;
   try { old = execFileSync("git", ["show", "7de652b:plugins/explain-interactive/skills/explain-interactive/template.html"], { cwd: SKILL, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }); }

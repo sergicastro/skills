@@ -31,11 +31,11 @@ On Claude Code older than 2.1.275, add the marketplace first:
 ## Layout
 
 - `skills/explain-interactive/SKILL.md`: the workflow and the data format for each step
-- `skills/explain-interactive/engine/`: the page shell, styles and script shared by every page (`page.html`, `engine.css`, `engine.js`)
+- `skills/explain-interactive/engine/`: the page shell, styles and script shared by every page (`page.html`, `engine.css`, `engine.js`), and the diagram layouts the build runs (`layout.mjs`)
 - `skills/explain-interactive/build.mjs`: inlines a content file into the engine and writes one offline HTML file (Node 22+, no dependencies)
 - `skills/explain-interactive/shots.mjs`: renders every step of a page in headless Chrome to `step-NN.png` for review, and reports what it can measure (overflow, tiny diagram text, console errors)
 - `skills/explain-interactive/cdp.mjs`: the small DevTools-protocol driver `shots.mjs` and the tests use
-- `skills/explain-interactive/examples/`: one sample content file per page type (walkthrough, decision, before/after, debugging story, concept)
+- `skills/explain-interactive/examples/`: one sample content file per page type (walkthrough, decision, before/after, debugging story, concept), and walkthroughs for each diagram layout
 - `test/`: `node --test plugins/explain-interactive/test/*.test.mjs` (the browser test needs Chrome or Chromium; set `CHROME=` to pick one)
 
 Claude writes only `~/explanations/<topic>.content.js` (`META`, `CAST`, `GLOSSARY`, `DIAGRAM`, `STEPS`); the build turns it into the page. To change a page, edit its content file and rebuild:
@@ -43,7 +43,7 @@ Claude writes only `~/explanations/<topic>.content.js` (`META`, `CAST`, `GLOSSAR
     node skills/explain-interactive/build.mjs ~/explanations/<topic>.content.js
 
 Pages made before the engine split can be recovered with `build.mjs --extract <page>.html`.
-- `skills/explain-interactive/diagram-recipes.md`: patterns for the shared diagram
+- `skills/explain-interactive/diagram-recipes.md`: how to declare the shared diagram and pick its layout
 
 ## License
 

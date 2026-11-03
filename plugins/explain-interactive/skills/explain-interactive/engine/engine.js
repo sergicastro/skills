@@ -162,8 +162,10 @@ const stuckHtml = i => `<details class="stuck" data-step="${i}"><summary>Still c
 // Before/after pages open with the two states side by side, under the big picture
 const baHtml = TYPE === "before-after" && (META.before || META.after)
   ? `<div class="ba"><div><b>Before</b>${META.before || ""}</div><div><b>After</b>${META.after || ""}</div></div>` : "";
+// A diagram wider than this would shrink its text below ~12px in the side column, so its steps go full width
+const WIDE_DIAGRAM = +((DIAGRAM.match(/viewBox="[\d.-]+ [\d.-]+ ([\d.]+)/) || [])[1] || 0) > 680;
 $("#stage").innerHTML = STEPS.map((s, i) => {
-  const recap = i === LAST && N > 1, wide = s.wide || recap || !!s.diff;
+  const recap = i === LAST && N > 1, wide = s.wide || recap || !!s.diff || (!s.visual && !!s.diagram && WIDE_DIAGRAM);
   const vis = s.visual || (s.diagram && DIAGRAM ? diagramFor(i) : "");
   const panel = panelFor(i);
   const look = (panel ? `<div class="panel">${panel}</div>` : "") + (s.diff ? diffHtml(s.diff) : "") +
@@ -483,7 +485,8 @@ cur = -1; go(m ? +m[1] - 1 : Math.min(saved.cur || 0, LAST), { push: false });
   typeof META === "object" ? META : null,
   typeof CAST === "object" && CAST ? CAST : {},
   typeof GLOSSARY === "object" && GLOSSARY ? GLOSSARY : {},
-  typeof DIAGRAM === "string" ? DIAGRAM : "",
+  // A spec DIAGRAM ({ layout, nodes, edges }) was laid out by build.mjs into the #explain-diagram template
+  typeof DIAGRAM === "string" ? DIAGRAM : (document.getElementById("explain-diagram") || {}).innerHTML || "",
   typeof STEPS !== "undefined" ? STEPS : null,
   typeof DECISION === "object" && DECISION ? DECISION : null,
   typeof HYPOTHESES !== "undefined" && Array.isArray(HYPOTHESES) ? HYPOTHESES : [],

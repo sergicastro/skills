@@ -1,6 +1,6 @@
 /* Content file for an explain-interactive page: why GET /orders gets a 401 when the token has expired.
    Build it with:  node build.mjs examples/token-401.content.js -o ~/explanations/token-401.html
-   Field reference: SKILL.md. Diagram patterns: diagram-recipes.md. */
+   Field reference: SKILL.md. Diagram layouts: diagram-recipes.md. */
 
 const META = {
   title: "Why an expired token gets a 401",
@@ -21,17 +21,24 @@ const GLOSSARY = {
   "401": "The HTTP status meaning \"not authenticated\": the server doesn't accept who you say you are.",
 };
 
-/* ONE diagram for the whole page. Every part that a step can light up is a <g data-id="…"> (data-id, not id: the
-   SVG is cloned once per step). Elements keep the same position in every step; steps only choose what to light up.
-   viewBox width 560–720 keeps the 14px text near its real size. Replace this example (client → gateway → service). */
-const DIAGRAM = `<svg viewBox="0 0 640 170" role="img" aria-label="A request goes from the client through the gateway to orders-svc">
-  <g data-id="client"><rect class="box" x="10" y="50" width="130" height="60" rx="8"/><text x="75" y="85" text-anchor="middle">Client</text></g>
-  <g data-id="gw"><rect class="box" x="255" y="50" width="130" height="60" rx="8"/><text x="320" y="85" text-anchor="middle">Gateway</text></g>
-  <g data-id="svc"><rect class="box" x="500" y="50" width="130" height="60" rx="8"/><text x="565" y="85" text-anchor="middle">orders-svc</text></g>
-  <g data-id="req"><line class="arrow" x1="140" y1="70" x2="253" y2="70"/><text class="label" x="197" y="62" text-anchor="middle">GET /orders</text></g>
-  <g data-id="deny"><line class="arrow bad" x1="253" y1="95" x2="142" y2="95"/><text class="label" x="197" y="115" text-anchor="middle">401 expired token</text></g>
-  <g data-id="fwd"><line class="arrow ok" x1="385" y1="80" x2="498" y2="80"/><text class="label" x="442" y="72" text-anchor="middle">GET /orders</text></g>
-</svg>`;
+/* ONE diagram for the whole page, declared as a spec: the build lays it out, so there are no coordinates to write.
+   layout: sequence (who calls whom, in order) | chain (stages left to right) | layers (a stack) | states (a lifecycle).
+   Every node and edge id is a part a step can light up; edges take the real value that travels on them as their label.
+   kind: "bad" (rejected) or "ok" (accepted). Patterns and rules: diagram-recipes.md. Replace this example. */
+const DIAGRAM = {
+  layout: "sequence",
+  label: "A request goes from the client through the gateway to orders-svc",
+  nodes: [
+    { id: "client", label: "Client" },
+    { id: "gw", label: "Gateway" },
+    { id: "svc", label: "orders-svc" },
+  ],
+  edges: [
+    { id: "req", from: "client", to: "gw", label: "GET /orders  Bearer eyJ…" },
+    { id: "deny", from: "gw", to: "client", label: "401 expired token", kind: "bad" },
+    { id: "fwd", from: "gw", to: "svc", label: "GET /orders", kind: "ok" },
+  ],
+};
 
 /* Step fields: see SKILL.md. Visual options, in order of preference:
    diagram: { hl: ["ids new in this step"], hide: [...], dim: [...], build: ["id", ["id","id"], …] }
