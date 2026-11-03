@@ -1,12 +1,12 @@
 // node --test plugins/explain-interactive/test/
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, mkdtempSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, readdirSync, mkdtempSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync, spawnSync } from "node:child_process";
-import { build, check, extract, loadContent } from "../skills/explain-interactive/build.mjs";
+import { build, check, extract, loadContent, TYPES } from "../skills/explain-interactive/build.mjs";
 
 const SKILL = join(dirname(fileURLToPath(import.meta.url)), "../skills/explain-interactive");
 const SAMPLE = join(SKILL, "examples/token-401.content.js");
@@ -59,7 +59,7 @@ const STEPS = [
 
 const specContent = (diagram, steps) => `const META = { title: "T", bigPicture: "B" };
 const DIAGRAM = ${diagram};
-const STEPS = ${steps || '[{ title: "One", summary: "s", body: "<p>x</p>", diagram: { hl: ["a", "e"] } }, { title: "Recap", body: "<p>y</p>", diagram: {} }]'};`;
+const STEPS = ${steps || '[{ title: "One", summary: "s", body: "<p><mark>A</mark> calls B</p>", diagram: { hl: ["a", "e"] } }, { title: "Recap", body: "<p>y</p>", diagram: {} }]'};`;
 const SPEC = `{ layout: "chain", label: "A calls B", nodes: [{ id: "a", label: "A" }, { id: "b", label: "B" }], edges: [{ id: "e", from: "a", to: "b", label: "GET /x" }] }`;
 
 test("a DIAGRAM spec is laid out into a template the engine reads; the content script keeps the spec", () => {
@@ -151,4 +151,114 @@ test("extract recovers content from a page made with the old template.html", t =
 
 test("extract returns null for unrelated HTML", () => {
   assert.equal(extract("<html><body>hi</body></html>"), null);
+});
+
+test("every sample builds without errors or warnings, one per page type", () => {
+  const types = new Set();
+  for (const f of readdirSync(join(SKILL, "examples")).filter(f => f.endsWith(".content.js"))) {
+    const code = readFileSync(join(SKILL, "examples", f), "utf8");
+    const { errors, warnings, html } = build(code, f);
+    assert.deepEqual(errors, [], f);
+    assert.deepEqual(warnings, [], f);
+    assert.ok(html, f);
+    types.add(loadContent(code).META.type || "walkthrough");
+  }
+  assert.deepEqual([...types].sort(), [...TYPES].sort());
+});
+
+test("check reports broken page-type content", () => {
+  const typed = (type, extra, steps) => check(loadContent(`const META = { type: ${JSON.stringify(type)}, title: "T", bigPicture: "B" };
+${extra}
+const STEPS = ${steps || `[{ title: "A", summary: "a", body: "<p>a</p>" }, { title: "Recap", body: "<p>r</p>" }]`};`));
+  const has = (r, re) => assert.ok([...r.errors, ...r.warnings].some(m => re.test(m)), [...r.errors, ...r.warnings].join("\n"));
+
+  has(typed("slides", ""), /META.type "slides" is not one of/);
+  has(typed("decision", ""), /"decision" page needs DECISION/);
+  has(typed("debugging", ""), /"debugging" page needs HYPOTHESES/);
+  has(typed("concept", ""), /"concept" page needs LAYERS/);
+
+  const d = typed("decision", `const DECISION = { options: [{ id: "a", name: "A" }, { id: "a", name: "A2" }], criteria: [{ id: "k", name: "K" }],
+    ratings: { a: { k: "great", z: "good" }, ghost: {} }, cost: { b: "x" }, recommend: "b" };`,
+    `[{ title: "A", summary: "a", body: "<p>a</p>", matrix: { options: ["nope"], criteria: ["k"] } }, { title: "Recap", body: "<p>r</p>" }]`);
+  has(d, /repeats the id "a"/);
+  has(d, /level "great" is not one of/);
+  has(d, /criterion "z"/);
+  has(d, /option "ghost"/);
+  has(d, /DECISION.cost names the option "b"/);
+  has(d, /recommend "b" is not in/);
+  has(d, /matrix.options names "nope"/);
+
+  const g = typed("debugging", `const HYPOTHESES = [{ id: "h1", text: "one" }, { id: "h2", text: "two" }];`,
+    `[{ title: "A", summary: "a", body: "<p>a</p>", phase: "guess", verdicts: { h1: "maybe", h9: "open" }, evidence: { label: "x" } }, { title: "Recap", body: "<p>r</p>" }]`);
+  has(g, /phase "guess" is not one of/);
+  has(g, /verdict "maybe"/);
+  has(g, /verdicts names "h9"/);
+  has(g, /evidence needs a text string/);
+  has(g, /hypothesis "h2" is never raised/);
+  has(g, /no step confirms/);
+
+  const c = typed("concept", `const LAYERS = [{ id: "a", name: "A" }, { id: "b", name: "B" }];`,
+    `[{ title: "A", summary: "a", body: "<p>a</p>", layer: "a" }, { title: "B", summary: "b", body: "<p>b</p>", layer: "a" }, { title: "C", summary: "c", body: "<p>c</p>", layer: "z" }, { title: "Recap", body: "<p>r</p>" }]`);
+  has(c, /layer "z" is not in LAYERS/);
+  has(c, /layer "b" is never added/);
+  has(c, /layer "a" is added by 2 steps/);
+
+  has(typed("before-after", ""), /no step has a diff/);
+  has(typed("before-after", "", `[{ title: "A", summary: "a", body: "<p>a</p>", diff: { before: "x" } }, { title: "Recap", body: "<p>r</p>" }]`), /diff needs before and after/);
+  // fields of another type are pointed out, not silently ignored
+  has(typed("walkthrough", `const LAYERS = [];`, `[{ title: "A", summary: "a", body: "<p>a</p>", layer: "x", phase: "fix" }, { title: "Recap", body: "<p>r</p>" }]`), /LAYERS is only drawn on a "concept" page/);
+});
+
+test("a diff about <script src> is not an external resource", () => {
+  const code = `const META = { type: "before-after", title: "T", bigPicture: "B" };
+const STEPS = [{ title: "A", summary: "a", body: "<p>a</p>", diff: { before: "<script src='https://cdn.example.com/a.js'></script>", after: "" } }, { title: "Recap", body: "<p>r</p>" }];`;
+  assert.deepEqual(build(code).errors, []);
+});
+
+test("check: size and focus rules give one clear warning each", () => {
+  const long = Array.from({ length: 6 }, (_, k) => `Sentence number ${k + 1} is here.`).join(" ");
+  const c = loadContent(`const META = { title: "T", bigPicture: "B" };
+const GLOSSARY = { token: "t" };
+const DIAGRAM = \`<svg viewBox="0 0 10 10"><g data-id="a"></g><g data-id="b"></g><g data-id="c"></g><g data-id="d"></g></svg>\`;
+const STEPS = [
+  { title: "Context", summary: "s", body: "<p>x</p>", context: { question: "One. Two. Three.", prereqs: ["a", "b", "c", "d"] } },
+  { title: "One two three four five six seven", summary: "one two three four five six seven eight nine", body: ${JSON.stringify(long)},
+    diagram: { hl: ["a", "b", "c", "d"] }, code: Array.from({ length: 16 }, () => "x").join("\\n") },
+  { title: "Lit", summary: "s", body: "<p>No mark here, e.g. this stays one sentence.</p>", diagram: { hl: ["a"] },
+    code: "y".repeat(61), evidence: { text: "z".repeat(200) }, context: { question: "q" },
+    quiz: { q: "?", options: ["a", "b", "c", "d", "e"], answer: 0, why: "w" } },
+  { title: "Recap", body: "<p>r</p>", diagram: { hl: ["a", "b"] } },
+];`);
+  const { errors, warnings } = check(c);
+  assert.deepEqual(errors, []);
+  const has = (re, n = 1) => assert.equal(warnings.filter(w => re.test(w)).length, n, `${re}\n${warnings.join("\n")}`);
+  has(/step 2 .*title has 7 words \(≤ 6\)/);
+  has(/step 2 .*summary has 9 words \(≤ 8\)/);
+  has(/step 2 .*body has 6 sentences \(≤ 5\)/);
+  has(/step 2 .*diagram lights 4 parts \(a, b, c, d\); light 1–3/);
+  has(/step 2 .*code has 16 lines \(≤ 15\)/);
+  has(/step 3 .*diagram lights a but body has no <mark>/);
+  has(/step 3 .*code has 1 line over 60 characters/);
+  has(/evidence.text has .*over/, 0);      // evidence is real output: no width rule
+  has(/step 3 .*body has \d+ sentences/, 0);   // "e.g. this" is not a sentence break
+  has(/step 3 .*quiz has 5 options \(3–4\)/);
+  has(/step 3 .*context is only for step 1/);
+  has(/step 1 .*context.prereqs has 4 items \(≤ 3\)/);
+  has(/step 1 .*context.question has 3 sentences/);
+  has(/step 4 .*no <mark>/, 0);            // the Recap may light everything without a <mark>
+});
+
+test("CLI --check lists problems and writes nothing", () => {
+  const src = join(tmp, "chk.content.js");
+  writeFileSync(src, minimal().replace('hl: ["a"]', () => 'hl: ["a", "zz"]'));
+  const r = run("--check", src);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /error: step 1 \("One"\): diagram.hl names "zz"/);
+  assert.match(r.stderr, /check failed \(1 error, 1 warning\)/);
+  assert.ok(!existsSync(join(tmp, "chk.html")));
+  writeFileSync(src, minimal().replace('"<p>x</p>"', () => '"<p><mark>a</mark></p>"'));
+  const ok = run("--check", src);
+  assert.equal(ok.status, 0, ok.stderr);
+  assert.match(ok.stdout, /chk\.content\.js: ok/);
+  assert.ok(!existsSync(join(tmp, "chk.html")));
 });

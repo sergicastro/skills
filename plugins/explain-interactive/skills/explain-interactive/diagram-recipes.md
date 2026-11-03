@@ -1,6 +1,6 @@
 # Diagram recipes
 
-Read this when planning the page's diagram (workflow step 1). One diagram serves the whole page. You declare it once as `DIAGRAM` in the content file: which parts there are and how they connect. The build lays it out, so there are no coordinates to write. Each step then lists which parts to light up.
+Read this when planning the page's diagram (workflow step 2). One diagram serves the whole page. You declare it once as `DIAGRAM` in the content file: which parts there are and how they connect. The build lays it out, so there are no coordinates to write. Each step then lists which parts to light up.
 
 ## Pick the layout from the mechanism
 

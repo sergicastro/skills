@@ -3,12 +3,14 @@
 // Node 22+, no dependencies.
 //
 //   node build.mjs <topic>.content.js [-o <topic>.html]     build (default output: next to the content file)
+//   node build.mjs --check <topic>.content.js               check only: list errors and warnings, write nothing
 //   node build.mjs --extract <page>.html [-o <topic>.content.js]
 //                                                           recover the content file from a built page,
 //                                                           or from a page made with the old template.html
 //
-// The content file is a plain script that declares META, STEPS and optionally CAST, GLOSSARY, DIAGRAM
-// (see examples/ and SKILL.md). A DIAGRAM spec object is laid out here (engine/layout.mjs) into an SVG; an <svg> string is used as written. The build checks it first; problems are listed and nothing is written.
+// The content file is a plain script that declares META, STEPS and optionally CAST, GLOSSARY, DIAGRAM,
+// and DECISION, HYPOTHESES or LAYERS for the page types that need them (see examples/ and SKILL.md). A DIAGRAM spec object is laid out here (engine/layout.mjs) into an SVG;
+// an <svg> string is used as written. The build checks it first; problems are listed and nothing is written.
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,11 +26,10 @@ const inlineScript = s => s.replace(/<\/(script)/gi, "<\\/$1");
 const inlineStyle = s => s.replace(/<\/(style)/gi, "<\\/$1");
 
 // ---------- Load and check the content ----------
+const NAMES = ["META", "STEPS", "CAST", "GLOSSARY", "DIAGRAM", "DECISION", "HYPOTHESES", "LAYERS"];
 export function loadContent(code, file = "content.js") {
   const ctx = vm.createContext({});
-  const expose = `\n;({ META: typeof META === "undefined" ? undefined : META, STEPS: typeof STEPS === "undefined" ? undefined : STEPS,
-    CAST: typeof CAST === "undefined" ? undefined : CAST, GLOSSARY: typeof GLOSSARY === "undefined" ? undefined : GLOSSARY,
-    DIAGRAM: typeof DIAGRAM === "undefined" ? undefined : DIAGRAM })`;
+  const expose = `\n;({ ${NAMES.map(n => `${n}: typeof ${n} === "undefined" ? undefined : ${n}`).join(", ")} })`;
   return vm.runInContext(code + expose, ctx, { filename: file, timeout: 2000 });
 }
 
@@ -65,6 +66,7 @@ export function check(c) {
     ids = new Set([...(Array.isArray(spec.nodes) ? spec.nodes : []), ...(Array.isArray(spec.edges) ? spec.edges : [])]
       .filter(x => x && typeof x === "object").map(x => x.id ?? `${x.from}-${x.to}`));
   } else ids = new Set([...DIAGRAM.matchAll(/data-id\s*=\s*["']([^"']+)["']/g)].map(m => m[1]));
+  const type = checkType(c, errors, warnings);
   if (/<[^>]+\sid\s*=/.test(DIAGRAM.replace(/data-id\s*=/g, ""))) warnings.push("DIAGRAM uses id=…; use data-id (the SVG is cloned once per step, so ids would repeat)");
   if (/<animate/i.test(DIAGRAM)) warnings.push("DIAGRAM uses SMIL <animate>; use the .flow class (reduced-motion can't stop SMIL)");
   const known = new Set([...Object.keys(CAST), ...Object.keys(GLOSSARY)].map(k => k.toLowerCase()));
@@ -99,6 +101,8 @@ export function check(c) {
       }
     }
     if (s.code && typeof s.code !== "string") errors.push(`${at}: code must be a string`);
+    checkStepType(type, c, s, at, errors, warnings);
+    checkSize(s, i, STEPS.length, at, warnings);
     // Every <dfn> needs a CAST or GLOSSARY entry, or its tooltip stays empty
     const html = JSON.stringify(s);
     for (const m of html.matchAll(/<dfn([^>]*)>(.*?)<\/dfn>/g)) {
@@ -107,10 +111,168 @@ export function check(c) {
     }
   });
 
-  // `code` is shown escaped, so a snippet about <script src> is fine; everything else is rendered as HTML
-  const all = JSON.stringify({ META, CAST, GLOSSARY, spec, STEPS: STEPS.map(s => ({ ...s, code: undefined })) }) + DIAGRAM;
+  checkTypeCoverage(type, c, warnings);
+  // `code`, `diff` and `evidence` are shown escaped, so a snippet about <script src> is fine; everything else is rendered as HTML
+  const all = JSON.stringify({ META, CAST, GLOSSARY, spec, DECISION: c.DECISION, HYPOTHESES: c.HYPOTHESES, LAYERS: c.LAYERS,
+    STEPS: STEPS.map(s => ({ ...s, code: undefined, diff: undefined, evidence: s.evidence && { ...s.evidence, text: undefined } })) }) + DIAGRAM;
   for (const [re, what] of EXTERNAL) if (re.test(all.replace(/\\"/g, '"'))) errors.push(`content loads an external resource (${what}); pages must work offline`);
   return { errors, warnings, svg: spec ? DIAGRAM : null };
+}
+
+// ---------- Size and focus: each step fits one screen and is about one thing ----------
+// The limits SKILL.md gives; over them is a warning, since a page can still be built.
+export const LIMITS = { titleWords: 6, summaryWords: 8, bodySentences: 5, bodyWords: 120, hlParts: 3,
+  codeLines: 15, codeWidth: 60, prereqs: 3, contextSentences: 2, quizOptions: 4 };
+const text = s => String(s).replace(/<[^>]*>/g, " ").replace(/&[a-z#0-9]+;/gi, " ").replace(/\s+/g, " ").trim();
+const words = s => (text(s).match(/\S+/g) || []).length;
+// A sentence ends at . ! ? (or …) followed by the end or by a space and a capital, digit or quote; "e.g. this" stays one sentence
+const sentences = s => { const t = text(s); return t ? (t.match(/[.!?…]+["')\]]*(?=\s+["'(\[`]?[A-Z0-9]|\s*$)/g) || [t]).length : 0; };
+function checkSize(s, i, n, at, warnings) {
+  const L = LIMITS, recap = i === n - 1 && n > 1;
+  const w = msg => warnings.push(`${at}: ${msg}`);
+  if (s.title && words(s.title) > L.titleWords) w(`title has ${words(s.title)} words (≤ ${L.titleWords}): name the one idea`);
+  if (s.summary && words(s.summary) > L.summaryWords) w(`summary has ${words(s.summary)} words (≤ ${L.summaryWords})`);
+  if (s.body) {
+    const k = sentences(s.body), m = words(s.body);
+    if (k > L.bodySentences) w(`body has ${k} sentences (≤ ${L.bodySentences}): move detail to deeper, or split the step`);
+    else if (m > L.bodyWords) w(`body has ${m} words (≤ ~${L.bodyWords}): shorten it, or move detail to deeper`);
+  }
+  const hl = [...new Set(((s.diagram || {}).hl || []).flat())];
+  if (hl.length > L.hlParts) w(`diagram lights ${hl.length} parts (${hl.join(", ")}); light 1–${L.hlParts}, or split the step`);
+  if (hl.length && !recap && s.body && !/<mark\b/.test(s.body)) w(`diagram lights ${hl.join(", ")} but body has no <mark>: wrap the lit part's name in <mark> so text and picture match`);
+  // width only for code: evidence is real output, quoted as it was
+  const block = (label, src, width = true) => {
+    if (typeof src !== "string") return;
+    const ls = src.replace(/\n+$/, "").split("\n"), wide = ls.filter(l => [...l].length > L.codeWidth).length;
+    if (ls.length > L.codeLines) w(`${label} has ${ls.length} lines (≤ ${L.codeLines}): keep only the lines that matter`);
+    if (width && wide) w(`${label} has ${wide} line${wide > 1 ? "s" : ""} over ${L.codeWidth} characters (they wrap in the narrow column)`);
+  };
+  block("code", s.code);
+  if (s.evidence) block("evidence.text", s.evidence.text, false);
+  if (s.diff && !recap) for (const side of ["before", "after"]) {
+    const k = typeof s.diff[side] === "string" ? s.diff[side].replace(/\n+$/, "").split("\n").length : 0;
+    if (k > L.codeLines) w(`diff.${side} has ${k} lines (≤ ${L.codeLines}): show only the part this step changes`);
+  }
+  if (s.quiz && Array.isArray(s.quiz.options) && s.quiz.options.length > L.quizOptions) w(`quiz has ${s.quiz.options.length} options (3–${L.quizOptions})`);
+  const c = s.context;
+  if (c && typeof c === "object") {
+    if (i > 0) w("context is only for step 1");
+    if (Array.isArray(c.prereqs) && c.prereqs.length > L.prereqs) w(`context.prereqs has ${c.prereqs.length} items (≤ ${L.prereqs})`);
+    for (const k of ["question", "setting", "why", "example"])
+      if (c[k] && sentences(c[k]) > L.contextSentences) w(`context.${k} has ${sentences(c[k])} sentences (1–${L.contextSentences})`);
+  }
+}
+
+// ---------- Page types (META.type) ----------
+export const TYPES = ["walkthrough", "decision", "before-after", "debugging", "concept"];
+const LEVELS = ["good", "fair", "poor"], VERDICTS = ["open", "ruled-out", "confirmed"];
+const PHASES = ["symptom", "hypothesis", "evidence", "cause", "fix"];
+const NEEDS = { decision: "DECISION", debugging: "HYPOTHESES", concept: "LAYERS" };
+// Each list of { id, … } needs unique ids; returns the set of them
+function idsOf(list, name, need, errors) {
+  const ids = new Set();
+  list.forEach((x, j) => {
+    if (!x || typeof x !== "object" || !x.id) return errors.push(`${name}[${j}] needs an id`);
+    if (ids.has(x.id)) errors.push(`${name} repeats the id "${x.id}"`);
+    ids.add(x.id);
+    if (!x[need]) errors.push(`${name} "${x.id}" needs ${need}`);
+  });
+  return ids;
+}
+function checkType(c, errors, warnings) {
+  const type = (c.META && c.META.type) || "walkthrough";
+  if (!TYPES.includes(type)) { errors.push(`META.type "${type}" is not one of ${TYPES.join(", ")}`); return null; }
+  for (const [t, name] of Object.entries(NEEDS))
+    if (c[name] !== undefined && type !== t) warnings.push(`${name} is only drawn on a "${t}" page (META.type is "${type}")`);
+  if ((c.META.before || c.META.after) && type !== "before-after") warnings.push(`META.before/after are only shown on a "before-after" page`);
+  const need = NEEDS[type];
+  if (need && c[need] === undefined) { errors.push(`a "${type}" page needs ${need} (see SKILL.md)`); return type; }
+  if (type === "decision") {
+    const D = c.DECISION;
+    if (typeof D !== "object" || D === null || !Array.isArray(D.options) || !Array.isArray(D.criteria)) { errors.push("DECISION needs options[] and criteria[]"); return type; }
+    const o = idsOf(D.options, "DECISION.options", "name", errors), k = idsOf(D.criteria, "DECISION.criteria", "name", errors);
+    if (o.size < 2) warnings.push(`DECISION has ${o.size} option(s); a decision compares at least 2`);
+    if (k.has("cost")) errors.push(`DECISION.criteria may not use the id "cost"; it is the row DECISION.cost fills`);
+    for (const [oid, row] of Object.entries(D.ratings || {})) {
+      if (!o.has(oid)) { errors.push(`DECISION.ratings names the option "${oid}", which is not in DECISION.options`); continue; }
+      for (const [kid, v] of Object.entries(row || {})) {
+        if (!k.has(kid)) errors.push(`DECISION.ratings.${oid} names the criterion "${kid}", which is not in DECISION.criteria`);
+        const lv = typeof v === "string" ? v : v && v.level;
+        if (lv !== undefined && !LEVELS.includes(lv)) errors.push(`DECISION.ratings.${oid}.${kid}: level "${lv}" is not one of ${LEVELS.join(", ")}`);
+      }
+    }
+    for (const oid of o) for (const kid of k) if (!((D.ratings || {})[oid] || {})[kid]) warnings.push(`DECISION.ratings has nothing for ${oid} × ${kid}`);
+    for (const oid of Object.keys(D.cost || {})) if (!o.has(oid)) errors.push(`DECISION.cost names the option "${oid}", which is not in DECISION.options`);
+    if (!D.recommend) warnings.push("DECISION.recommend is empty: say which option you recommend");
+    else if (!o.has(D.recommend)) errors.push(`DECISION.recommend "${D.recommend}" is not in DECISION.options`);
+    if (D.recommend && !D.why) warnings.push("DECISION.why is empty: say why the recommended option wins");
+  }
+  if (type === "debugging") {
+    if (!Array.isArray(c.HYPOTHESES)) errors.push("HYPOTHESES must be an array of { id, text }");
+    else idsOf(c.HYPOTHESES, "HYPOTHESES", "text", errors);
+  }
+  if (type === "concept") {
+    if (!Array.isArray(c.LAYERS)) errors.push("LAYERS must be an array of { id, name, text }");
+    else idsOf(c.LAYERS, "LAYERS", "name", errors);
+  }
+  return type;
+}
+function checkStepType(type, c, s, at, errors, warnings) {
+  if (s.diff !== undefined && (typeof s.diff !== "object" || typeof s.diff.before !== "string" || typeof s.diff.after !== "string"))
+    errors.push(`${at}: diff needs before and after strings`);
+  if (s.matrix !== undefined) {
+    if (type !== "decision") warnings.push(`${at}: matrix is only drawn on a "decision" page`);
+    else if (c.DECISION && Array.isArray(c.DECISION.options)) {
+      const o = new Set(c.DECISION.options.map(x => x && x.id)), k = new Set((c.DECISION.criteria || []).map(x => x && x.id));
+      if (c.DECISION.cost) k.add("cost");
+      for (const [f, set, what] of [["options", o, "DECISION.options"], ["criteria", k, "DECISION.criteria"]]) {
+        const v = s.matrix[f];
+        if (v === undefined) continue;
+        if (!Array.isArray(v)) { errors.push(`${at}: matrix.${f} must be an array`); continue; }
+        v.forEach(id => { if (!set.has(id)) errors.push(`${at}: matrix.${f} names "${id}", which is not in ${what}`); });
+      }
+    }
+  }
+  if (s.phase !== undefined) {
+    if (type !== "debugging") warnings.push(`${at}: phase is only shown on a "debugging" page`);
+    else if (!PHASES.includes(s.phase)) errors.push(`${at}: phase "${s.phase}" is not one of ${PHASES.join(", ")}`);
+  }
+  if (s.verdicts !== undefined) {
+    if (type !== "debugging") warnings.push(`${at}: verdicts are only drawn on a "debugging" page`);
+    else if (Array.isArray(c.HYPOTHESES)) {
+      const h = new Set(c.HYPOTHESES.map(x => x && x.id));
+      for (const [id, v] of Object.entries(s.verdicts || {})) {
+        if (!h.has(id)) errors.push(`${at}: verdicts names "${id}", which is not in HYPOTHESES`);
+        if (!VERDICTS.includes(v)) errors.push(`${at}: verdict "${v}" for "${id}" is not one of ${VERDICTS.join(", ")}`);
+      }
+    }
+  }
+  if (s.evidence !== undefined && (typeof s.evidence !== "object" || typeof s.evidence.text !== "string"))
+    errors.push(`${at}: evidence needs a text string ({ label, text })`);
+  if (s.layer !== undefined) {
+    if (type !== "concept") warnings.push(`${at}: layer is only drawn on a "concept" page`);
+    else if (Array.isArray(c.LAYERS) && !c.LAYERS.some(l => l && l.id === s.layer)) errors.push(`${at}: layer "${s.layer}" is not in LAYERS`);
+  }
+}
+// Whole-page checks: each type's structure is actually used by the steps
+function checkTypeCoverage(type, c, warnings) {
+  const S = c.STEPS;
+  if (type === "before-after" && !S.some(s => s.diff)) warnings.push(`no step has a diff; a "before-after" page shows at least one`);
+  if (type === "decision" && !S.some(s => s.matrix && s.matrix.recommend)) warnings.push("no step sets matrix.recommend; the recommendation then appears only on the Recap");
+  if (type === "debugging") {
+    for (const p of ["symptom", "cause"]) if (!S.some(s => s.phase === p)) warnings.push(`no step has phase "${p}"`);
+    const raised = new Set(S.flatMap(s => Object.keys(s.verdicts || {})));
+    (Array.isArray(c.HYPOTHESES) ? c.HYPOTHESES : []).forEach(h => { if (h && !raised.has(h.id)) warnings.push(`hypothesis "${h.id}" is never raised by a step's verdicts`); });
+    if (!S.some(s => Object.values(s.verdicts || {}).includes("confirmed"))) warnings.push("no step confirms a hypothesis");
+  }
+  if (type === "concept" && Array.isArray(c.LAYERS)) {
+    const used = S.map(s => s.layer).filter(Boolean);
+    c.LAYERS.forEach(l => {
+      const n = used.filter(x => x === (l && l.id)).length;
+      if (l && n === 0) warnings.push(`layer "${l.id}" is never added by a step`);
+      if (l && n > 1) warnings.push(`layer "${l.id}" is added by ${n} steps; each step adds one new layer`);
+    });
+  }
 }
 
 // ---------- Build ----------
@@ -150,8 +312,9 @@ function main(argv) {
   const take = flag => { const i = args.indexOf(flag); if (i < 0) return undefined; const v = args[i + 1]; args.splice(i, 2); return v; };
   const out = take("-o") ?? take("--out");
   const extractFrom = take("--extract");
+  const checkOnly = args.includes("--check") && (args.splice(args.indexOf("--check"), 1), true);
   if (args.includes("-h") || args.includes("--help") || (!extractFrom && args.length !== 1)) {
-    console.log("usage: node build.mjs <topic>.content.js [-o <topic>.html]\n       node build.mjs --extract <page>.html [-o <topic>.content.js]");
+    console.log("usage: node build.mjs <topic>.content.js [-o <topic>.html]\n       node build.mjs --check <topic>.content.js\n       node build.mjs --extract <page>.html [-o <topic>.content.js]");
     return extractFrom || args.length === 1 ? 0 : 2;
   }
   if (extractFrom) {
@@ -166,8 +329,11 @@ function main(argv) {
   let res;
   try { res = build(readFileSync(src, "utf8"), src); }
   catch (e) { console.error(`${src}: ${e.message}`); return 1; }
+  res.errors.forEach(e => console.error(`error: ${e}`));
   res.warnings.forEach(w => console.warn(`warning: ${w}`));
-  if (res.errors.length) { res.errors.forEach(e => console.error(`error: ${e}`)); console.error(`${src}: not built (${res.errors.length} error${res.errors.length > 1 ? "s" : ""})`); return 1; }
+  const count = (n, what) => `${n} ${what}${n === 1 ? "" : "s"}`;
+  if (res.errors.length) { console.error(`${src}: ${checkOnly ? "check failed" : "not built"} (${count(res.errors.length, "error")}, ${count(res.warnings.length, "warning")})`); return 1; }
+  if (checkOnly) { console.log(`${src}: ${res.warnings.length ? count(res.warnings.length, "warning") : "ok"}`); return 0; }
   const dest = out ?? src.replace(/(\.content)?\.m?js$/i, "") + ".html";
   writeFileSync(dest, res.html);
   console.log(`built ${resolve(dest)}`);

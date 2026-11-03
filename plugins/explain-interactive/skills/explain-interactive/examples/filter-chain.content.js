@@ -66,7 +66,7 @@ const STEPS = [
     title: "The rate limit counts calls",
     summary: "over quota ends at a 429",
     body: "<p>The <mark>Rate limit</mark> counts the client's calls. <strong>Ours is over its <dfn>quota</dfn></strong>, so the reply is a 429 and <dfn>orders-svc</dfn> never sees it.</p>",
-    diagram: { hl: ["e2", "rl", "slow", "r429"] },
+    diagram: { hl: ["rl", "slow", "r429"] },
     quiz: { q: "A client with an expired token and no quota left calls GET /orders. What does it get?",
       options: ["401", { t: "429", why: "The rate limit never runs: the JWT check comes first and stops the call." }, "200 from orders-svc"],
       answer: 0, why: "Filters run in order, and the first one that says no decides the reply." },

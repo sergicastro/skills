@@ -1,7 +1,8 @@
 /* explain-interactive engine: renders a step-by-step explainer from the page's content.
-   The content script (inlined before this one by build.mjs) declares META, CAST, GLOSSARY, DIAGRAM and STEPS.
+   The content script (inlined before this one by build.mjs) declares META, CAST, GLOSSARY, DIAGRAM and STEPS,
+   plus DECISION, HYPOTHESES or LAYERS for the page types that need them (META.type).
    Don't edit pages by hand: change the content file and rebuild. Field reference: SKILL.md. */
-((META, CAST, GLOSSARY, DIAGRAM, STEPS) => {
+((META, CAST, GLOSSARY, DIAGRAM, STEPS, DECISION, HYPOTHESES, LAYERS) => {
 if (!META || !Array.isArray(STEPS) || !STEPS.length) {
   document.getElementById("stage").textContent = "This page has no content: META and STEPS are missing (rebuild it from its content file).";
   return;
@@ -11,6 +12,9 @@ const $$ = s => [...document.querySelectorAll(s)];
 const esc = s => s.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 const N = STEPS.length, LAST = N - 1;
 const terms = Object.keys(GLOSSARY), cast = Object.keys(CAST);
+// Page type: picks the panel drawn next to each step's text. A walkthrough has none and renders as it always has.
+const TYPE = ["decision", "before-after", "debugging", "concept"].includes(META.type) ? META.type : "walkthrough";
+document.body.classList.add("type-" + TYPE);
 document.title = META.title;
 $("#title").textContent = META.title;
 $$(".bigpic-text").forEach(e => e.textContent = META.bigPicture);
@@ -35,8 +39,101 @@ function diagramFor(i) {
     else if (dim.has(id) || (!recap && !seen.has(id))) el.classList.add("dim");
     (d.build || []).forEach((stage, n) => { if ([].concat(stage).includes(id)) el.setAttribute("data-b", n + 1); });
   });
-  return box.innerHTML + (recap ? "" : `<div class="legend"><span><i class="new"></i>new in this step</span><span><i></i>already introduced</span><span><i class="soon"></i>coming later</span></div>`);
+  return box.innerHTML + (recap ? "" : legend);
 }
+const legend = `<div class="legend"><span><i class="new"></i>new in this step</span><span><i></i>already introduced</span><span><i class="soon"></i>coming later</span></div>`;
+// Ids a field of the earlier steps introduced, so a panel can ghost what the reader hasn't met yet (same rule as the diagram)
+const seenBefore = (i, pick) => new Set(STEPS.slice(0, i).flatMap(t => [].concat(pick(t) || [])));
+
+// Decision: options as columns, criteria (then cost) as rows. A step lights the rows/columns it discusses;
+// the recommendation shows from the step that sets matrix.recommend, and always on the Recap.
+const LEVEL = { good: ["✓", "good"], fair: ["~", "fair"], poor: ["✗", "poor"] };
+function matrixFor(i) {
+  const D = DECISION, m = STEPS[i].matrix || {}, recap = i === LAST && N > 1;
+  const opts = D.options || [], rows = [...(D.criteria || [])];
+  if (D.cost) rows.push({ id: "cost", name: "Cost" });
+  const sO = seenBefore(i, t => (t.matrix || {}).options), sC = seenBefore(i, t => (t.matrix || {}).criteria);
+  const hO = new Set(m.options || []), hC = new Set(m.criteria || []);
+  const st = (h, s, id) => h.has(id) ? "hl" : recap || s.has(id) ? "" : "dim";
+  const rec = (recap || STEPS.slice(0, i + 1).some(t => (t.matrix || {}).recommend)) && D.recommend;
+  const col = o => [st(hO, sO, o.id), rec === o.id ? "rec" : ""].filter(Boolean).join(" ");
+  const cell = (o, r) => {
+    if (r.id === "cost") return `<td class="${col(o)}">${(D.cost || {})[o.id] || ""}</td>`;
+    const v = ((D.ratings || {})[o.id] || {})[r.id], lv = typeof v === "string" ? v : v && v.level, note = v && v.note;
+    const [sym, word] = LEVEL[lv] || ["", ""];
+    return `<td class="${col(o)}">${sym ? `<span class="lv ${lv}" title="${word}">${sym}<span class="sr"> ${word}</span></span>` : ""}${note ? ` ${note}` : ""}</td>`;
+  };
+  return `<div class="matrix-wrap"><table class="matrix">
+    <thead><tr><th></th>${opts.map(o => `<th scope="col" class="${col(o)}">${o.name}${rec === o.id ? `<span class="badge">Recommended</span>` : ""}${o.summary ? `<small>${o.summary}</small>` : ""}</th>`).join("")}</tr></thead>
+    <tbody>${rows.map(r => `<tr class="${st(hC, sC, r.id)}"><th scope="row">${r.name}</th>${opts.map(o => cell(o, r)).join("")}</tr>`).join("")}</tbody>
+  </table></div>${rec && D.why ? `<p class="rec-why"><b>Why ${(opts.find(o => o.id === rec) || {}).name || rec}:</b> ${D.why}</p>` : ""}${recap ? "" : legend}`;
+}
+
+// Debugging: the case board lists every hypothesis raised so far with its state as of this step.
+// Hypotheses not raised yet are left off (they would give the story away); the ones this step changes are lit.
+const VERDICT = { open: ["?", "open"], "ruled-out": ["✗", "ruled out"], confirmed: ["✓", "confirmed"] };
+const PHASE = { symptom: "Symptom", hypothesis: "Hypothesis", evidence: "Evidence", cause: "Root cause", fix: "Fix" };
+function boardFor(i) {
+  const state = {}, now = STEPS[i].verdicts || {};
+  STEPS.slice(0, i + 1).forEach(t => Object.assign(state, t.verdicts || {}));
+  const raised = HYPOTHESES.filter(h => h.id in state);
+  if (!raised.length) return "";
+  return `<div class="board"><b class="board-h">Hypotheses</b><ul>${raised.map(h => {
+    const [sym, word] = VERDICT[state[h.id]] || VERDICT.open;
+    return `<li class="v-${state[h.id]}${h.id in now ? " hl" : ""}"><span class="vs" aria-hidden="true">${sym}</span><span class="vt">${h.text}</span><span class="vw">${word}</span></li>`;
+  }).join("")}</ul></div>`;
+}
+const evidenceHtml = e => `<figure class="evidence">${e.label ? `<figcaption>${e.label}</figcaption>` : ""}<pre><code>${codeHtml(e.text || "")}</code></pre></figure>`;
+
+// Concept: layers stacked bottom-up (LAYERS[0] is the foundation). Each step adds one; later ones show their name only.
+function stackFor(i) {
+  const recap = i === LAST && N > 1, seen = seenBefore(i, t => t.layer), now = STEPS[i].layer;
+  return `<div class="stack">${[...LAYERS].reverse().map(l => {
+    const c = l.id === now ? "hl" : recap || seen.has(l.id) ? "" : "dim";
+    return `<div class="layer ${c}"><b>${l.name}</b>${c === "dim" ? "" : `<span>${l.text || ""}</span>`}</div>`;
+  }).join("")}</div>${recap ? "" : legend}`;
+}
+
+// Before/after: a line diff (longest common subsequence) shown as aligned Before | After columns;
+// narrow screens stack the two columns (CSS reorders the cells by --r).
+function diffOps(a, b) {
+  const A = a.split("\n"), B = b.split("\n"), L = A.map(() => new Array(B.length + 1).fill(0));
+  L.push(new Array(B.length + 1).fill(0));
+  for (let x = A.length - 1; x >= 0; x--) for (let y = B.length - 1; y >= 0; y--)
+    L[x][y] = A[x] === B[y] ? L[x + 1][y + 1] + 1 : Math.max(L[x + 1][y], L[x][y + 1]);
+  const ops = []; let x = 0, y = 0;
+  while (x < A.length || y < B.length) {
+    if (x < A.length && y < B.length && A[x] === B[y]) { ops.push([" ", A[x++]]); y++; }
+    else if (y < B.length && (x >= A.length || L[x][y + 1] >= L[x + 1][y])) ops.push(["+", B[y++]]);
+    else ops.push(["-", A[x++]]);
+  }
+  return ops;
+}
+function diffHtml(d) {
+  const rows = [], ops = diffOps(d.before || "", d.after || "");
+  for (let k = 0; k < ops.length;) {
+    if (ops[k][0] === " ") { rows.push([["same", ops[k][1]], ["same", ops[k][1]]]); k++; continue; }
+    const del = [], add = [];
+    while (k < ops.length && ops[k][0] !== " ") (ops[k][0] === "-" ? del : add).push(ops[k++][1]);
+    for (let j = 0; j < Math.max(del.length, add.length); j++)
+      rows.push([j < del.length ? ["del", del[j]] : ["pad", ""], j < add.length ? ["add", add[j]] : ["pad", ""]]);
+  }
+  const c = (side, r, [k, t]) => `<code class="c ${side} ${k}" style="--r:${r}">${k === "del" ? "−" : k === "add" ? "+" : " "} ${esc(t) || " "}</code>`;
+  const changed = ops.filter(o => o[0] !== " ").length;
+  return `<div class="diff" role="group" aria-label="${d.label ? esc(d.label).replace(/"/g, "&quot;") + ": " : ""}before and after, ${changed} changed line${changed === 1 ? "" : "s"}">
+    ${d.label ? `<div class="diff-label">${esc(d.label)}</div>` : ""}
+    <div class="diff-grid"><b class="c L hd" style="--r:1">Before</b><b class="c R hd" style="--r:1">After</b>${rows.map(([l, r], j) => c("L", j + 2, l) + c("R", j + 2, r)).join("")}</div></div>`;
+}
+// The type's own panel for step i, drawn above any diagram/visual/code
+function panelFor(i) {
+  const s = STEPS[i];
+  if (s.panel === false) return "";
+  if (TYPE === "decision" && DECISION) return matrixFor(i);
+  if (TYPE === "debugging" && HYPOTHESES.length) return boardFor(i);
+  if (TYPE === "concept" && LAYERS.length) return stackFor(i);
+  return "";
+}
+
 // Context card: the fixed questions a newcomer needs answered before the mechanism starts
 const CTX = [["question", "The question"], ["setting", "Where this happens"], ["why", "Why it matters"],
   ["prereqs", "What you need to know first"], ["example", "The example we'll follow"]];
@@ -56,17 +153,29 @@ function shuffled(n, seed) {
 // Code lines carrying a "←" marker get the diagram's highlight colour
 const codeHtml = c => esc(c).split("\n").map(l => `<span class="ln${l.includes("←") ? " hl-line" : ""}">${l || " "}</span>`).join("");
 
+// "Still confused here": the reader says what's unclear and copies a prompt to paste back into Claude. Nothing is sent anywhere.
+const stuckHtml = i => `<details class="stuck" data-step="${i}"><summary>Still confused here</summary>
+  <label for="stuck-${i}">What's unclear? <span>(optional)</span></label>
+  <textarea id="stuck-${i}" rows="2" placeholder="e.g. which part decides this, and why there?"></textarea>
+  <div class="stuck-acts"><button class="primary" data-copy>Copy a prompt for Claude</button><span class="stuck-msg"></span></div>
+  <textarea class="stuck-out" readonly hidden aria-label="Prompt to copy"></textarea></details>`;
+// Before/after pages open with the two states side by side, under the big picture
+const baHtml = TYPE === "before-after" && (META.before || META.after)
+  ? `<div class="ba"><div><b>Before</b>${META.before || ""}</div><div><b>After</b>${META.after || ""}</div></div>` : "";
 // A diagram wider than this would shrink its text below ~12px in the side column, so its steps go full width
 const WIDE_DIAGRAM = +((DIAGRAM.match(/viewBox="[\d.-]+ [\d.-]+ ([\d.]+)/) || [])[1] || 0) > 680;
 $("#stage").innerHTML = STEPS.map((s, i) => {
-  const recap = i === LAST && N > 1, wide = s.wide || recap || (!s.visual && !!s.diagram && WIDE_DIAGRAM);
+  const recap = i === LAST && N > 1, wide = s.wide || recap || !!s.diff || (!s.visual && !!s.diagram && WIDE_DIAGRAM);
   const vis = s.visual || (s.diagram && DIAGRAM ? diagramFor(i) : "");
-  const look = (vis ? `<div class="visual">${vis}</div>` : "") + (s.code ? `<pre><code>${codeHtml(s.code)}</code></pre>` : "");
+  const panel = panelFor(i);
+  const look = (panel ? `<div class="panel">${panel}</div>` : "") + (s.diff ? diffHtml(s.diff) : "") +
+    (vis ? `<div class="visual">${vis}</div>` : "") + (s.code ? `<pre><code>${codeHtml(s.code)}</code></pre>` : "") +
+    (s.evidence ? evidenceHtml(s.evidence) : "");
   const split = look && !wide;
   return `
   <article class="step${split ? " split" : ""}${wide ? " wide" : ""}" id="step-${i + 1}" aria-labelledby="h-${i}">
-    ${i === 0 ? `<div class="bigpic"><b>Big picture</b>${esc(META.bigPicture)}</div>` : ""}
-    <div class="eyebrow">Step ${i + 1} of ${N}</div>
+    ${i === 0 ? `<div class="bigpic"><b>Big picture</b>${esc(META.bigPicture)}</div>${baHtml}` : ""}
+    <div class="eyebrow">Step ${i + 1} of ${N}${s.phase && PHASE[s.phase] ? ` · <span class="phase ph-${s.phase}">${PHASE[s.phase]}</span>` : ""}</div>
     <h2 id="h-${i}" tabindex="-1">${s.title}</h2>
     <div class="cols">
       <div class="read">
@@ -83,6 +192,7 @@ $("#stage").innerHTML = STEPS.map((s, i) => {
             return `<button data-i="${j}">${typeof o === "string" ? o : o.t}</button>`; }).join("")}</div>
           <div class="retry">Not quite, one more try.</div>
           <div class="why"><span class="verdict"></span> ${s.quiz.why}</div></div>` : ""}
+        ${stuckHtml(i)}
         ${recap ? `<section class="finish" aria-label="Finished">
           <h3>You made it to the end</h3><p id="score"></p>
           <div class="acts"><button class="primary" data-finish="restart">↺ Start over</button>
@@ -219,8 +329,52 @@ function paintMarks() {
       (left ? ` ${left} still unanswered.` : "");
 }
 
+// The prompt carries what the page said at this step, so Claude can answer without the page open.
+// It names no file path: a page's location can hold a user name.
+const plain = h => new DOMParser().parseFromString(String(h || ""), "text/html").body.textContent.replace(/\s+/g, " ").trim();
+function stuckPrompt(i, unclear) {
+  const s = STEPS[i], r = results[i];
+  const used = [...new Set($$(`#step-${i + 1} .read dfn`).map(d => (d.dataset.term || d.textContent).trim()))]
+    .map(t => [t, findTerm({ dataset: {}, textContent: t })]).filter(([, d]) => d);
+  const lines = [
+    `I'm reading an explainer page, "${plain(META.title)}", and I'm stuck on step ${i + 1} of ${N}: "${plain(s.title)}".`, "",
+    `The page's big picture: ${plain(META.bigPicture)}`, "",
+    "What this step says:",
+    ...(s.summary ? [`- In short: ${plain(s.summary)}`] : []),
+    `- ${plain(s.body) || "(no text)"}`,
+    ...(s.analogy ? [`- Analogy: ${plain(s.analogy)}`] : []),
+    ...(used.length ? ["", "Terms it uses, as the page defines them:", ...used.map(([t, d]) => `- ${t}: ${plain(d)}`)] : []),
+  ];
+  if (r && r.res === "miss" && s.quiz) {
+    const o = s.quiz.options[s.quiz.answer];
+    lines.push("", `I got this step's check wrong. Question: "${plain(s.quiz.q)}" The answer is "${plain(typeof o === "string" ? o : o.t)}".`);
+  }
+  lines.push("", `What's unclear to me: ${unclear.trim() || "I can't say exactly; the step as a whole doesn't click."}`, "",
+    "Explain this step another way. Start from what I said is unclear, use a concrete example, and don't repeat the page's wording. " +
+    "If the page skips something I'd need, or gets something wrong, say so.");
+  return lines.join("\n");
+}
+async function copyText(t) {
+  try { await navigator.clipboard.writeText(t); return true; } catch (e) {}
+  // Some browsers give a file:// page no clipboard API; the old copy command still works from a click
+  const ta = Object.assign(document.createElement("textarea"), { value: t, readOnly: true });
+  ta.style.cssText = "position:fixed;top:0;opacity:0"; document.body.appendChild(ta); ta.select();
+  let ok = false; try { ok = document.execCommand("copy"); } catch (e) {}
+  ta.remove(); return ok;
+}
+$$(".stuck").forEach(box => box.querySelector("[data-copy]").addEventListener("click", async e => {
+  const btn = e.currentTarget, msg = box.querySelector(".stuck-msg"), out = box.querySelector(".stuck-out");
+  const text = stuckPrompt(+box.dataset.step, box.querySelector("textarea").value);
+  const ok = await copyText(text);
+  btn.focus({ preventScroll: true });
+  out.value = text; out.hidden = ok;   // copy failed: show the prompt, selected, to copy by hand
+  msg.textContent = ok ? "Copied. Paste it into your chat with Claude." : "Couldn't copy. Select the text below and copy it.";
+  if (!ok) out.select();
+  $("#live").textContent = msg.textContent;
+}));
+
 // Stepper
-$("#outline").innerHTML = STEPS.map((s, i) => `<li><button data-i="${i}"><span class="n">${i + 1}</span><span class="t">${s.title}</span><span class="mk"></span></button></li>`).join("");
+$("#outline").innerHTML = STEPS.map((s, i) => `<li><button data-i="${i}"><span class="n">${i + 1}</span><span class="t">${s.title}${s.phase && PHASE[s.phase] ? `<span class="ph ph-${s.phase}">${PHASE[s.phase]}</span>` : ""}</span><span class="mk"></span></button></li>`).join("");
 const items = $$("#outline button"), arts = $$(".step"), stage = $("#stage");
 const isAll = () => document.body.classList.contains("all");
 
@@ -334,4 +488,7 @@ cur = -1; go(m ? +m[1] - 1 : Math.min(saved.cur || 0, LAST), { push: false });
   // A spec DIAGRAM ({ layout, nodes, edges }) was laid out by build.mjs into the #explain-diagram template
   typeof DIAGRAM === "string" ? DIAGRAM : (document.getElementById("explain-diagram") || {}).innerHTML || "",
   typeof STEPS !== "undefined" ? STEPS : null,
+  typeof DECISION === "object" && DECISION ? DECISION : null,
+  typeof HYPOTHESES !== "undefined" && Array.isArray(HYPOTHESES) ? HYPOTHESES : [],
+  typeof LAYERS !== "undefined" && Array.isArray(LAYERS) ? LAYERS : [],
 );
