@@ -54,8 +54,8 @@ in the manager session (`rename-worker`).
 5. When you end a turn waiting on a user decision that blocks progress: send STATUS
    `needs-user` with a one-line reason. External blocker: STATUS `blocked`. When work resumes:
    STATUS `assigned`.
-6. Each time you open a PR for the goal, send `[orch v1 PR]` with its URL right away, then
-   keep working. Don't wait for DONE. The manager's ACK needs no reply.
+6. Each time you open a PR for the goal, end its body with the worker footer (`github.md`,
+   "Open a PR"), then send `[orch v1 PR]` with its URL right away and keep working. Don't wait for DONE. The manager's ACK needs no reply.
 7. Finished (acceptance criteria met, PR opened if the goal has a repo): send DONE with the PR
    and short notes: decisions, interfaces and facts later goals need. At most ~10 lines, no
    diffs or logs.

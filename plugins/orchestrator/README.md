@@ -12,6 +12,7 @@ The manager can also propose a change notice to the affected workers when a goal
 or a merged goal settles a design question. It sends the notice only after the user approves;
 workers acknowledge it and change course only on the user's say-so.
 Workers report each PR as soon as they open it, so the status page lists a goal's PRs while it is still in progress.
+Each PR a worker opens ends with a small footer naming the worker, epic and goal, so you can tell who opened it from the PR alone.
 
 ## Goals
 
