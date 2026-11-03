@@ -14,8 +14,8 @@
 // The content file is a plain script that declares META, STEPS and optionally CAST, GLOSSARY, DIAGRAM,
 // and DECISION, HYPOTHESES or LAYERS for the page types that need them (see examples/ and SKILL.md). A DIAGRAM spec object is laid out here (engine/layout.mjs) into an SVG;
 // an <svg> string is used as written. The build checks it first; problems are listed and nothing is written.
-import { readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { readFileSync, writeFileSync, readdirSync, statSync, existsSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { homedir } from "node:os";
@@ -47,6 +47,10 @@ const EXTERNAL = [
   [/<(image|use)\b[^>]*\bhref\s*=\s*["']?(https?:)?\/\//i, "remote SVG href"],
 ];
 
+// Every step field the engine reads; SKILL.md's "Content rules per step" documents each one
+export const STEP_KEYS = ["title", "summary", "context", "body", "diagram", "visual", "build", "analogy", "code", "deeper",
+  "quiz", "whatif", "matrix", "diff", "phase", "verdicts", "evidence", "layer", "panel", "depth", "wide"];
+
 export function check(c) {
   const errors = [], warnings = [];
   const { META, STEPS } = c, CAST = c.CAST || {}, GLOSSARY = c.GLOSSARY || {};
@@ -70,22 +74,25 @@ export function check(c) {
     ids = new Set([...(Array.isArray(spec.nodes) ? spec.nodes : []), ...(Array.isArray(spec.edges) ? spec.edges : [])]
       .filter(x => x && typeof x === "object").map(x => x.id ?? `${x.from}-${x.to}`));
   } else ids = new Set([...DIAGRAM.matchAll(/data-id\s*=\s*["']([^"']+)["']/g)].map(m => m[1]));
-  checkTerms(spec, DIAGRAM, hasTermIn(CAST, GLOSSARY), warnings);
+  const hasTerm = hasTermIn(CAST, GLOSSARY);
+  checkTerms(spec, DIAGRAM, hasTerm, warnings);
   const type = checkType(c, errors, warnings);
   if (/<[^>]+\sid\s*=/.test(DIAGRAM.replace(/data-id\s*=/g, ""))) warnings.push("DIAGRAM uses id=…; use data-id (the SVG is cloned once per step, so ids would repeat)");
   if (/<animate/i.test(DIAGRAM)) warnings.push("DIAGRAM uses SMIL <animate>; use the .flow class (reduced-motion can't stop SMIL)");
-  const hasTerm = hasTermIn(CAST, GLOSSARY);
   const stripTags = s => s.replace(/<[^>]*>/g, "");
 
   STEPS.forEach((s, i) => {
     const at = `step ${i + 1}${s && s.title ? ` ("${stripTags(s.title)}")` : ""}`;
     if (!s || typeof s !== "object") return errors.push(`step ${i + 1} is not an object`);
     if (!s.title) errors.push(`${at}: title is missing`);
+    // The engine ignores a field it doesn't know, so a misspelt one would vanish from the page without a word
+    Object.keys(s).filter(k => !STEP_KEYS.includes(k))
+      .forEach(k => warnings.push(`${at}: unknown field "${k}" (known: ${STEP_KEYS.join(", ")})`));
     if (!s.body) warnings.push(`${at}: body is empty`);
     if (i < STEPS.length - 1 && !s.summary) warnings.push(`${at}: summary is missing (shown in the Recap list)`);
     const d = s.diagram;
     if (d && typeof d === "object") {
-      if (!DIAGRAM && !spec) errors.push(`${at}: has diagram but DIAGRAM is empty`);
+      if (!DIAGRAM && !spec && ["hl", "hide", "dim", "build"].some(k => d[k] && d[k].length)) errors.push(`${at}: diagram names parts but DIAGRAM is empty`);
       for (const k of ["hl", "hide", "dim", "build"]) {
         if (d[k] === undefined) continue;
         if (!Array.isArray(d[k])) { errors.push(`${at}: diagram.${k} must be an array`); continue; }
@@ -94,6 +101,8 @@ export function check(c) {
       if ((d.build || []).length > 4) warnings.push(`${at}: diagram.build has ${d.build.length} stages (keep it ≤ 4)`);
     }
     if (s.visual && s.build && !/data-b\s*=/.test(s.visual)) warnings.push(`${at}: build is set but visual has no data-b parts`);
+    const maxB = Math.max(0, ...[...String(s.visual || "").matchAll(/data-b\s*=\s*["']?(\d+)/g)].map(m => +m[1]));
+    if (maxB > (s.build || 0)) warnings.push(`${at}: visual stages parts up to data-b="${maxB}" but build is ${s.build || 0}; set build: ${maxB}`);
     checkWhatif(s, i, STEPS.length, at, { ids, hasDiagram: !!(DIAGRAM || spec) }, errors, warnings);
     const q = s.quiz;
     if (q) {
@@ -101,6 +110,7 @@ export function check(c) {
       else {
         if (!Number.isInteger(q.answer) || q.answer < 0 || q.answer >= q.options.length)
           errors.push(`${at}: quiz.answer ${q.answer} is not an index into its ${q.options.length} options`);
+        if (!q.why) warnings.push(`${at}: quiz.why is missing (shown once the quiz is answered: why the answer is right)`);
         if (q.options.length < 3) warnings.push(`${at}: quiz has ${q.options.length} options; use 3–4 (the retry would give a 2-option answer away)`);
         q.options.forEach((o, j) => { if (typeof o !== "string" && !(o && typeof o.t === "string")) errors.push(`${at}: quiz option ${j} must be a string or { t, why }`); });
       }
@@ -250,7 +260,7 @@ function checkType(c, errors, warnings) {
   if (!TYPES.includes(type)) { errors.push(`META.type "${type}" is not one of ${TYPES.join(", ")}`); return null; }
   for (const [t, name] of Object.entries(NEEDS))
     if (c[name] !== undefined && type !== t) warnings.push(`${name} is only drawn on a "${t}" page (META.type is "${type}")`);
-  if ((c.META.before || c.META.after) && type !== "before-after") warnings.push(`META.before/after are only shown on a "before-after" page`);
+  if (c.META && (c.META.before || c.META.after) && type !== "before-after") warnings.push(`META.before/after are only shown on a "before-after" page`);
   const need = NEEDS[type];
   if (need && c[need] === undefined) { errors.push(`a "${type}" page needs ${need} (see SKILL.md)`); return type; }
   if (type === "decision") {
@@ -471,6 +481,8 @@ export function writeIndex(dir) {
     return [{ ...p, file, mtime, date: mtime.toISOString().slice(0, 10) }];
   }).sort((a, b) => b.mtime - a.mtime || a.title.localeCompare(b.title));
   const dest = join(dir, "index.html");
+  // A folder's own index.html (a docs site, a page built as index.html) is not ours to replace
+  if (existsSync(dest) && metaOf(readFileSync(dest, "utf8"), "generator") !== INDEX_GENERATOR) return null;
   writeFileSync(dest, indexHtml(pages));
   return dest;
 }
@@ -484,7 +496,7 @@ function main(argv) {
   const noIndex = args.includes("--no-index") && (args.splice(args.indexOf("--no-index"), 1), true);
   if (args[0] === "--index") {
     const dir = args[1] ?? join(homedir(), "explanations");
-    try { console.log(`index ${resolve(writeIndex(dir))}`); return 0; }
+    try { const ix = writeIndex(dir); if (!ix) { console.error(`${join(dir, "index.html")} is not an explainer index; left alone`); return 1; } console.log(`index ${resolve(ix)}`); return 0; }
     catch (e) { console.error(`${dir}: ${e.message}`); return 1; }
   }
   const checkOnly = args.includes("--check") && (args.splice(args.indexOf("--check"), 1), true);
@@ -513,7 +525,7 @@ function main(argv) {
   writeFileSync(dest, res.html);
   console.log(`built ${resolve(dest)}`);
   if (!noIndex) {
-    try { console.log(`index ${resolve(writeIndex(dirname(resolve(dest))))}`); }
+    try { const ix = writeIndex(dirname(resolve(dest))); console.log(ix ? `index ${resolve(ix)}` : `index.html in that folder is not an explainer index; left alone`); }
     catch (e) { console.warn(`warning: index not updated (${e.message})`); }
   }
   return 0;

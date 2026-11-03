@@ -479,3 +479,18 @@ test("index page: lists pages, filters them, shows reading progress", { skip }, 
   await js("localStorage.clear()");
   rmSync(dir, { recursive: true, force: true });
 });
+
+test("Show all reveals a step left halfway through its stages; a page with no big picture still renders", { skip }, async () => {
+  const page = join(tmp, "stages.html");
+  const code = readFileSync(join(SKILL, "examples/token-401.content.js"), "utf8").replace(/bigPicture: "[^"]*",/, "");
+  writeFileSync(page, build(code).html);
+  await open(page); await js("localStorage.clear()"); await open(page);
+  assert.equal(await js(`document.querySelectorAll(".step").length`), 6);
+  const staged = await js(`[...document.querySelectorAll(".step")].findIndex(a => a.querySelector("[data-b]"))`);
+  assert.ok(staged > 0, "the sample has a step with build stages");
+  await js(`location.hash = "#step-${staged + 1}"`); await sleep(100);
+  assert.ok(await js(`document.querySelectorAll("#step-${staged + 1} .pend").length > 0`));
+  await js(`document.querySelector("#prev").click()`); await sleep(50);
+  await js(`document.querySelector('[data-act="all"]').click()`); await sleep(50);
+  assert.equal(await js(`document.querySelectorAll(".pend").length`), 0);
+});

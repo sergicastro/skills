@@ -293,6 +293,14 @@ const GLOSSARY = { token: "a signed string" };
 const DIAGRAM = { layout: "chain", label: "l", nodes: [{ id: "a", label: "A", term: "token" }, { id: "b", label: "B", term: "nope" }], edges: [{ from: "a", to: "b", label: "x" }] };
 const STEPS = [{ title: "Ctx", summary: "s", body: "<p>c</p>", diagram: {} }, ${mid}, { title: "Recap", body: "<p>r</p>", diagram: {} }];`;
 
+test("a step field the engine doesn't know is a warning, so a typo doesn't vanish", () => {
+  const { errors, warnings } = check(loadContent(minimal().replace('summary: "s"', 'summary: "s", quizz: {}')));
+  assert.deepEqual(errors, []);
+  const unknown = warnings.filter(w => /unknown field/.test(w));
+  assert.equal(unknown.length, 1);
+  assert.match(unknown[0], /step 1 \("One"\): unknown field "quizz"/);
+});
+
 test("depth: only \"full\" is allowed, and only where it can be skipped", () => {
   let { errors, warnings } = check(loadContent(steps3(`{ title: "Bg", summary: "s", body: "<p>b</p>", depth: "full" }`)));
   assert.deepEqual(errors, []);
@@ -353,4 +361,39 @@ test("index: lists the folder's pages newest first, and the CLI keeps it up to d
   // an empty folder gets a page that says so
   const empty = join(tmp, "empty"); mkdirSync(empty);
   assert.match(readFileSync(writeIndex(empty), "utf8"), /No pages yet/);
+});
+
+test("check: no META lists every problem instead of crashing", () => {
+  const { errors } = check(loadContent(`const STEPS = [{ title: "One", summary: "s", body: "<p>x</p>" }, { title: "Recap", body: "<p>y</p>" }];`));
+  assert.deepEqual(errors, ["META is missing (const META = { title, bigPicture })"]);
+});
+
+test("check: diagram: {} needs no DIAGRAM, naming a part does", () => {
+  const code = `const META = { type: "decision", title: "T", bigPicture: "B" };
+const DECISION = { options: [{ id: "a", name: "A" }, { id: "b", name: "B" }], criteria: [{ id: "c", name: "C" }, { id: "d", name: "D" }],
+  ratings: { a: { c: "good", d: "good" }, b: { c: "poor", d: "poor" } }, recommend: "a", why: "w" };
+const STEPS = [{ title: "One", summary: "s", body: "<p>x</p>", diagram: {}, matrix: {} }, { title: "Recap", body: "<p>y</p>", diagram: X }];`;
+  assert.deepEqual(check(loadContent(code.replace("X", "{}"))).errors, []);
+  assert.match(check(loadContent(code.replace("X", '{ hl: ["a"] }'))).errors.join("\n"), /diagram names parts but DIAGRAM is empty/);
+});
+
+test("check: a quiz without why, and data-b stages beyond build, are warnings", () => {
+  const code = minimal().replace('summary: "s"', `summary: "s", quiz: { q: "Q?", options: ["a", "b", "c"], answer: 0 }`)
+    .replace('{ title: "Recap"', `{ title: "Two", summary: "s", body: "<p>z</p>", visual: '<svg viewBox="0 0 600 100"><g data-b="1"></g><g data-b="2"></g></svg>', build: 1 }, { title: "Recap"`);
+  const w = check(loadContent(code)).warnings.join("\n");
+  assert.match(w, /step 1 \("One"\): quiz\.why is missing/);
+  assert.match(w, /step 2 \("Two"\): visual stages parts up to data-b="2" but build is 1; set build: 2/);
+});
+
+test("index: never replaces a page built as index.html, nor an index.html the build didn't write", () => {
+  const dir = join(tmp, "own-index"); mkdirSync(dir);
+  const src = join(dir, "t.content.js"); writeFileSync(src, sample);
+  let r = run(src, "-o", join(dir, "index.html"));
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(readFileSync(join(dir, "index.html"), "utf8"), /<title>Why an expired token gets a 401<\/title>/);
+  assert.match(r.stdout, /not an explainer index; left alone/);
+  writeFileSync(join(dir, "index.html"), "<!doctype html><title>My docs</title>");
+  r = run("--index", dir);
+  assert.equal(r.status, 1);
+  assert.equal(readFileSync(join(dir, "index.html"), "utf8"), "<!doctype html><title>My docs</title>");
 });

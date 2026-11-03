@@ -15,7 +15,7 @@
 // Exit code: 0 rendered (findings are printed, not fatal), 1 the page failed, 2 bad arguments or no browser.
 import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join, resolve, dirname } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
 import { build } from "./build.mjs";

@@ -396,7 +396,7 @@ export function overlaps(sc) {
 }
 
 // ---------- Entry point ----------
-// Returns { svg, errors, warnings, scene }. svg is null when the spec has errors.
+// Returns { svg, errors, warnings }. svg is null when the spec has errors.
 export function render(spec) {
   const { errors, warnings } = checkSpec(spec);
   if (errors.length) return { svg: null, errors, warnings };
@@ -416,5 +416,5 @@ export function render(spec) {
   if (H > W * .85) warnings.push(`DIAGRAM is taller (${Math.ceil(H)}) than ~85% of its width (${Math.ceil(W)}); the page caps its height, so its text shrinks (fewer edges, or another layout)`);
   const svg = `<svg viewBox="0 0 ${Math.ceil(W)} ${Math.ceil(H)}" role="img" aria-label="${esc(spec.label)}">\n` +
     `<g transform="translate(${r1(dx)},${r1(-minY)})">\n${sc.parts.filter(Boolean).join("\n")}\n</g>\n</svg>`;
-  return { svg, errors, warnings, scene: sc };
+  return { svg, errors, warnings };
 }
