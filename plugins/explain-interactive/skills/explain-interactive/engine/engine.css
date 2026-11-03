@@ -210,6 +210,20 @@ dfn { font-style: normal; border-bottom: 1.5px dotted var(--accent); cursor: hel
   background: var(--fg); color: var(--bg); pointer-events: none; opacity: 0; transition: opacity .12s; }
 #tip.on { opacity: 1; }
 
+/* Diagram parts with a CAST/GLOSSARY entry: click (or Tab + Enter) shows it in #tip */
+.visual svg [data-def] { cursor: pointer; outline: none; }
+.visual svg [data-def]:hover .box, .visual svg [data-def]:focus-visible .box { stroke: var(--accent); stroke-width: 2.5; }
+.visual svg [data-def]:focus-visible .arrow, .visual svg [data-def]:focus-visible .label-bg { stroke: var(--accent); stroke-width: 2.5; }
+.legend .def-hint { margin-left: auto; font-style: italic; }
+
+/* Depth: the short version hides background steps (depth: "full") and part of the Context card */
+body.short .full-only { display: none !important; }
+.short-only { display: none; }
+body.short .short-only { display: block; }
+.depth-note { margin: 0 0 12px; padding: 8px 12px; border-radius: 8px; background: var(--accent-soft); font-size: .88rem; }
+.linkish { border: 0; background: none; padding: 0; color: var(--accent); text-decoration: underline; font-size: inherit; }
+.eyebrow .bg-tag { color: var(--accent); font-weight: 600; }
+
 /* Footer: navigation right under the content, with a preview of what's next */
 .foot { grid-area: foot; display: flex; align-items: center; gap: 12px; padding: 0 clamp(16px, 4vw, 48px);
   border-top: 1px solid var(--line); background: var(--card); }

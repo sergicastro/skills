@@ -1,6 +1,6 @@
 /* explain-interactive diagram layout: turns a DIAGRAM spec into the SVG the engine shows. Runs in build.mjs (no DOM).
-     { layout: "sequence" | "chain" | "layers" | "states", label, nodes: [{ id, label, kind?, branch? }],
-       edges: [{ id?, from, to, label, kind? }] }
+     { layout: "sequence" | "chain" | "layers" | "states", label, nodes: [{ id, label, kind?, branch?, term? }],
+       edges: [{ id?, from, to, label, kind?, term? }] }
    Every node and edge becomes a <g data-id="…">, the same shape a hand-written DIAGRAM uses, so a step's
    hl / dim / hide / build work on it unchanged. There is no browser at build time, so text widths come from a table
    that errs wide: a box a little too roomy reads fine, a clipped label doesn't. After laying out, the result is checked
@@ -8,7 +8,7 @@
 
 export const LAYOUTS = ["sequence", "chain", "layers", "states"];
 const KINDS = { node: ["bad", "ok"], edge: ["bad", "ok", "flow"] };
-const KEYS = { spec: ["layout", "label", "nodes", "edges"], node: ["id", "label", "kind", "branch"], edge: ["id", "from", "to", "label", "kind"] };
+const KEYS = { spec: ["layout", "label", "nodes", "edges"], node: ["id", "label", "kind", "branch", "term"], edge: ["id", "from", "to", "label", "kind", "term"] };
 
 const NODE_FONT = 16, LABEL_FONT = 14, NODE_H = 44, PAD_X = 18, MIN_NODE_W = 96, LABEL_H = 18;
 const MARGIN = 12, MIN_WIDTH = 560, MAX_WIDTH = 900, MAX_NODES = 7;
@@ -86,11 +86,13 @@ export function checkSpec(spec) {
 
 // ---------- Geometry bookkeeping ----------
 // Each layout fills a Scene: drawn parts in order, plus the rectangles and polylines the overlap check reads.
+// term: the CAST/GLOSSARY entry a part stands for, when its label doesn't name it; the page shows it on click
+const termAttr = x => x.term ? ` data-term="${esc(x.term)}"` : "";
 class Scene {
   constructor() { this.parts = []; this.boxes = []; this.labels = []; this.paths = []; this.extra = []; }
   node(n, x, y, w, h, inner = "") {
     this.boxes.push({ id: n.id, x, y, w, h });
-    this.parts.push(`<g data-id="${n.id}"><rect class="box${kindClass(n.kind)}" x="${r1(x)}" y="${r1(y)}" width="${r1(w)}" height="${r1(h)}" rx="8"/>` +
+    this.parts.push(`<g data-id="${n.id}"${termAttr(n)}><rect class="box${kindClass(n.kind)}" x="${r1(x)}" y="${r1(y)}" width="${r1(w)}" height="${r1(h)}" rx="8"/>` +
       `<text x="${r1(x + w / 2)}" y="${r1(y + h / 2 + NODE_FONT * .35)}" text-anchor="middle">${esc(n.label)}</text>${inner}</g>`);
   }
   // A label is placed by its centre; a background keeps lines that pass behind it from cutting through the text.
@@ -109,7 +111,7 @@ class Scene {
       lab = `<rect class="label-bg" x="${r1(x)}" y="${r1(y)}" width="${r1(w)}" height="${LABEL_H}" rx="3"/>` +
         `<text class="label" x="${r1(lx)}" y="${r1(ly + LABEL_FONT * .35)}" text-anchor="middle">${esc(e.label)}</text>`;
     }
-    this.parts.push(`<g data-id="${e.id}"><path class="arrow${kindClass(e.kind)}" d="${path.d}"/>${lab}</g>`);
+    this.parts.push(`<g data-id="${e.id}"${termAttr(e)}><path class="arrow${kindClass(e.kind)}" d="${path.d}"/>${lab}</g>`);
   }
 }
 

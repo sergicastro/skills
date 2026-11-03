@@ -14,6 +14,8 @@ const CAST = {
 const GLOSSARY = {
   "filter": "One check the gateway runs on every request, in a fixed order.",
   "quota": "How many calls a client may make in a time window.",
+  "listener": "The gateway's open port: where a request enters before any filter runs.",
+  "JWT": "JSON Web Token: a signed token that says who the client is and when that stops being true.",
 };
 
 const DIAGRAM = {
@@ -21,7 +23,7 @@ const DIAGRAM = {
   label: "A request passes the listener, a JWT check and a rate limit before it reaches orders-svc",
   nodes: [
     { id: "in", label: "Listener" },
-    { id: "jwt", label: "JWT check" },
+    { id: "jwt", label: "JWT check", term: "JWT" },   // term: the GLOSSARY entry a click on this box shows
     { id: "rl", label: "Rate limit" },
     { id: "svc", label: "orders-svc" },
     { id: "r401", label: "401 reply", kind: "bad", branch: true },
@@ -48,6 +50,15 @@ const STEPS = [
       example: "A client calls <code>GET /orders</code> with a valid token, but it has used up its <dfn>quota</dfn>.",
     },
     body: "<p>The next steps follow the request filter by filter.</p>",
+    diagram: {},
+  },
+  {
+    // depth: "full" marks background a reader may already know; the short version skips this step
+    depth: "full",
+    title: "Why the order matters",
+    summary: "the first no ends the chain",
+    body: "<p>Before following the request, one rule: the gateway runs its <dfn data-term=\"filter\">filters</dfn> one after another, and <strong>a filter that refuses ends the chain</strong>. The filters after it never run, so only the first refusal shows in the reply.</p>",
+    analogy: "Like airport checks: turned away at passport control, you never reach the security line.",
     diagram: {},
   },
   {

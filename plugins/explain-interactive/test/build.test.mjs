@@ -1,12 +1,12 @@
 // node --test plugins/explain-interactive/test/
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync, mkdtempSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, readdirSync, mkdtempSync, mkdirSync, writeFileSync, existsSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync, spawnSync } from "node:child_process";
-import { build, check, extract, loadContent, TYPES } from "../skills/explain-interactive/build.mjs";
+import { build, check, extract, loadContent, readPage, writeIndex, TYPES } from "../skills/explain-interactive/build.mjs";
 
 const SKILL = join(dirname(fileURLToPath(import.meta.url)), "../skills/explain-interactive");
 const SAMPLE = join(SKILL, "examples/token-401.content.js");
@@ -285,4 +285,72 @@ const STEPS = [{ title: "One", summary: "s", body: "<p><mark>a</mark></p>", diag
   assert.match(w(`{ label: "x", options: [${["p", "q", "r", "s", "t"].map(x => opt(x)).join(",")}] }`), /whatif has 5 options \(2–4\)/);
   assert.match(w(`{ label: "x", options: [${opt("p")}, { id: "q", label: "q", outcome: "<p>One. Two. Three.</p>" }] }`), /whatif option "q" outcome has 3 sentences \(≤ 2\)/);
   assert.match(w(`{ label: "x", options: [${opt("p")}, ${opt("q", `, diagram: { hl: ["b"] }`)}] }`, `, visual: "<svg></svg>"`), /whatif options set diagram, but the step shows its own visual/);
+});
+
+// ---------- Depth, diagram terms, index ----------
+const steps3 = mid => `const META = { title: "T", bigPicture: "B" };
+const GLOSSARY = { token: "a signed string" };
+const DIAGRAM = { layout: "chain", label: "l", nodes: [{ id: "a", label: "A", term: "token" }, { id: "b", label: "B", term: "nope" }], edges: [{ from: "a", to: "b", label: "x" }] };
+const STEPS = [{ title: "Ctx", summary: "s", body: "<p>c</p>", diagram: {} }, ${mid}, { title: "Recap", body: "<p>r</p>", diagram: {} }];`;
+
+test("depth: only \"full\" is allowed, and only where it can be skipped", () => {
+  let { errors, warnings } = check(loadContent(steps3(`{ title: "Bg", summary: "s", body: "<p>b</p>", depth: "full" }`)));
+  assert.deepEqual(errors, []);
+  assert.ok(!warnings.some(w => /depth/.test(w)), warnings.join("\n"));
+  ({ errors } = check(loadContent(steps3(`{ title: "Bg", summary: "s", body: "<p>b</p>", depth: "short" }`))));
+  assert.ok(errors.some(e => /step 2 \("Bg"\): depth must be "full"/.test(e)), errors.join("\n"));
+  ({ warnings } = check(loadContent(steps3(`{ title: "Bg", summary: "s", body: "<p><mark>A</mark></p>", depth: "full", diagram: { hl: ["a"] } }`))));
+  assert.ok(warnings.some(w => /depth "full" step lights diagram parts/.test(w)), warnings.join("\n"));
+  ({ warnings } = check(loadContent(steps3(`{ title: "M", summary: "s", body: "<p>m</p>" }`).replace('body: "<p>c</p>"', 'body: "<p>c</p>", depth: "full"'))));
+  assert.ok(warnings.some(w => /step 1 .*ignored on the Context step/.test(w)), warnings.join("\n"));
+});
+
+test("diagram terms: the layout writes data-term, and a term with no entry is a warning", () => {
+  const { html, warnings } = build(steps3(`{ title: "M", summary: "s", body: "<p>m</p>" }`));
+  assert.match(html, /<g data-id="a" data-term="token">/);
+  assert.ok(warnings.some(w => w === `DIAGRAM part "b": term "nope" has no CAST or GLOSSARY entry`), warnings.join("\n"));
+  assert.ok(!warnings.some(w => /part "a"/.test(w)));
+  // a hand-written SVG is checked the same way, whatever the attribute order
+  const raw = minimal().replace('<g data-id="a"></g>', '<g data-term="ghost" data-id="a"></g><g data-id="b" data-term="T"></g>')
+    .replace('const STEPS', 'const CAST = { T: "t" };\nconst STEPS');
+  const r = check(loadContent(raw));
+  assert.ok(r.warnings.some(w => w === `DIAGRAM part "a": term "ghost" has no CAST or GLOSSARY entry`), r.warnings.join("\n"));
+  assert.ok(!r.warnings.some(w => /part "b"/.test(w)));
+});
+
+test("a built page carries the meta tags the index reads", () => {
+  const { html } = build(readFileSync(join(SKILL, "examples/session-store.content.js"), "utf8"));
+  assert.deepEqual(readPage(html), { title: "Where to keep login sessions", bigPicture: loadContent(readFileSync(join(SKILL, "examples/session-store.content.js"), "utf8")).META.bigPicture, type: "decision", steps: 6 });
+  assert.equal(readPage("<!doctype html><title>x</title>"), null, "not an explainer page");
+  // a page built before the meta tags existed is read through its content
+  const old = html.replace(/<meta name="(description|explain-type|explain-steps)"[^>]*>\n/g, "");
+  assert.equal(readPage(old).type, "decision");
+  assert.equal(readPage(old).steps, 6);
+});
+
+test("index: lists the folder's pages newest first, and the CLI keeps it up to date", () => {
+  const dir = join(tmp, "explanations"); mkdirSync(dir);
+  const put = (name, file) => { const src = join(dir, name + ".content.js"); writeFileSync(src, readFileSync(join(SKILL, "examples", file), "utf8")); return src; };
+  const a = put("token", "token-401.content.js"), b = put("cron", "cron-twice.content.js");
+  writeFileSync(join(dir, "notes.html"), "<!doctype html><title>Not a page</title>");
+  let r = run(a); assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^index .*index\.html$/m);
+  r = run(b, "--no-index"); assert.equal(r.status, 0, r.stderr);
+  assert.doesNotMatch(r.stdout, /^index /m);
+  assert.doesNotMatch(readFileSync(join(dir, "index.html"), "utf8"), /nightly report/, "--no-index left the index alone");
+  utimesSync(join(dir, "token.html"), new Date(2020, 0, 1), new Date(2020, 0, 1));
+  r = run("--index", dir); assert.equal(r.status, 0, r.stderr);
+  const idx = readFileSync(join(dir, "index.html"), "utf8");
+  const titles = [...idx.matchAll(/<a href="([^"]+)">([^<]+)<\/a>/g)].map(m => [m[1], m[2]]);
+  assert.deepEqual(titles, [["cron.html", "Why the nightly report was sent twice"], ["token.html", "Why an expired token gets a 401"]]);
+  assert.match(idx, /2 pages, newest first/);
+  assert.match(idx, /<span class="type">debugging<\/span><span>8 steps<\/span><span>\d{4}-\d\d-\d\d<\/span>/);
+  assert.doesNotMatch(idx, /Not a page/);
+  assert.doesNotMatch(idx, /<script[^>]+src=|<link[^>]+href=|https?:\/\//i, "self-contained");
+  // re-indexing doesn't list the index itself
+  writeIndex(dir);
+  assert.equal([...readFileSync(join(dir, "index.html"), "utf8").matchAll(/<li /g)].length, 2);
+  // an empty folder gets a page that says so
+  const empty = join(tmp, "empty"); mkdirSync(empty);
+  assert.match(readFileSync(writeIndex(empty), "utf8"), /No pages yet/);
 });

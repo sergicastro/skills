@@ -32,13 +32,15 @@ test("a spec's nodes and edges become data-id parts, each edge carrying its labe
     const { svg } = render(spec);
     assert.deepEqual(ids(svg).sort(), [...spec.nodes.map(n => n.id), ...spec.edges.map(e => e.id)].sort(), f);
     for (const e of spec.edges) {
-      const part = svg.match(new RegExp(`<g data-id="${e.id}">([\\s\\S]*?)</g>`))[1];
+      const part = svg.match(new RegExp(`<g data-id="${e.id}"(?: data-term="[^"]*")?>([\\s\\S]*?)</g>`))[1];
       assert.match(part, /<path class="arrow/, `${f}: ${e.id}`);
       assert.ok(part.includes(`>${e.label.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</text>`), `${f}: ${e.id} label`);
     }
     const [w] = viewBox(svg);
     assert.ok(w >= 560 && w <= 900, `${f}: width ${w}`);
     assert.match(svg, new RegExp(`aria-label="${spec.label}"`));
+    // a part with a term carries it, so the page can show its definition on click
+    for (const x of [...spec.nodes, ...spec.edges].filter(x => x.term)) assert.match(svg, new RegExp(`<g data-id="${x.id}" data-term="${x.term}">`), `${f}: ${x.id} term`);
   }
 });
 
