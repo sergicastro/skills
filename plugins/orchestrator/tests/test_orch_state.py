@@ -408,8 +408,34 @@ class UserTests(Base):
     def test_approve_unblocks_dependents(self):
         self.finish_g1()
         self.assertEqual(self.run_cli("approve", "demo", "g1"),
-                         (0, {"goal": "g1", "status": "done", "newly_ready": ["g2", "g3"], "all_done": False}))
+                         (0, {"goal": "g1", "status": "done", "newly_ready": ["g2", "g3"], "all_done": False,
+                              "idle_worker": "demo-w-a"}))
         self.assertIn("user APPROVE g1", (Path(self.tmp.name) / "demo" / "events.log").read_text())
+
+    def test_approve_no_idle_worker_when_busy_gone_or_other_goal_in_review(self):
+        self.finish_g1()
+        self.run_cli("approve", "demo", "g1")
+        self.run_cli("request", "demo", "demo-w-a")  # g2
+        self.run_cli("done", "demo", "demo-w-a", "g2", "--notes", "n")
+        self.run_cli("request", "demo", "demo-w-a")  # g3
+        self.run_cli("done", "demo", "demo-w-a", "g3", "--notes", "n")
+        # g3 is still in review with demo-w-a: it may need its context for review fixes
+        self.assertIsNone(self.run_cli("approve", "demo", "g2")[1]["idle_worker"])
+        self.assertEqual(self.run_cli("approve", "demo", "g3")[1]["idle_worker"], "demo-w-a")
+
+    def test_approve_no_idle_worker_when_worker_holds_a_goal(self):
+        self.run_cli("request", "demo", "demo-w-a")  # g1
+        self.run_cli("done", "demo", "demo-w-a", "g1", "--notes", "n")
+        self.run_cli("policy", "demo", "in-review")
+        self.run_cli("request", "demo", "demo-w-a")  # g2, unblocked by g1 in review
+        self.assertEqual(self.state()["workers"]["demo-w-a"]["current"], "g2")
+        self.assertIsNone(self.run_cli("approve", "demo", "g1")[1]["idle_worker"])
+
+    def test_approve_no_idle_worker_when_worker_unregistered(self):
+        self.finish_g1()
+        st = self.state()
+        del st["workers"]["demo-w-a"]
+        self.assertIsNone(orch_state.approve(st, "g1")[0]["idle_worker"])
 
     def test_approve_only_from_in_review(self):
         code, out = self.run_cli("approve", "demo", "g1")
@@ -842,7 +868,7 @@ class CleanupTests(Base):
 
     def test_approve_reports_all_done(self):
         self.assertEqual(self.run_cli("approve", "demo", "g1"),
-                         (0, {"goal": "g1", "status": "done", "newly_ready": [], "all_done": True}))
+                         (0, {"goal": "g1", "status": "done", "newly_ready": [], "all_done": True, "idle_worker": "demo-w-a"}))
 
     def test_refuses_while_goals_are_open(self):
         code, out = self.run_cli("cleanup", "demo", "--delete")

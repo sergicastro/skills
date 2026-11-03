@@ -133,7 +133,7 @@ REGISTER): the helper rejects it; relay its error.
 
 | User says | Run |
 |---|---|
-| approve <goal> | `$ORCH approve <slug> <goal>`; report newly ready goals; GitHub: set done status, update epic progress comment. If `all_done` is true, tell the user every goal is done and to say "cleanup" when they want to tidy up; don't clean up on your own. |
+| approve <goal> | `$ORCH approve <slug> <goal>`; report newly ready goals; GitHub: set done status, update epic progress comment. If `all_done` is true, tell the user every goal is done and to say "cleanup" when they want to tidy up; don't clean up on your own. Otherwise, if `idle_worker` is set, suggest a context reset for it (see "Idle workers"). |
 | send <goal> back (reason) | `$ORCH sendback <slug> <goal> --reason "<reason>"`; tell the user to explain in that worker's session |
 | release / reassign <goal> | `$ORCH release <slug> <goal>` (worker gone, or the user wants someone else on it) |
 | start <goal> now | `$ORCH start <slug> <goal>` |
@@ -149,6 +149,23 @@ REGISTER): the helper rejects it; relay its error.
 
 After any change that makes goals ready, tell the user which workers are idle and can
 request. Don't message them.
+
+## Idle workers
+
+When `approve` returns an `idle_worker` (and `all_done` is false), that worker has finished its
+work and nothing of it is still in review. Its conversation is now dead weight: the next ASSIGN
+carries the goal and the upstream handoff notes, and its history stays in state. Suggest, in a
+few lines, that before saying "next" there the user resets its context:
+
+1. In `<idle_worker>`'s session, run `/clear`.
+2. Run `/orchestrator-worker <manager name>` again. `/clear` keeps the session name, so it
+   registers again under the same name and keeps its history.
+3. Say "next" when they want its next goal.
+
+`/compact` instead keeps a summary, if they'd rather keep some of it. It's a suggestion only:
+don't message the worker, and don't repeat it if the user declines. `idle_worker` is null while
+the worker holds a goal or has another goal in review (a send-back or review-fix PR needs that
+context): say nothing then.
 
 ## Notices
 
@@ -212,4 +229,6 @@ Only when the user asks for it (you suggest it once every goal is done).
 | "That REQUEST must have come before init" | Don't invent a cause; check `events.log` and answer it now. |
 | "I'll update the state files directly and send the goal to the idle worker" | `$ORCH` only, and no ASSIGN without a REQUEST. Tell the user who can request. |
 | "A worker is about to build on the old design, I'll just warn it" | Propose the notice and wait for the user's go-ahead; then `$ORCH notify`. |
+| "The worker is idle, I'll tell it to clear its context" | Suggest it to the user; never message a worker first. |
+| "I'll suggest a reset right after DONE" | Only after approve, when `idle_worker` is set: until then a send-back or review fix needs that context. |
 | "All goals are done, I'll clean up now" | Suggest it; clean up only what the user selects. |
