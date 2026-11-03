@@ -46,10 +46,19 @@ ITEM_ID=$(gh project item-list <number> --owner <owner> --format json --limit 50
 gh project item-edit --id "$ITEM_ID" --project-id "$PROJECT_ID" --field-id "$FIELD_ID" --single-select-option-id "$OPTION_ID"
 ```
 
-## Link a PR to its issue (worker)
+## Open a PR (worker)
 
-Put `Closes #<n>` (or `Closes <owner/repo>#<n>`) in the PR body, or comment on the
-issue: `gh issue comment <n> --repo <owner/repo> --body "PR: <url>"`.
+Link it to its issue: put `Closes #<n>` (or `Closes <owner/repo>#<n>`) in the PR body, or
+comment on the issue: `gh issue comment <n> --repo <owner/repo> --body "PR: <url>"`.
+
+End the PR body with this footer line, so anyone looking at the PR can see which worker
+opened it:
+```
+<sub>🎼 orchestrator · worker `<your name>` · `<slug>`/<goal id></sub>
+```
+`<your name>` is the name you registered with; `<slug>` and `<goal id>` come from the ASSIGN.
+Put it last, after `Closes #<n>` and any template sections. Add it only to PRs you open,
+and don't go back to edit older PRs after a rename.
 
 ## Check alignment (manager, on DONE / approval / status)
 
