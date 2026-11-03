@@ -262,3 +262,27 @@ test("CLI --check lists problems and writes nothing", () => {
   assert.match(ok.stdout, /chk\.content\.js: ok/);
   assert.ok(!existsSync(join(tmp, "chk.html")));
 });
+
+test("check reports broken what-if controls", () => {
+  const steps = (whatif, more = "") => check(loadContent(`const META = { title: "T", bigPicture: "B" };
+const DIAGRAM = \`<svg viewBox="0 0 10 10"><g data-id="a"></g><g data-id="b"></g></svg>\`;
+const STEPS = [{ title: "One", summary: "s", body: "<p><mark>a</mark></p>", diagram: { hl: ["a"] }, whatif: ${whatif} ${more} },
+  { title: "Recap", body: "<p>y</p>" }];`));
+  const opt = (id, extra = "") => `{ id: "${id}", label: "${id}", outcome: "<p>it is ${id}.</p>" ${extra} }`;
+  const ok = steps(`{ label: "x", options: [${opt("p", `, diagram: { hl: ["a"] }`)}, ${opt("q", `, diagram: { hl: ["b"], dim: ["a"] }`)}] }`);
+  assert.deepEqual(ok.errors, []); assert.deepEqual(ok.warnings, []);
+  const e = (...a) => steps(...a).errors.join("\n");
+  assert.match(e(`{ options: [] }`), /whatif\.label is missing/);
+  assert.match(e(`{ options: [] }`), /whatif has 0 option\(s\); a what-if switches between at least 2/);
+  assert.match(e(`[]`), /whatif needs label and options\[\]/);
+  assert.match(e(`{ label: "x", control: "dial", options: [${opt("p")}, ${opt("q")}] }`), /whatif\.control "dial" is not one of choice, slider/);
+  assert.match(e(`{ label: "x", options: [${opt("p")}, ${opt("p")}] }`), /whatif repeats the option id "p"/);
+  assert.match(e(`{ label: "x", options: [${opt("p")}, { id: "q", label: "q" }] }`), /whatif option "q" needs an outcome/);
+  assert.match(e(`{ label: "x", options: [${opt("p")}, ${opt("q", `, diagram: { hl: ["zz"] }`)}] }`), /whatif option "q" diagram\.hl names "zz", which is not a data-id in DIAGRAM/);
+  assert.match(e(`{ label: "x", options: [${opt("p")}, ${opt("q", `, diagram: { build: ["a"] }`)}] }`), /whatif option "q" diagram can't have build stages/);
+  assert.match(e(`{ label: "x", options: [${opt("p")}, ${opt("q")}] }`, `, diagram: { hl: ["a"], build: ["a"] }`), /can't have both build stages and a what-if control/);
+  const w = (...a) => steps(...a).warnings.join("\n");
+  assert.match(w(`{ label: "x", options: [${["p", "q", "r", "s", "t"].map(x => opt(x)).join(",")}] }`), /whatif has 5 options \(2–4\)/);
+  assert.match(w(`{ label: "x", options: [${opt("p")}, { id: "q", label: "q", outcome: "<p>One. Two. Three.</p>" }] }`), /whatif option "q" outcome has 3 sentences \(≤ 2\)/);
+  assert.match(w(`{ label: "x", options: [${opt("p")}, ${opt("q", `, diagram: { hl: ["b"] }`)}] }`, `, visual: "<svg></svg>"`), /whatif options set diagram, but the step shows its own visual/);
+});

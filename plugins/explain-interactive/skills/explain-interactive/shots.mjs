@@ -9,7 +9,7 @@
 //   --dark     dark theme instead of light
 //
 // A content file is built first (into the output directory). Each step is shown as the reader sees it on arrival,
-// with every build stage revealed. Besides the images it lists what it can measure on each step:
+// with every build stage revealed. A step with a what-if control is also shot once per other option: step-NN-<option>.png. Besides the images it lists what it can measure on each step:
 // a middle step much taller than the screen, a diagram too wide for its box, diagram text rendered too small,
 // console errors or warnings (e.g. a <dfn> with no glossary entry), and any request the page makes.
 // Exit code: 0 rendered (findings are printed, not fatal), 1 the page failed, 2 bad arguments or no browser.
@@ -40,9 +40,22 @@ const MEASURE = `(() => {
   return { over, clipped, minText: minText === Infinity ? null : Math.round(minText * 10) / 10, title: art.querySelector("h2").textContent };
 })()`;
 
+// The active step's what-if options, as file-name-safe ids, and how to pick one the way a reader would
+const WHATIF_IDS = `[...document.querySelectorAll(".step.active .whatif .wi-out")].map(o => o.dataset.wi.replace(/[^\\w-]+/g, "_"))`;
+const pickOption = k => `(f => { const r = f.querySelector("input[type=range]");
+  if (r) { r.value = ${k}; r.dispatchEvent(new Event("input", { bubbles: true })); } else f.querySelectorAll("input[type=radio]")[${k}].click(); })(document.querySelector(".step.active .whatif"))`;
+
 export async function shoot(page, { out, phone = false, dark = false } = {}) {
   const b = await launch({ width: SIZES.desktop.width, height: SIZES.desktop.height });
   const shots = [], findings = [];
+  const check = (m, i, n, size, dim, what) => {
+    const at = `step ${i + 1} ("${m.title}")${what}${size === "phone" ? " on a phone" : ""}`;
+    // The Context step and the Recap are long by design, and phones always stack and scroll: only middle steps on desktop count
+    if (size === "desktop" && i > 0 && i < n - 1 && m.over > OVER * dim.height)
+      findings.push(`${at}: ${m.over}px taller than the screen; the reader has to scroll (shorten body, move detail to deeper, or split the step)`);
+    if (m.clipped && size === "desktop") findings.push(`${at}: the visual is wider than its box and scrolls sideways (narrow the viewBox, or set wide: true)`);
+    if (m.minText !== null && m.minText < MIN_TEXT_PX && size === "desktop") findings.push(`${at}: diagram text renders at ${m.minText}px (< ${MIN_TEXT_PX}px): shrink the viewBox or the parts, or set wide: true`);
+  };
   try {
     await b.send("Emulation.setEmulatedMedia", { features: [
       { name: "prefers-reduced-motion", value: "reduce" },          // no slide-in or pop: capture the settled frame
@@ -60,19 +73,20 @@ export async function shoot(page, { out, phone = false, dark = false } = {}) {
         await b.js(`document.querySelectorAll("#outline button")[${i}].click(); document.activeElement && document.activeElement.blur && document.activeElement.blur()`);
         const stages = await b.js(`Math.max(0, ...[...document.querySelectorAll(".step.active [data-b]")].map(e => +e.dataset.b))`);
         for (let k = 0; k < stages; k++) await b.js(`document.querySelector("#next").click()`);
-        await b.js(`document.querySelector("#stage").scrollTop = 0`);
-        await sleep(60);
-        const m = await b.js(MEASURE);
-        const file = join(out, `step-${String(i + 1).padStart(2, "0")}${size === "phone" ? "-phone" : ""}.png`);
-        const { data } = await b.send("Page.captureScreenshot", { format: "png" });
-        writeFileSync(file, Buffer.from(data, "base64"));
-        shots.push(file);
-        const at = `step ${i + 1} ("${m.title}")${size === "phone" ? " on a phone" : ""}`;
-        // The Context step and the Recap are long by design, and phones always stack and scroll: only middle steps on desktop count
-        if (size === "desktop" && i > 0 && i < n - 1 && m.over > OVER * dim.height)
-          findings.push(`${at}: ${m.over}px taller than the screen; the reader has to scroll (shorten body, move detail to deeper, or split the step)`);
-        if (m.clipped && size === "desktop") findings.push(`${at}: the visual is wider than its box and scrolls sideways (narrow the viewBox, or set wide: true)`);
-        if (m.minText !== null && m.minText < MIN_TEXT_PX && size === "desktop") findings.push(`${at}: diagram text renders at ${m.minText}px (< ${MIN_TEXT_PX}px): shrink the viewBox or the parts, or set wide: true`);
+        const options = await b.js(WHATIF_IDS);
+        for (let k = 0; k < Math.max(1, options.length); k++) {
+          if (k) await b.js(pickOption(k));
+          await b.js(`document.querySelector("#stage").scrollTop = 0`);
+          await sleep(60);
+          const m = await b.js(MEASURE);
+          const opt = k ? `-${options[k]}` : "";
+          const file = join(out, `step-${String(i + 1).padStart(2, "0")}${opt}${size === "phone" ? "-phone" : ""}.png`);
+          const { data } = await b.send("Page.captureScreenshot", { format: "png" });
+          writeFileSync(file, Buffer.from(data, "base64"));
+          shots.push(file);
+          check(m, i, n, size, dim, k ? ` with what-if "${options[k]}"` : "");
+        }
+        if (options.length) await b.js(pickOption(0));   // leave the step as a reader finds it
       }
     }
     await b.send("Emulation.clearDeviceMetricsOverride");
@@ -96,7 +110,7 @@ async function main(argv) {
   const src = args[0], topic = basename(src).replace(/(\.content)?\.(m?js|html?)$/i, "");
   out = resolve(out ?? join(tmpdir(), "explain-shots", topic));
   mkdirSync(out, { recursive: true });
-  readdirSync(out).filter(f => /^step-\d+(-phone)?\.png$/.test(f)).forEach(f => rmSync(join(out, f)));
+  readdirSync(out).filter(f => /^step-\d+(-[\w-]+)?\.png$/.test(f)).forEach(f => rmSync(join(out, f)));
   let page = resolve(src);
   if (/\.m?js$/i.test(src)) {
     let res;

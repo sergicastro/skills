@@ -64,3 +64,15 @@ test("shots: a content file with errors is not rendered", { skip }, () => {
     assert.equal(readdirSync(out).filter(f => f.endsWith(".png")).length, 0);
   } finally { rmSync(out, { recursive: true, force: true }); }
 });
+
+test("shots: a what-if step is shot once per option", { skip }, () => {
+  const out = mkdtempSync(join(tmpdir(), "explain-shots-"));
+  try {
+    const r = run(join(SKILL, "examples/cache-read.content.js"), "-o", out);
+    assert.equal(r.status, 0, r.stderr);
+    const files = readdirSync(out).filter(f => f.endsWith(".png")).sort();
+    assert.deepEqual(files.filter(f => /^step-0[46]/.test(f)), ["step-04-miss.png", "step-04.png", "step-06-59s.png", "step-06-61s.png", "step-06.png"]);
+    assert.equal(files.length, 11);
+    assert.doesNotMatch(r.stderr, /finding:/);
+  } finally { rmSync(out, { recursive: true, force: true }); }
+});
