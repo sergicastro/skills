@@ -56,8 +56,10 @@ function shuffled(n, seed) {
 // Code lines carrying a "←" marker get the diagram's highlight colour
 const codeHtml = c => esc(c).split("\n").map(l => `<span class="ln${l.includes("←") ? " hl-line" : ""}">${l || " "}</span>`).join("");
 
+// A diagram wider than this would shrink its text below ~12px in the side column, so its steps go full width
+const WIDE_DIAGRAM = +((DIAGRAM.match(/viewBox="[\d.-]+ [\d.-]+ ([\d.]+)/) || [])[1] || 0) > 680;
 $("#stage").innerHTML = STEPS.map((s, i) => {
-  const recap = i === LAST && N > 1, wide = s.wide || recap;
+  const recap = i === LAST && N > 1, wide = s.wide || recap || (!s.visual && !!s.diagram && WIDE_DIAGRAM);
   const vis = s.visual || (s.diagram && DIAGRAM ? diagramFor(i) : "");
   const look = (vis ? `<div class="visual">${vis}</div>` : "") + (s.code ? `<pre><code>${codeHtml(s.code)}</code></pre>` : "");
   const split = look && !wide;
@@ -329,6 +331,7 @@ cur = -1; go(m ? +m[1] - 1 : Math.min(saved.cur || 0, LAST), { push: false });
   typeof META === "object" ? META : null,
   typeof CAST === "object" && CAST ? CAST : {},
   typeof GLOSSARY === "object" && GLOSSARY ? GLOSSARY : {},
-  typeof DIAGRAM === "string" ? DIAGRAM : "",
+  // A spec DIAGRAM ({ layout, nodes, edges }) was laid out by build.mjs into the #explain-diagram template
+  typeof DIAGRAM === "string" ? DIAGRAM : (document.getElementById("explain-diagram") || {}).innerHTML || "",
   typeof STEPS !== "undefined" ? STEPS : null,
 );
