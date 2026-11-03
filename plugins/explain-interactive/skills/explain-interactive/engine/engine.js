@@ -153,6 +153,12 @@ function shuffled(n, seed) {
 // Code lines carrying a "←" marker get the diagram's highlight colour
 const codeHtml = c => esc(c).split("\n").map(l => `<span class="ln${l.includes("←") ? " hl-line" : ""}">${l || " "}</span>`).join("");
 
+// "Still confused here": the reader says what's unclear and copies a prompt to paste back into Claude. Nothing is sent anywhere.
+const stuckHtml = i => `<details class="stuck" data-step="${i}"><summary>Still confused here</summary>
+  <label for="stuck-${i}">What's unclear? <span>(optional)</span></label>
+  <textarea id="stuck-${i}" rows="2" placeholder="e.g. which part decides this, and why there?"></textarea>
+  <div class="stuck-acts"><button class="primary" data-copy>Copy a prompt for Claude</button><span class="stuck-msg"></span></div>
+  <textarea class="stuck-out" readonly hidden aria-label="Prompt to copy"></textarea></details>`;
 // Before/after pages open with the two states side by side, under the big picture
 const baHtml = TYPE === "before-after" && (META.before || META.after)
   ? `<div class="ba"><div><b>Before</b>${META.before || ""}</div><div><b>After</b>${META.after || ""}</div></div>` : "";
@@ -184,6 +190,7 @@ $("#stage").innerHTML = STEPS.map((s, i) => {
             return `<button data-i="${j}">${typeof o === "string" ? o : o.t}</button>`; }).join("")}</div>
           <div class="retry">Not quite, one more try.</div>
           <div class="why"><span class="verdict"></span> ${s.quiz.why}</div></div>` : ""}
+        ${stuckHtml(i)}
         ${recap ? `<section class="finish" aria-label="Finished">
           <h3>You made it to the end</h3><p id="score"></p>
           <div class="acts"><button class="primary" data-finish="restart">↺ Start over</button>
@@ -319,6 +326,50 @@ function paintMarks() {
       (missed.length ? ` Worth another look: ${missed.map(i => `<a href="#step-${i + 1}" data-go="${i}">${STEPS[i].title}</a>`).join(", ")}.` : "") +
       (left ? ` ${left} still unanswered.` : "");
 }
+
+// The prompt carries what the page said at this step, so Claude can answer without the page open.
+// It names no file path: a page's location can hold a user name.
+const plain = h => new DOMParser().parseFromString(String(h || ""), "text/html").body.textContent.replace(/\s+/g, " ").trim();
+function stuckPrompt(i, unclear) {
+  const s = STEPS[i], r = results[i];
+  const used = [...new Set($$(`#step-${i + 1} .read dfn`).map(d => (d.dataset.term || d.textContent).trim()))]
+    .map(t => [t, findTerm({ dataset: {}, textContent: t })]).filter(([, d]) => d);
+  const lines = [
+    `I'm reading an explainer page, "${plain(META.title)}", and I'm stuck on step ${i + 1} of ${N}: "${plain(s.title)}".`, "",
+    `The page's big picture: ${plain(META.bigPicture)}`, "",
+    "What this step says:",
+    ...(s.summary ? [`- In short: ${plain(s.summary)}`] : []),
+    `- ${plain(s.body) || "(no text)"}`,
+    ...(s.analogy ? [`- Analogy: ${plain(s.analogy)}`] : []),
+    ...(used.length ? ["", "Terms it uses, as the page defines them:", ...used.map(([t, d]) => `- ${t}: ${plain(d)}`)] : []),
+  ];
+  if (r && r.res === "miss" && s.quiz) {
+    const o = s.quiz.options[s.quiz.answer];
+    lines.push("", `I got this step's check wrong. Question: "${plain(s.quiz.q)}" The answer is "${plain(typeof o === "string" ? o : o.t)}".`);
+  }
+  lines.push("", `What's unclear to me: ${unclear.trim() || "I can't say exactly; the step as a whole doesn't click."}`, "",
+    "Explain this step another way. Start from what I said is unclear, use a concrete example, and don't repeat the page's wording. " +
+    "If the page skips something I'd need, or gets something wrong, say so.");
+  return lines.join("\n");
+}
+async function copyText(t) {
+  try { await navigator.clipboard.writeText(t); return true; } catch (e) {}
+  // Some browsers give a file:// page no clipboard API; the old copy command still works from a click
+  const ta = Object.assign(document.createElement("textarea"), { value: t, readOnly: true });
+  ta.style.cssText = "position:fixed;top:0;opacity:0"; document.body.appendChild(ta); ta.select();
+  let ok = false; try { ok = document.execCommand("copy"); } catch (e) {}
+  ta.remove(); return ok;
+}
+$$(".stuck").forEach(box => box.querySelector("[data-copy]").addEventListener("click", async e => {
+  const btn = e.currentTarget, msg = box.querySelector(".stuck-msg"), out = box.querySelector(".stuck-out");
+  const text = stuckPrompt(+box.dataset.step, box.querySelector("textarea").value);
+  const ok = await copyText(text);
+  btn.focus({ preventScroll: true });
+  out.value = text; out.hidden = ok;   // copy failed: show the prompt, selected, to copy by hand
+  msg.textContent = ok ? "Copied. Paste it into your chat with Claude." : "Couldn't copy. Select the text below and copy it.";
+  if (!ok) out.select();
+  $("#live").textContent = msg.textContent;
+}));
 
 // Stepper
 $("#outline").innerHTML = STEPS.map((s, i) => `<li><button data-i="${i}"><span class="n">${i + 1}</span><span class="t">${s.title}${s.phase && PHASE[s.phase] ? `<span class="ph ph-${s.phase}">${PHASE[s.phase]}</span>` : ""}</span><span class="mk"></span></button></li>`).join("");

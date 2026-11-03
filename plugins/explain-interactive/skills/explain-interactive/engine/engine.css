@@ -168,6 +168,22 @@ details[open] summary { margin-bottom: 6px; }
 .finish .acts button.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 600; }
 .finish a { color: var(--accent); }
 
+/* "Still confused here": quieter than "Go deeper", since most readers won't need it */
+details.stuck { margin: 20px 0 0; border-top: 0; padding-top: 0; }
+.stuck summary { color: var(--muted); font-weight: 500; font-size: .88rem; }
+.stuck summary:hover { color: var(--accent); }
+.stuck[open] { padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); }
+.stuck label { display: block; font-size: .85rem; font-weight: 600; margin: 4px 0 6px; }
+.stuck label span { font-weight: 400; color: var(--muted); }
+.stuck textarea { display: block; width: 100%; box-sizing: border-box; font: inherit; font-size: .92rem; color: inherit;
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); resize: vertical; }
+.stuck textarea[hidden] { display: none; }
+.stuck .stuck-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 8px; }
+.stuck button.primary { padding: 7px 14px; border-radius: 10px; border: 1px solid var(--accent); background: var(--accent);
+  color: var(--on-accent); font-weight: 600; font-size: .9rem; }
+.stuck .stuck-msg { font-size: .85rem; color: var(--muted); }
+.stuck .stuck-out { margin-top: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .8rem; height: 12em; }
+
 dfn { font-style: normal; border-bottom: 1.5px dotted var(--accent); cursor: help; position: relative; }
 #tip { position: fixed; z-index: 60; max-width: 300px; padding: 8px 10px; border-radius: 8px; font-size: .85rem; line-height: 1.4;
   background: var(--fg); color: var(--bg); pointer-events: none; opacity: 0; transition: opacity .12s; }
@@ -316,7 +332,7 @@ body.gloss #gloss { transform: none; visibility: visible; transition: transform 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
 @media print {
   body { overflow: visible; } .app { display: block; height: auto; }
-  .top button, .side, .foot, #gloss, .scrim, .finish { display: none; }
+  .top button, .side, .foot, #gloss, .scrim, .finish, .stuck { display: none; }
   .stage { overflow: visible; } .step { display: block; break-inside: avoid; margin-bottom: 24px; animation: none; }
   .visual svg { max-height: none; } .step.split .look { position: static; }
   .visual .pend { opacity: 1 !important; visibility: visible !important; }   /* print shows every build stage */
