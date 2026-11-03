@@ -34,8 +34,8 @@ const DIAGRAM = {
     { id: "svc", label: "orders-svc" },
   ],
   edges: [
-    { id: "req", from: "client", to: "gw", label: "GET /orders  Bearer eyJ…" },
-    { id: "deny", from: "gw", to: "client", label: "401 expired token", kind: "bad" },
+    { id: "req", from: "client", to: "gw", label: "GET /orders  Bearer eyJ…", term: "token" },
+    { id: "deny", from: "gw", to: "client", label: "401 expired token", kind: "bad", term: "401" },
     { id: "fwd", from: "gw", to: "svc", label: "GET /orders", kind: "ok" },
   ],
 };

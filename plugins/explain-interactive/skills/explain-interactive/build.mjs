@@ -7,14 +7,18 @@
 //   node build.mjs --extract <page>.html [-o <topic>.content.js]
 //                                                           recover the content file from a built page,
 //                                                           or from a page made with the old template.html
+//   node build.mjs --index [<dir>]                          rewrite <dir>/index.html (default ~/explanations), a list of its pages
+//
+// A build also rewrites index.html in the folder it wrote the page to; --no-index skips that.
 //
 // The content file is a plain script that declares META, STEPS and optionally CAST, GLOSSARY, DIAGRAM,
 // and DECISION, HYPOTHESES or LAYERS for the page types that need them (see examples/ and SKILL.md). A DIAGRAM spec object is laid out here (engine/layout.mjs) into an SVG;
 // an <svg> string is used as written. The build checks it first; problems are listed and nothing is written.
-import { readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { homedir } from "node:os";
 import { render as renderDiagram } from "./engine/layout.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -66,11 +70,11 @@ export function check(c) {
     ids = new Set([...(Array.isArray(spec.nodes) ? spec.nodes : []), ...(Array.isArray(spec.edges) ? spec.edges : [])]
       .filter(x => x && typeof x === "object").map(x => x.id ?? `${x.from}-${x.to}`));
   } else ids = new Set([...DIAGRAM.matchAll(/data-id\s*=\s*["']([^"']+)["']/g)].map(m => m[1]));
+  checkTerms(spec, DIAGRAM, hasTermIn(CAST, GLOSSARY), warnings);
   const type = checkType(c, errors, warnings);
   if (/<[^>]+\sid\s*=/.test(DIAGRAM.replace(/data-id\s*=/g, ""))) warnings.push("DIAGRAM uses id=…; use data-id (the SVG is cloned once per step, so ids would repeat)");
   if (/<animate/i.test(DIAGRAM)) warnings.push("DIAGRAM uses SMIL <animate>; use the .flow class (reduced-motion can't stop SMIL)");
-  const known = new Set([...Object.keys(CAST), ...Object.keys(GLOSSARY)].map(k => k.toLowerCase()));
-  const hasTerm = k => known.has(k) || known.has(k.replace(/(es|s)$/, "")) || known.has(k.replace(/s$/, ""));
+  const hasTerm = hasTermIn(CAST, GLOSSARY);
   const stripTags = s => s.replace(/<[^>]*>/g, "");
 
   STEPS.forEach((s, i) => {
@@ -102,6 +106,11 @@ export function check(c) {
       }
     }
     if (s.code && typeof s.code !== "string") errors.push(`${at}: code must be a string`);
+    if (s.depth !== undefined) {
+      if (s.depth !== "full") errors.push(`${at}: depth must be "full" (a background step the short version skips) or left out`);
+      else if (i === 0 || i === STEPS.length - 1) warnings.push(`${at}: depth "full" is ignored on ${i === 0 ? "the Context step" : "the Recap"}; both are always shown`);
+      else if (d && (d.hl || []).length) warnings.push(`${at}: a depth "full" step lights diagram parts; in the short version later steps show them as already introduced`);
+    }
     checkStepType(type, c, s, at, errors, warnings);
     checkSize(s, i, STEPS.length, at, warnings);
     // Every <dfn> needs a CAST or GLOSSARY entry, or its tooltip stays empty
@@ -158,6 +167,22 @@ function checkWhatif(s, i, n, at, { ids, hasDiagram }, errors, warnings) {
     if (hl.length && o.outcome && !/<mark\b/.test(o.outcome) && !/<mark\b/.test(s.body || ""))
       warnings.push(`${at}: ${name} lights ${hl.join(", ")} but neither its outcome nor the body has a <mark>`);
   });
+}
+// Same lookup as the page's tooltips: the name, then its singular, case-insensitive
+function hasTermIn(CAST, GLOSSARY) {
+  const known = new Set([...Object.keys(CAST), ...Object.keys(GLOSSARY)].map(k => k.toLowerCase()));
+  return k => known.has(k) || known.has(k.replace(/(es|s)$/, "")) || known.has(k.replace(/s$/, ""));
+}
+// A diagram part with a term opens that CAST/GLOSSARY entry on click; one that names nothing would stay inert
+function checkTerms(spec, svg, hasTerm, warnings) {
+  const named = spec ? [...(Array.isArray(spec.nodes) ? spec.nodes : []), ...(Array.isArray(spec.edges) ? spec.edges : [])]
+      .filter(x => x && typeof x === "object" && x.term).map(x => [x.id ?? `${x.from}-${x.to}`, String(x.term)])
+    : [...svg.matchAll(/<[^>]*\sdata-term\s*=[^>]*>/g)].map(([tag]) => {
+        const attr = n => (tag.match(new RegExp(`\\s${n}\\s*=\\s*["']([^"']*)["']`)) || [])[1];
+        return [attr("data-id") || "?", attr("data-term") || ""];
+      });
+  for (const [id, term] of named)
+    if (!hasTerm(term.trim().toLowerCase())) warnings.push(`DIAGRAM part "${id}": term "${term}" has no CAST or GLOSSARY entry`);
 }
 
 // ---------- Size and focus: each step fits one screen and is about one thing ----------
@@ -324,6 +349,9 @@ export function build(code, file) {
   const shell = readFileSync(join(ENGINE_DIR, "page.html"), "utf8");
   const parts = {
     TITLE: esc(content.META.title),
+    // Read by the index page (build.mjs --index), so it needn't run the content
+    META: `<meta name="description" content="${esc(content.META.bigPicture || "")}">\n` +
+      `<meta name="explain-type" content="${esc(content.META.type || "walkthrough")}">\n<meta name="explain-steps" content="${content.STEPS.length}">`,
     CSS: inlineStyle(readFileSync(join(ENGINE_DIR, "engine.css"), "utf8").trimEnd()),
     CONTENT: inlineScript(code.trim()),
     ENGINE: inlineScript(readFileSync(join(ENGINE_DIR, "engine.js"), "utf8").trimEnd()),
@@ -331,7 +359,7 @@ export function build(code, file) {
     DIAGRAM: result.svg ? `<template id="explain-diagram">\n${result.svg}\n</template>` : "",
   };
   // Function replacer: content may contain "$&" and friends, which a string replacement would expand
-  const html = shell.replace(/\{\{(TITLE|CSS|CONTENT|ENGINE|DIAGRAM)\}\}/g, (_, k) => parts[k]);
+  const html = shell.replace(/\{\{(TITLE|META|CSS|CONTENT|ENGINE|DIAGRAM)\}\}/g, (_, k) => parts[k]);
   const { svg, ...rest } = result;
   return { ...rest, html };
 }
@@ -347,15 +375,121 @@ export function extract(html) {
   return null;
 }
 
+// ---------- Index ----------
+// index.html lists every page built into a folder, newest first. It reads each page's <meta> tags; a page built
+// before they existed is read through its content script. The reader's progress comes from the same localStorage
+// key the page writes, so it shows wherever the browser shares storage between file:// pages (Chrome does).
+const INDEX_GENERATOR = "explain-interactive-index";
+const metaOf = (html, name) => { const m = html.match(new RegExp(`<meta name="${name}" content="([^"]*)">`)); return m && m[1]; };
+const unesc = s => s.replace(/&(lt|gt|quot|amp);/g, (_, k) => ({ lt: "<", gt: ">", quot: '"', amp: "&" }[k]));
+export function readPage(html) {
+  if (metaOf(html, "generator") !== "explain-interactive") return null;
+  const title = unesc((html.match(/<title>([\s\S]*?)<\/title>/) || [])[1] || "");
+  let bigPicture = metaOf(html, "description"), type = metaOf(html, "explain-type"), steps = +metaOf(html, "explain-steps") || 0;
+  if (bigPicture === null) {
+    try {
+      const c = loadContent(extract(html) || "");
+      bigPicture = (c.META && c.META.bigPicture) || ""; type = (c.META && c.META.type) || "walkthrough";
+      steps = Array.isArray(c.STEPS) ? c.STEPS.length : 0;
+    } catch { bigPicture = ""; }
+  } else bigPicture = unesc(bigPicture);
+  return { title, bigPicture, type: type || "walkthrough", steps };
+}
+export function indexHtml(pages) {
+  const item = p => `<li data-title="${esc(p.title)}" data-steps="${p.steps}" data-text="${esc((p.title + " " + p.bigPicture).toLowerCase())}">
+  <a href="${esc(encodeURIComponent(p.file))}">${esc(p.title || p.file)}</a>
+  <p>${esc(p.bigPicture)}</p>
+  <div class="meta"><span class="type">${esc(p.type)}</span><span>${p.steps} steps</span><span>${p.date}</span><span class="prog"></span></div>
+</li>`;
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="${INDEX_GENERATOR}">
+<title>Explanations</title>
+<script>try { const t = localStorage.getItem("explain-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+<style>
+:root { --bg: #f6f5f1; --card: #fff; --fg: #1f2328; --muted: #5d656e; --line: #dcdfe3; --accent: #2f6fd6; --ok: #1a7f37; color-scheme: light; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #0d0f12; --card: #1d2127; --fg: #e6e8eb; --muted: #b4bcc6; --line: #48515c; --accent: #6ea8ff; --ok: #4ac26b; color-scheme: dark; } }
+:root[data-theme="dark"] { --bg: #0d0f12; --card: #1d2127; --fg: #e6e8eb; --muted: #b4bcc6; --line: #48515c; --accent: #6ea8ff; --ok: #4ac26b; color-scheme: dark; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 760px; margin: 0 auto; padding: 32px 20px 48px; }
+h1 { margin: 0 0 4px; font-size: 1.5rem; } .sub { margin: 0 0 20px; color: var(--muted); }
+input { width: 100%; box-sizing: border-box; font: inherit; color: inherit; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+ul { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 10px; }
+li { padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+li a { font-weight: 600; color: var(--accent); text-decoration: none; } li a:hover { text-decoration: underline; }
+li p { margin: 4px 0 8px; color: var(--muted); font-size: .92rem; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .8rem; color: var(--muted); }
+.type { text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
+.prog.done { color: var(--ok); font-weight: 600; }
+.empty { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+<h1>Explanations</h1>
+<p class="sub">${pages.length} page${pages.length === 1 ? "" : "s"}, newest first. Rebuilt each time a page is built.</p>
+${pages.length ? `<input type="search" id="q" placeholder="Filter by title or big picture" aria-label="Filter pages">
+<ul id="list">
+${pages.map(item).join("\n")}
+</ul>
+<p class="empty" id="none" hidden>No page matches.</p>` : `<p class="empty">No pages yet. Build one with <code>node build.mjs &lt;topic&gt;.content.js</code>.</p>`}
+</main>
+<script>
+// Progress as each page saved it (visited steps); the key is the page's path plus its title
+document.querySelectorAll("#list li").forEach(li => {
+  try {
+    const path = new URL(li.querySelector("a").getAttribute("href"), location.href).pathname;
+    const p = JSON.parse(localStorage.getItem("explain-progress:" + path + ":" + li.dataset.title));
+    if (!p) return;
+    const seen = (p.maxSeen || 0) + 1, n = +li.dataset.steps, el = li.querySelector(".prog");
+    el.textContent = seen >= n ? "✓ read to the end" : "read " + seen + " of " + n;
+    el.classList.toggle("done", seen >= n);
+  } catch (e) {}
+});
+const q = document.getElementById("q");
+if (q) q.addEventListener("input", () => {
+  const t = q.value.trim().toLowerCase(); let shown = 0;
+  document.querySelectorAll("#list li").forEach(li => { li.hidden = !!t && !li.dataset.text.includes(t); shown += !li.hidden; });
+  document.getElementById("none").hidden = shown > 0;
+});
+</script>
+</body>
+</html>
+`;
+}
+// Rewrites <dir>/index.html from the pages in it; returns its path
+export function writeIndex(dir) {
+  const pages = readdirSync(dir).filter(f => /\.html?$/i.test(f) && f !== "index.html").flatMap(file => {
+    const path = join(dir, file);
+    let html; try { html = readFileSync(path, "utf8"); } catch { return []; }
+    const p = readPage(html); if (!p) return [];
+    const mtime = statSync(path).mtime;
+    return [{ ...p, file, mtime, date: mtime.toISOString().slice(0, 10) }];
+  }).sort((a, b) => b.mtime - a.mtime || a.title.localeCompare(b.title));
+  const dest = join(dir, "index.html");
+  writeFileSync(dest, indexHtml(pages));
+  return dest;
+}
+
 // ---------- CLI ----------
 function main(argv) {
   const args = [...argv];
   const take = flag => { const i = args.indexOf(flag); if (i < 0) return undefined; const v = args[i + 1]; args.splice(i, 2); return v; };
   const out = take("-o") ?? take("--out");
   const extractFrom = take("--extract");
+  const noIndex = args.includes("--no-index") && (args.splice(args.indexOf("--no-index"), 1), true);
+  if (args[0] === "--index") {
+    const dir = args[1] ?? join(homedir(), "explanations");
+    try { console.log(`index ${resolve(writeIndex(dir))}`); return 0; }
+    catch (e) { console.error(`${dir}: ${e.message}`); return 1; }
+  }
   const checkOnly = args.includes("--check") && (args.splice(args.indexOf("--check"), 1), true);
   if (args.includes("-h") || args.includes("--help") || (!extractFrom && args.length !== 1)) {
-    console.log("usage: node build.mjs <topic>.content.js [-o <topic>.html]\n       node build.mjs --check <topic>.content.js\n       node build.mjs --extract <page>.html [-o <topic>.content.js]");
+    console.log("usage: node build.mjs <topic>.content.js [-o <topic>.html] [--no-index]\n       node build.mjs --check <topic>.content.js\n       node build.mjs --extract <page>.html [-o <topic>.content.js]\n       node build.mjs --index [<dir>]");
     return extractFrom || args.length === 1 ? 0 : 2;
   }
   if (extractFrom) {
@@ -378,6 +512,10 @@ function main(argv) {
   const dest = out ?? src.replace(/(\.content)?\.m?js$/i, "") + ".html";
   writeFileSync(dest, res.html);
   console.log(`built ${resolve(dest)}`);
+  if (!noIndex) {
+    try { console.log(`index ${resolve(writeIndex(dirname(resolve(dest))))}`); }
+    catch (e) { console.warn(`warning: index not updated (${e.message})`); }
+  }
   return 0;
 }
 

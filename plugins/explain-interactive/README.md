@@ -17,6 +17,7 @@ by one) or a concept built up layer by layer; the skill picks the type that fits
 Ask for it after an explanation, e.g. "show me that as HTML", "walk me through it step
 by step", or run `/explain-interactive <topic>`. The page is written to
 `~/explanations/<topic>.html` (with its source, `<topic>.content.js`, next to it) and opened in your browser. Nothing is published.
+`~/explanations/index.html` lists every page you have, newest first, with how far you read each one.
 
 ## Install
 

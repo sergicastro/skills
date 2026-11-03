@@ -40,6 +40,7 @@ const DIAGRAM = {
 | `nodes[].branch` | `chain` only: puts the node below the main row. It is the end of the line (a rejection), so edges may lead to it but not leave it. |
 | `edges[].label` | What travels on the edge, with the real value from the conversation. |
 | `edges[].kind` | `"bad"`, `"ok"`, `"flow"` (animated dashes in the direction of travel), or a mix such as `"bad flow"`. |
+| `nodes[].term`, `edges[].term` | Optional: the `CAST` or `GLOSSARY` entry this part stands for, when its label doesn't name it (`{ id: "jwt", label: "JWT check", term: "JWT" }`). Clicking the part (or Tab + Enter) shows that entry. A part whose label or id already is an entry (`Gateway`, `orders-svc`) is clickable without it. A `term` with no entry is a warning. |
 
 The build checks the spec. Unknown layouts, unknown or repeated ids, edges naming a missing node, and steps naming a missing part are errors. Missing edge labels, unknown fields, more than ~7 nodes and any overlap it finds after laying out are warnings. Fix the warnings too: each one means the picture is harder to read.
 
@@ -61,6 +62,7 @@ A diagram wider than 680 units would be too small beside the text, so the page s
 When no layout fits, `DIAGRAM` can be an `<svg>` string written by hand, and the same `diagram: { hl, … }` mechanism works on it. A single step can also bring its own picture with `visual`.
 
 - Every part a step can light up is a `<g data-id="…">`. Use `data-id`, not `id`: the SVG is cloned for every step, so ids would repeat.
+- A part's `CAST`/`GLOSSARY` entry is found from its `data-term="…"`, else its first `<text>`, else its `data-id`; a part with one shows it on click.
 - Size the viewBox for real text: width 560–720 (up to 900 for `wide` steps), height ≤ ~60% of the width, and no `width` attribute. SVG text scales with the viewBox: a 1200-wide viewBox shrinks 16px text to ~9px. Base text 16px, `.label` 14px, never below 12px.
 - Use CSS (`.flow`) for motion, never SMIL `<animate>` (reduced-motion settings don't stop it).
 

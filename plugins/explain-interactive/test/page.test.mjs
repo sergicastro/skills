@@ -179,8 +179,16 @@ test("a page from the old template.html renders the same after extract + rebuild
   let old;
   try { old = execFileSync("git", ["show", "7de652b:plugins/explain-interactive/skills/explain-interactive/template.html"], { cwd: SKILL, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }); }
   catch { return t.skip("old template not in git history here"); }
-  // The rebuilt page has engine features the old template lacked ("Still confused here"); compare the rest
-  const snapshot = `document.querySelectorAll(".stuck").forEach(e => e.remove()), JSON.stringify({ title: document.title,
+  // The rebuilt page has engine features the old template lacked ("Still confused here", depth, clickable
+  // diagram parts); take them out and compare the rest
+  const snapshot = `document.querySelectorAll(".stuck, .depth-note, .def-hint").forEach(e => e.remove());
+    document.querySelectorAll(".legend").forEach(e => { if (!e.children.length) e.remove(); });
+    document.querySelectorAll(".eyebrow .pos, .eyebrow .tot").forEach(e => e.replaceWith(e.textContent));
+    document.querySelectorAll("[data-def]").forEach(e => ["data-def", "tabindex", "role", "aria-label"].forEach(a => e.removeAttribute(a)));
+    document.querySelectorAll(".visual svg[role=group]").forEach(e => e.setAttribute("role", "img"));
+    document.querySelectorAll(".full-only").forEach(e => { e.classList.remove("full-only"); if (!e.classList.length) e.removeAttribute("class"); });
+    document.querySelector("#stage").normalize();
+    JSON.stringify({ title: document.title,
     stage: document.querySelector("#stage").innerHTML.replace(/>\\s+</g, "><"),
     outline: document.querySelector("#outline").innerHTML, gloss: document.querySelector("#gloss").innerHTML,
     next: document.querySelector("#next").textContent })`;
@@ -351,4 +359,123 @@ test("what-if controls: a choice and a slider switch the outcome and the diagram
   // every step can be walked without console problems
   await walkAll();
   assert.deepEqual(problems, []);
+});
+
+test("depth: the short version skips background steps, renumbers, and is remembered", { skip }, async () => {
+  problems.length = 0;
+  await openSample("filter-chain");
+  const step = () => js(`[...document.querySelectorAll(".step")].findIndex(a => a.classList.contains("active"))`);
+  const btn = `document.querySelector('.top [data-act="depth"]')`;
+  assert.ok(await js(`!${btn}.hidden && ${btn}.getAttribute("aria-pressed") === "false"`));
+  assert.equal(await js(`document.querySelector("#count").textContent`), "1 / 6");
+  assert.match(await js(`document.querySelector("#step-2 .eyebrow").textContent`), /Step 2 of 6 · Background/);
+  // full: Next goes to the background step
+  await js(`document.querySelector("#next").click()`);
+  assert.equal(await step(), 1);
+  // switching to short while on it moves back to a step the short version shows
+  await js(`${btn}.click()`);
+  assert.ok(await js(`document.body.classList.contains("short") && ${btn}.getAttribute("aria-pressed") === "true"`));
+  assert.equal(await step(), 0);
+  assert.equal(await js(`localStorage.getItem("explain-depth")`), "short");
+  assert.equal(await js(`document.querySelector("#count").textContent`), "1 / 5");
+  assert.equal(await js(`document.querySelector("#next .sub").textContent`), "The listener accepts the call");
+  // the skipped step is gone from the outline and the Recap list; the others are renumbered
+  assert.equal(await js(`getComputedStyle(document.querySelectorAll("#outline li")[1]).display`), "none");
+  assert.deepEqual(await js(`[...document.querySelectorAll("#outline li")].filter(l => getComputedStyle(l).display !== "none").map(l => l.querySelector(".n").textContent)`), ["1", "2", "3", "4", "5"]);
+  assert.match(await js(`document.querySelector("#step-3 .eyebrow").textContent`), /Step 2 of 5/);
+  // the Context card keeps the question and the example, and says what was left out
+  assert.deepEqual(await js(`[...document.querySelectorAll("#step-1 .ctx dt")].filter(d => getComputedStyle(d).display !== "none").map(d => d.textContent)`), ["The question", "The example we'll follow"]);
+  assert.match(await js(`(n => getComputedStyle(n).display !== "none" && n.textContent)(document.querySelector("#step-1 .depth-note"))`), /1 background step and part of this card left out/);
+  // Next / Back step over it
+  await js(`document.querySelector("#next").click()`);
+  assert.equal(await step(), 2);
+  await js(`document.querySelector("#prev").click()`);
+  assert.equal(await step(), 0);
+  // remembered across a reload; a link to the skipped step lands on the next one
+  await js(`history.replaceState(null, "", "#step-2"); location.reload()`); await sleep(400);
+  assert.ok(await js(`document.body.classList.contains("short")`));
+  assert.equal(await step(), 2);
+  // the "Still confused" prompt counts what the reader walks
+  await js(`window.__copied = null; navigator.clipboard.writeText = t => (window.__copied = t, Promise.resolve())`);
+  await js(`document.querySelector("#step-3 .stuck [data-copy]").click()`); await sleep(50);
+  assert.match(await js(`window.__copied`), /step 2 of 5: "The listener accepts the call"/);
+  // Show all hides it too
+  await js(`document.querySelector('.top [data-act="all"]').click()`);
+  assert.equal(await js(`getComputedStyle(document.querySelector("#step-2")).display`), "none");
+  await js(`document.querySelector('.top [data-act="all"]').click()`);
+  // the link on step 1 brings the full version back
+  await js(`document.querySelectorAll("#outline button")[0].click()`);
+  await js(`document.querySelector("#step-1 .depth-note button").click()`);
+  assert.ok(await js(`!document.body.classList.contains("short")`));
+  assert.equal(await js(`localStorage.getItem("explain-depth")`), "full");
+  assert.equal(await js(`document.querySelector("#count").textContent`), "1 / 6");
+  await js(`localStorage.removeItem("explain-depth")`);
+  assert.deepEqual(problems, []);
+});
+
+test("depth: no switch on a page with nothing to skip", { skip }, async () => {
+  const page = join(tmp, "flat.html");
+  writeFileSync(page, build(`const META = { title: "Flat", bigPicture: "B" };
+const STEPS = [{ title: "One", summary: "s", body: "<p>x</p>", context: { question: "q", example: "e" } }, { title: "Recap", body: "<p>y</p>" }];`).html);
+  await open(page); await js(`localStorage.setItem("explain-depth", "short")`); await open(page);
+  assert.ok(await js(`[...document.querySelectorAll('[data-act="depth"]')].every(b => b.hidden) && !document.querySelector(".depth-note")`));
+  assert.ok(await js(`!document.body.classList.contains("short")`));
+  await js(`localStorage.clear()`);
+});
+
+test("diagram parts with a CAST/GLOSSARY entry show it on click or Enter", { skip }, async () => {
+  problems.length = 0;
+  await openSample("token-401");
+  await js(`document.querySelector("#next").click()`);
+  const part = id => `document.querySelector('#step-2 [data-id=${id}]')`;
+  // by label (Gateway is in CAST), by term (the req edge stands for "token"); Client names nothing
+  assert.deepEqual(await js(`[...document.querySelectorAll("#step-2 [data-def]")].map(g => g.dataset.id + "=" + g.dataset.def)`), ["gw=Gateway", "svc=orders-svc", "req=token", "deny=401"]);
+  assert.ok(await js(`${part("gw")}.getAttribute("role") === "button" && ${part("gw")}.tabIndex === 0 && !${part("client")}.hasAttribute("tabindex")`));
+  assert.equal(await js(`document.querySelector("#step-2 .visual svg").getAttribute("role")`), "group");
+  assert.match(await js(`document.querySelector("#step-2 .legend").textContent`), /Click a part to see what it is/);
+  await js(`${part("gw")}.dispatchEvent(new MouseEvent("click", { bubbles: true }))`);
+  assert.ok(await js(`document.querySelector("#tip").classList.contains("on")`));
+  assert.equal(await js(`document.querySelector("#tip b").textContent`), "Gateway");
+  assert.match(await js(`document.querySelector("#tip").textContent`), /^Gateway The front door/);
+  assert.equal(await js(`${part("gw")}.getAttribute("aria-describedby")`), "tip");
+  // the tip sits next to the part's box (a sequence node's group also holds its lifeline, which runs much lower)
+  assert.ok(await js(`(r => { const t = document.querySelector("#tip").getBoundingClientRect(); return Math.abs(t.top - r.bottom) < 12 || Math.abs(t.bottom - r.top) < 12; })(${part("gw")}.querySelector(".box").getBoundingClientRect())`));
+  // a click elsewhere closes it
+  await js(`document.querySelector("#step-2 h2").click()`);
+  assert.ok(await js(`!document.querySelector("#tip").classList.contains("on")`));
+  // keyboard: focus + Enter; Esc closes; ←/→ still change step
+  await js(`${part("deny")}.focus(); ${part("deny")}.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))`);
+  assert.match(await js(`document.querySelector("#tip").textContent`), /^401 The HTTP status/);
+  await js(`document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))`);
+  assert.ok(await js(`!document.querySelector("#tip").classList.contains("on") && document.activeElement !== ${part("deny")}`));
+  // moving on closes it as well
+  await js(`${part("svc")}.dispatchEvent(new MouseEvent("click", { bubbles: true }))`);
+  await js(`document.querySelector("#next").click()`);
+  assert.ok(await js(`!document.querySelector("#tip").classList.contains("on")`));
+  assert.deepEqual(problems, []);
+});
+
+test("index page: lists pages, filters them, shows reading progress", { skip }, async () => {
+  problems.length = 0; requests.length = 0;
+  const dir = mkdtempSync(join(tmpdir(), "explain-index-"));
+  for (const f of ["token-401", "cron-twice"]) writeFileSync(join(dir, f + ".html"), build(readFileSync(join(SKILL, `examples/${f}.content.js`), "utf8")).html);
+  const { writeIndex } = await import("../skills/explain-interactive/build.mjs");
+  const index = writeIndex(dir);
+  // read two steps of one page, then open the index
+  await open(join(dir, "token-401.html")); await js("localStorage.clear()"); await open(join(dir, "token-401.html"));
+  await js(`document.querySelector("#next").click()`);
+  await open(index);
+  assert.deepEqual(await js(`[...document.querySelectorAll("#list li a")].map(a => a.textContent).sort()`), ["Why an expired token gets a 401", "Why the nightly report was sent twice"]);
+  assert.equal(await js(`[...document.querySelectorAll("#list li")].find(l => l.textContent.includes("401")).querySelector(".prog").textContent`), "read 2 of 6");
+  await js(`(q => (q.value = "nightly", q.dispatchEvent(new Event("input"))))(document.querySelector("#q"))`);
+  assert.deepEqual(await js(`[...document.querySelectorAll("#list li")].filter(l => !l.hidden).map(l => l.querySelector("a").getAttribute("href"))`), ["cron-twice.html"]);
+  await js(`(q => (q.value = "zzz", q.dispatchEvent(new Event("input"))))(document.querySelector("#q"))`);
+  assert.ok(await js(`!document.querySelector("#none").hidden`));
+  // links open the page
+  await js(`document.querySelector('#list a[href="cron-twice.html"]').click()`); await sleep(300);
+  assert.equal(await js(`document.title`), "Why the nightly report was sent twice");
+  assert.deepEqual(problems, []);
+  assert.deepEqual(requests.filter(u => !u.startsWith("file:") && !u.startsWith("data:")), []);
+  await js("localStorage.clear()");
+  rmSync(dir, { recursive: true, force: true });
 });

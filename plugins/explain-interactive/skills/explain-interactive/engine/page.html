@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="generator" content="explain-interactive">
+{{META}}
 <title>{{TITLE}}</title>
 <script>try { const t = localStorage.getItem("explain-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
 <style>
@@ -16,6 +17,7 @@
     <button class="tbtn" id="menu" aria-label="Steps and tools" aria-expanded="false">☰</button>
     <h1 id="title"></h1>
     <span class="count" id="count"></span>
+    <button class="tbtn tool" data-act="depth" aria-pressed="false" hidden>Short</button>
     <button class="tbtn tool" data-act="gloss" aria-pressed="false">Glossary</button>
     <button class="tbtn tool" data-act="all" aria-pressed="false">Show all</button>
     <button class="tbtn tool theme" data-act="theme"></button>
@@ -26,6 +28,7 @@
     <div class="bigpic"><b>Big picture</b><span class="bigpic-text"></span></div>
     <ol class="outline" id="outline"></ol>
     <div class="side-tools">
+      <button class="tbtn" data-act="depth" aria-pressed="false" hidden>Short version</button>
       <button class="tbtn" data-act="gloss" aria-pressed="false">Glossary</button>
       <button class="tbtn" data-act="all" aria-pressed="false">Show all</button>
       <button class="tbtn" data-act="theme" data-long></button>

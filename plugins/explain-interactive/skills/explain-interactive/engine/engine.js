@@ -26,6 +26,32 @@ let saved = {}; try { saved = JSON.parse(localStorage.getItem(KEY)) || {}; } cat
 let results = saved.results || {}, maxSeen = saved.maxSeen || 0, cur = 0, choices = saved.choices || {};
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify({ cur, maxSeen, results, choices })); } catch (e) {} };
 
+// Glossary lookup shared by <dfn> tooltips, diagram parts and the "Still confused" prompt: the name, then its singular.
+// <dfn data-term="token">tokens</dfn> names the entry explicitly; otherwise its text is looked up.
+const GL = Object.fromEntries([...cast.map(t => [t.toLowerCase(), CAST[t]]), ...terms.map(t => [t.toLowerCase(), GLOSSARY[t]])]);
+const lookup = t => { const k = String(t).trim().toLowerCase(); return GL[k] ?? GL[k.replace(/(es|s)$/, "")] ?? GL[k.replace(/s$/, "")]; };
+const findTerm = d => lookup(d.dataset.term || d.textContent);
+
+// Diagram parts that name a CAST/GLOSSARY entry (by data-term, else their own text, else their id) show it on click
+const DEFS = {};
+{ const box = document.createElement("div"); box.innerHTML = DIAGRAM;
+  box.querySelectorAll("[data-id]").forEach(el => {
+    const t = el.querySelector("text"), name = [el.dataset.term, t && t.textContent, el.dataset.id].find(k => k && lookup(k));
+    if (name) DEFS[el.dataset.id] = name.trim();
+  }); }
+const HAS_DEFS = Object.keys(DEFS).length > 0;
+
+// Depth: Short skips the steps marked depth: "full" (background a reader may already have) and the Context card's
+// setting / why / prereqs. The Context step and the Recap are always shown. The choice is remembered, like the theme.
+const FULL = STEPS.map((s, i) => i > 0 && i < LAST && s.depth === "full");
+const FULL_CTX = ["setting", "why", "prereqs"].filter(k => { const c = STEPS[0].context || {}; return c[k] && c[k].length; });
+const HAS_DEPTH = FULL.some(Boolean) || FULL_CTX.length > 0;
+let short = false; try { short = HAS_DEPTH && localStorage.getItem("explain-depth") === "short"; } catch (e) {}
+const shown = i => !(short && FULL[i]);
+const order = () => STEPS.map((_, i) => i).filter(shown);   // the steps the reader walks, in order
+const pos = i => order().indexOf(i) + 1, total = () => order().length;
+const nextShown = (i, dir) => { for (let j = i + dir; j >= 0 && j <= LAST; j += dir) if (shown(j)) return j; return -1; };
+
 // Shared diagram: clone DIAGRAM for step i. New parts get .hl, parts not introduced yet are ghosted (.dim), the Recap shows all.
 const buildStages = STEPS.map(s => Math.max(s.build || 0, ((s.diagram || {}).build || []).length));
 // What-if options: each may relight the step's diagram. Whatever any option lit counts as introduced for later steps,
@@ -45,10 +71,17 @@ function diagramFor(i, d = STEPS[i].diagram || {}) {
     else if (hl.has(id)) el.classList.add("hl");
     else if (dim.has(id) || (!recap && !seen.has(id))) el.classList.add("dim");
     (d.build || []).forEach((stage, n) => { if ([].concat(stage).includes(id)) el.setAttribute("data-b", n + 1); });
+    if (DEFS[id] && !hide.has(id)) {
+      el.setAttribute("data-def", DEFS[id]); el.setAttribute("tabindex", "0"); el.setAttribute("role", "button");
+      el.setAttribute("aria-label", `${DEFS[id]}: what it is`);
+    }
   });
-  return box.innerHTML + (recap ? "" : legend);
+  // An image's parts can't be buttons for a screen reader; a labelled group's can
+  const svg = box.querySelector("svg"); if (HAS_DEFS && svg && svg.getAttribute("role") === "img") svg.setAttribute("role", "group");
+  return box.innerHTML + (recap ? (HAS_DEFS ? `<div class="legend">${defHint}</div>` : "") : legend);
 }
-const legend = `<div class="legend"><span><i class="new"></i>new in this step</span><span><i></i>already introduced</span><span><i class="soon"></i>coming later</span></div>`;
+const defHint = `<span class="def-hint">Click a part to see what it is</span>`;
+const legend = `<div class="legend"><span><i class="new"></i>new in this step</span><span><i></i>already introduced</span><span><i class="soon"></i>coming later</span>${HAS_DEFS ? defHint : ""}</div>`;
 // Ids a field of the earlier steps introduced, so a panel can ghost what the reader hasn't met yet (same rule as the diagram)
 const seenBefore = (i, pick) => new Set(STEPS.slice(0, i).flatMap(t => [].concat(pick(t) || [])));
 
@@ -144,8 +177,13 @@ function panelFor(i) {
 // Context card: the fixed questions a newcomer needs answered before the mechanism starts
 const CTX = [["question", "The question"], ["setting", "Where this happens"], ["why", "Why it matters"],
   ["prereqs", "What you need to know first"], ["example", "The example we'll follow"]];
-const contextHtml = c => `<dl class="ctx">${CTX.filter(([k]) => c[k] && c[k].length).map(([k, label]) =>
-  `<dt>${label}</dt><dd>${Array.isArray(c[k]) ? `<ul>${c[k].map(x => `<li>${x}</li>`).join("")}</ul>` : c[k]}</dd>`).join("")}</dl>`;
+const contextHtml = c => `<dl class="ctx">${CTX.filter(([k]) => c[k] && c[k].length).map(([k, label]) => {
+  const f = FULL_CTX.includes(k) ? ` class="full-only"` : "";
+  return `<dt${f}>${label}</dt><dd${f}>${Array.isArray(c[k]) ? `<ul>${c[k].map(x => `<li>${x}</li>`).join("")}</ul>` : c[k]}</dd>`; }).join("")}</dl>`;
+// On step 1 in the short version: what was left out, and a way back to the full one
+const skippedN = FULL.filter(Boolean).length;
+const depthNote = HAS_DEPTH ? `<p class="depth-note short-only">Short version: ${skippedN ? `${skippedN} background step${skippedN === 1 ? "" : "s"}` : "background"}${skippedN && FULL_CTX.length ? " and part of this card" : ""} left out.
+  <button class="linkish" data-act="depth">Show the full version</button></p>` : "";
 // Quiz options are shown shuffled, seeded by the question text so the order survives reloads.
 // Buttons keep the original index in data-i, so `answer`, per-option `why` and saved results still line up.
 function shuffled(n, seed) {
@@ -195,18 +233,19 @@ $("#stage").innerHTML = STEPS.map((s, i) => {
     (s.evidence ? evidenceHtml(s.evidence) : "");
   const split = look && !wide;
   return `
-  <article class="step${split ? " split" : ""}${wide ? " wide" : ""}" id="step-${i + 1}" aria-labelledby="h-${i}">
+  <article class="step${split ? " split" : ""}${wide ? " wide" : ""}${FULL[i] ? " full-only" : ""}" id="step-${i + 1}" aria-labelledby="h-${i}">
     ${i === 0 ? `<div class="bigpic"><b>Big picture</b>${esc(META.bigPicture)}</div>${baHtml}` : ""}
-    <div class="eyebrow">Step ${i + 1} of ${N}${s.phase && PHASE[s.phase] ? ` · <span class="phase ph-${s.phase}">${PHASE[s.phase]}</span>` : ""}</div>
+    <div class="eyebrow">Step <span class="pos">${i + 1}</span> of <span class="tot">${N}</span>${FULL[i] ? ` · <span class="bg-tag">Background</span>` : ""}${s.phase && PHASE[s.phase] ? ` · <span class="phase ph-${s.phase}">${PHASE[s.phase]}</span>` : ""}</div>
     <h2 id="h-${i}" tabindex="-1">${s.title}</h2>
     <div class="cols">
       <div class="read">
+        ${i === 0 ? depthNote : ""}
         ${s.context ? contextHtml(s.context) : ""}
         <div class="body">${s.body || ""}</div>
         ${s.analogy ? `<div class="analogy"><span>${s.analogy}</span></div>` : ""}
         ${wiOpts(s).length ? whatifHtml(i) : ""}
         ${wide && look ? `<div class="look">${look}</div>` : ""}
-        ${recap ? `<ol class="recap-list">${STEPS.slice(0, LAST).map((t, j) => `<li><button data-go="${j}">
+        ${recap ? `<ol class="recap-list">${STEPS.slice(0, LAST).map((t, j) => `<li${FULL[j] ? ` class="full-only"` : ""}><button data-go="${j}">
           <span class="n">${j + 1}</span><span><b>${t.title}</b>${t.summary ? ` <span class="s">— ${t.summary}</span>` : ""}</span>
           <span class="mk" data-mk="${j}"></span></button></li>`).join("")}</ol>` : ""}
         ${s.deeper ? `<details><summary>Go deeper</summary>${s.deeper}</details>` : ""}
@@ -229,23 +268,36 @@ $("#stage").innerHTML = STEPS.map((s, i) => {
 
 // Glossary: tooltips that stay on-screen, plus a drawer
 const tip = $("#tip");
-const GL = Object.fromEntries([...cast.map(t => [t.toLowerCase(), CAST[t]]), ...terms.map(t => [t.toLowerCase(), GLOSSARY[t]])]);
-// <dfn data-term="token">tokens</dfn> names the entry explicitly; otherwise the text, then its singular, is looked up
-const findTerm = d => { const k = (d.dataset.term || d.textContent).trim().toLowerCase(); return GL[k] ?? GL[k.replace(/(es|s)$/, "")] ?? GL[k.replace(/s$/, "")]; };
+// Shown under (or above) the element, kept inside the window. A diagram part's tip names the part first.
+let tipFor = null;
+function showTip(el, text, name) {
+  tipFor = el; el.setAttribute("aria-describedby", "tip");
+  tip.replaceChildren(...(name ? [Object.assign(document.createElement("b"), { textContent: name }), " "] : []), text);
+  tip.classList.add("on");
+  // A diagram part is placed by its box or label: a sequence node's group also holds its lifeline, which runs to the bottom
+  const r = (el.matches("[data-def]") && el.querySelector(".box, .label-bg") || el).getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+  tip.style.left = Math.max(8, Math.min(r.left, innerWidth - w - 8)) + "px";
+  tip.style.top = (r.bottom + h + 12 > innerHeight ? r.top - h - 6 : r.bottom + 6) + "px";
+}
+function hideTip(el) {
+  if (el && el !== tipFor) return;
+  tip.classList.remove("on"); if (tipFor) tipFor.removeAttribute("aria-describedby"); tipFor = null;
+}
 $$("dfn").forEach(d => {
   const text = findTerm(d); if (!text) { console.warn("No glossary entry for <dfn>", d.textContent); return; }
   d.tabIndex = 0;
-  const show = () => {
-    d.setAttribute("aria-describedby", "tip");
-    tip.textContent = text; tip.classList.add("on");
-    const r = d.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
-    tip.style.left = Math.max(8, Math.min(r.left, innerWidth - w - 8)) + "px";
-    tip.style.top = (r.bottom + h + 12 > innerHeight ? r.top - h - 6 : r.bottom + 6) + "px";
-  };
-  const hide = () => { tip.classList.remove("on"); d.removeAttribute("aria-describedby"); };
+  const show = () => showTip(d, text), hide = () => hideTip(d);
   d.addEventListener("mouseenter", show); d.addEventListener("focus", show);
   d.addEventListener("mouseleave", hide); d.addEventListener("blur", hide);
 });
+// Diagram parts: a click (or focus, or Enter) shows the definition; it stays until focus moves on
+$$(".visual [data-def]").forEach(g => {
+  const show = () => showTip(g, lookup(g.dataset.def), g.dataset.def);
+  g.addEventListener("click", e => { e.stopPropagation(); g.focus({ preventScroll: true }); show(); });
+  g.addEventListener("focus", show); g.addEventListener("blur", () => hideTip(g));
+  g.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); show(); } });
+});
+document.addEventListener("click", e => { if (tipFor && tipFor.matches("[data-def]") && !tipFor.contains(e.target)) hideTip(); });
 const dl = (keys, src) => "<dl>" + keys.map(t => `<dt>${t}</dt><dd>${src[t]}</dd>`).join("") + "</dl>";
 $("#gloss").innerHTML = `<div class="dhead"><h2>Glossary</h2><button class="x" data-close aria-label="Close glossary">×</button></div>` +
   (cast.length ? `<h3>Who's who</h3>${dl(cast, CAST)}` : "") +
@@ -300,6 +352,7 @@ $$("[data-act]").forEach(b => b.onclick = () => {
     return paintTheme();
   }
   if (act === "gloss") { setMode("menu", false); return setMode("gloss"); }
+  if (act === "depth") return setDepth(!short);
   if (act === "all") { closePanels(); setMode("all"); go(cur, { push: false }); }
 });
 
@@ -342,7 +395,7 @@ function paintMarks() {
   $$("#outline .mk").forEach((el, i) => mark(el, i));
   $$("[data-mk]").forEach(el => mark(el, el.dataset.mk));
   const score = $("#score"); if (!score) return;
-  const withQuiz = STEPS.map((s, i) => s.quiz ? i : -1).filter(i => i >= 0);
+  const withQuiz = STEPS.map((s, i) => s.quiz && shown(i) ? i : -1).filter(i => i >= 0);
   const ok = withQuiz.filter(i => results[i] && results[i].res === "ok");
   const missed = withQuiz.filter(i => results[i] && results[i].res === "miss");
   const left = withQuiz.length - ok.length - missed.length;
@@ -359,7 +412,7 @@ function stuckPrompt(i, unclear) {
   const used = [...new Set($$(`#step-${i + 1} .read dfn`).filter(d => !d.closest("[hidden]")).map(d => (d.dataset.term || d.textContent).trim()))]
     .map(t => [t, findTerm({ dataset: {}, textContent: t })]).filter(([, d]) => d);
   const lines = [
-    `I'm reading an explainer page, "${plain(META.title)}", and I'm stuck on step ${i + 1} of ${N}: "${plain(s.title)}".`, "",
+    `I'm reading an explainer page, "${plain(META.title)}", and I'm stuck on step ${pos(i)} of ${total()}: "${plain(s.title)}".`, "",
     `The page's big picture: ${plain(META.bigPicture)}`, "",
     "What this step says:",
     ...(s.summary ? [`- In short: ${plain(s.summary)}`] : []),
@@ -418,7 +471,7 @@ $$(".whatif").forEach(f => {
 });
 
 // Stepper
-$("#outline").innerHTML = STEPS.map((s, i) => `<li><button data-i="${i}"><span class="n">${i + 1}</span><span class="t">${s.title}${s.phase && PHASE[s.phase] ? `<span class="ph ph-${s.phase}">${PHASE[s.phase]}</span>` : ""}</span><span class="mk"></span></button></li>`).join("");
+$("#outline").innerHTML = STEPS.map((s, i) => `<li${FULL[i] ? ` class="full-only"` : ""}><button data-i="${i}"><span class="n">${i + 1}</span><span class="t">${s.title}${s.phase && PHASE[s.phase] ? `<span class="ph ph-${s.phase}">${PHASE[s.phase]}</span>` : ""}</span><span class="mk"></span></button></li>`).join("");
 const items = $$("#outline button"), arts = $$(".step"), stage = $("#stage");
 const isAll = () => document.body.classList.contains("all");
 
@@ -431,8 +484,8 @@ function mark(i) {
     if (j === cur) d.setAttribute("aria-current", "step"); else d.removeAttribute("aria-current");
   });
   items[cur].scrollIntoView({ block: "nearest" });
-  $("#bar").style.width = ((cur + 1) / N * 100) + "%";
-  $("#count").textContent = `${cur + 1} / ${N}`;
+  $("#bar").style.width = (pos(cur) / total() * 100) + "%";
+  $("#count").textContent = `${pos(cur)} / ${total()}`;
   paintNav();
   save();
 }
@@ -445,7 +498,7 @@ function paintNav() {
   const K = isAll() ? 0 : buildStages[cur], building = b < K;
   $("#prev").classList.toggle("gone", cur === 0 && b === 0);
   $("#prev").disabled = cur === 0 && b === 0;
-  const last = cur === LAST, next = STEPS[cur + 1];
+  const last = cur === LAST, next = STEPS[nextShown(cur, 1)];
   $("#next .lbl").textContent = building ? "Reveal ▸" : last ? "Finish ✓" : "Next →";
   $("#next .sub").textContent = building ? `part ${b + 1} of ${K}` : last ? "See your summary" : next.title;
   $("#upnext").innerHTML = building ? `Reveal part ${b + 1} of ${K} <span class="keys">· <kbd>→</kbd></span>`
@@ -454,17 +507,18 @@ function paintNav() {
 // Forward/back first walk through a step's build stages, then move between steps
 function fwd(viaKey) {
   if (!isAll() && b < buildStages[cur]) { b++; paintBuild(); paintNav(); $("#live").textContent = `Revealed part ${b} of ${buildStages[cur]}`; return; }
-  if (cur < LAST) return go(cur + 1);
+  if (cur < LAST) return go(nextShown(cur, 1));
   if (viaKey) return;
   const f = $(".finish"); if (f) { f.scrollIntoView({ behavior: "smooth" }); f.querySelector("button").focus({ preventScroll: true }); }
 }
 function back() {
   if (!isAll() && b > 0) { b--; paintBuild(); paintNav(); return; }
-  if (cur > 0) go(cur - 1, { build: "full" });
+  if (cur > 0) go(nextShown(cur, -1), { build: "full" });
 }
 let spyPaused = 0;
 function go(i, { push = true, build = 0 } = {}) {
   i = Math.max(0, Math.min(LAST, i));
+  if (!shown(i)) i = nextShown(i, 1);   // a link to a skipped step lands on the next one the reader walks
   const moved = i !== cur;
   if (moved) stage.style.setProperty("--dx", i > cur ? "14px" : "-14px");   // slide in from the direction of travel
   b = build === "full" ? buildStages[i] : 0;
@@ -474,7 +528,8 @@ function go(i, { push = true, build = 0 } = {}) {
   if (isAll()) { spyPaused = Date.now() + 800; arts[cur].scrollIntoView({ behavior: "smooth" }); }
   else stage.scrollTop = 0;
   try { history[push && moved ? "pushState" : "replaceState"](null, "", "#step-" + (cur + 1)); } catch (e) {}
-  if (moved) $("#live").textContent = `Step ${cur + 1} of ${N}: ${STEPS[cur].title}`;
+  if (moved) hideTip();
+  if (moved) $("#live").textContent = `Step ${pos(cur)} of ${total()}: ${STEPS[cur].title}`;
   setMode("menu", false);
 }
 items.forEach((d, i) => d.onclick = () => { go(i); $(`#h-${i}`).focus({ preventScroll: true }); });
@@ -493,10 +548,12 @@ stage.addEventListener("click", e => {
 stage.addEventListener("scroll", () => {
   if (!isAll() || Date.now() < spyPaused) return;
   const atEnd = stage.scrollTop + stage.clientHeight >= stage.scrollHeight - 4;
-  let i = 0; arts.forEach((a, j) => { if (a.offsetTop - stage.scrollTop <= 120) i = j; });
+  let i = 0; arts.forEach((a, j) => { if (shown(j) && a.offsetTop - stage.scrollTop <= 120) i = j; });
   if (atEnd) i = LAST;
   if (i !== cur) { mark(i); try { history.replaceState(null, "", "#step-" + (i + 1)); } catch (e) {} }
 }, { passive: true });
+
+stage.addEventListener("scroll", () => { if (tipFor && tipFor.matches("[data-def]")) showTip(tipFor, lookup(tipFor.dataset.def), tipFor.dataset.def); }, { passive: true });
 
 // Browser Back/Forward move between steps
 addEventListener("popstate", () => { const m = location.hash.match(/step-(\d+)/); go(m ? +m[1] - 1 : 0, { push: false }); });
@@ -513,7 +570,7 @@ stage.addEventListener("touchend", e => {
 });
 
 document.addEventListener("keydown", e => {
-  if (e.key === "Escape") return closePanels();
+  if (e.key === "Escape") { if (tipFor) { const t = tipFor; hideTip(); if (t.matches("[data-def]")) t.blur(); } return closePanels(); }
   if (e.target.matches("input, textarea") || e.metaKey || e.ctrlKey || e.altKey) return;
   if (document.body.classList.contains("gloss") || document.body.classList.contains("menu")) return;   // a drawer is open: don't navigate behind it
   const sc = e.target.closest && e.target.closest(".visual, pre");
@@ -521,6 +578,25 @@ document.addEventListener("keydown", e => {
   if (e.key === "ArrowRight") fwd(true);
   if (e.key === "ArrowLeft") back();
 });
+
+// Depth switch: renumber what the reader walks, and leave a skipped step if we were on one
+function paintDepth() {
+  document.body.classList.toggle("short", short);
+  $$('.tbtn[data-act="depth"]').forEach(b => { b.hidden = !HAS_DEPTH; b.setAttribute("aria-pressed", short);
+    b.title = short ? "Showing the short version: background steps are skipped" : "Skip the background steps"; });
+  arts.forEach((a, i) => { a.querySelector(".pos").textContent = pos(i) || i + 1; a.querySelector(".tot").textContent = total(); });
+  const n = (el, i) => { if (shown(i)) el.textContent = pos(i); };
+  $$("#outline .n").forEach(n); $$(".recap-list .n").forEach(n);
+}
+function setDepth(on) {
+  short = HAS_DEPTH && on;
+  try { localStorage.setItem("explain-depth", short ? "short" : "full"); } catch (e) {}
+  paintDepth(); paintMarks();
+  const at = shown(cur) ? cur : nextShown(cur, -1);
+  go(at, { push: false, build: at === cur ? b : 0 });
+  $("#live").textContent = short ? `Short version: ${total()} of ${N} steps` : `Full version: all ${N} steps`;
+}
+paintDepth();
 
 quizzes.forEach(paintQuiz); paintMarks();
 const m = location.hash.match(/step-(\d+)/);
