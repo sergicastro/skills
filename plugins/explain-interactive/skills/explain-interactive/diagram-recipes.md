@@ -1,6 +1,6 @@
 # Diagram recipes
 
-Read this when planning the page's diagram (workflow step 1). One diagram serves the whole page: define it once as `DIAGRAM` in `template.html`, then each step lists which parts to light up.
+Read this when planning the page's diagram (workflow step 1). One diagram serves the whole page: define it once as `DIAGRAM` in the content file, then each step lists which parts to light up.
 
 ## Pick the pattern from the mechanism
 
@@ -27,7 +27,7 @@ Read this when planning the page's diagram (workflow step 1). One diagram serves
 - Use CSS (`.flow`) for motion, never SMIL `<animate>` (reduced-motion settings don't stop it).
 - `build` (staged reveal, ≤ 4 stages) is for sequences where the order of messages is the point.
 
-## Kit (already styled in the template)
+## Kit (already styled by the engine)
 
 | Class | Use |
 |---|---|

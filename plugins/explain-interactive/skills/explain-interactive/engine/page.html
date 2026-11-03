@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="explain-interactive">
+<title>{{TITLE}}</title>
+<script>try { const t = localStorage.getItem("explain-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+<style>
+{{CSS}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <button class="tbtn" id="menu" aria-label="Steps and tools" aria-expanded="false">☰</button>
+    <h1 id="title"></h1>
+    <span class="count" id="count"></span>
+    <button class="tbtn tool" data-act="gloss" aria-pressed="false">Glossary</button>
+    <button class="tbtn tool" data-act="all" aria-pressed="false">Show all</button>
+    <button class="tbtn tool theme" data-act="theme"></button>
+    <div class="bar" id="bar"></div>
+  </header>
+  <aside class="side" id="side" aria-label="Steps">
+    <div class="dhead side-head"><b>Steps</b><button class="x" data-close aria-label="Close menu">×</button></div>
+    <div class="bigpic"><b>Big picture</b><span class="bigpic-text"></span></div>
+    <ol class="outline" id="outline"></ol>
+    <div class="side-tools">
+      <button class="tbtn" data-act="gloss" aria-pressed="false">Glossary</button>
+      <button class="tbtn" data-act="all" aria-pressed="false">Show all</button>
+      <button class="tbtn" data-act="theme" data-long></button>
+    </div>
+  </aside>
+  <main class="stage" id="stage"></main>
+  <footer class="foot">
+    <button class="nav" id="prev">← Back</button>
+    <span class="upnext" id="upnext"></span>
+    <button class="nav primary" id="next"><span class="lbl"></span><span class="sub"></span></button>
+  </footer>
+</div>
+<div class="scrim" data-close></div>
+<aside id="gloss" role="dialog" aria-modal="true" aria-label="Glossary"></aside>
+<div id="tip" role="tooltip"></div>
+<div id="live" class="sr" aria-live="polite"></div>
+
+<!-- Shared SVG defs (arrowheads) usable by every diagram -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <!-- style="fill: var(--x)" (not the fill attribute) so the heads follow the light/dark theme in every browser -->
+    <marker id="arrowhead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" style="fill: var(--muted)"/>
+    </marker>
+    <marker id="arrowhead-hl" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" style="fill: var(--hl)"/>
+    </marker>
+    <marker id="arrowhead-bad" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" style="fill: var(--bad)"/>
+    </marker>
+    <marker id="arrowhead-ok" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" style="fill: var(--ok)"/>
+    </marker>
+  </defs>
+</svg>
+
+<!-- Page content (META, CAST, GLOSSARY, DIAGRAM, STEPS): rebuild from the content file, or extract it with build.mjs --extract -->
+<script id="explain-content">
+{{CONTENT}}
+</script>
+<script id="explain-engine">
+{{ENGINE}}
+</script>
+</body>
+</html>

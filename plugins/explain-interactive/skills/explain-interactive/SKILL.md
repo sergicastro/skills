@@ -23,10 +23,27 @@ Turn a complex explanation into a single self-contained HTML page that a human c
    - **Prerequisite terms** → `GLOSSARY` entries; **every project-specific name** on the page (service, file, function, team, flag) → a `CAST` one-liner.
    - Where the real mechanism is spatial/temporal (flows, layers, sequences, state changes), plan **one diagram for the whole page**: pick the pattern from `diagram-recipes.md` (read it), then decide which parts each step lights up.
    - The 2–3 points where a learner most likely gets confused → **check-your-understanding** questions. Each wrong option should be a real misconception from the source.
-2. **Fill the template** at `template.html` (same directory as this file). Keep its structure, stepper, styles and JS; replace only the `STEPS`, `CAST`, `GLOSSARY`, `META`, `DIAGRAM` data and per-step HTML. Do not pull in frameworks.
+2. **Write only the content file.** The page's look and behaviour live in an engine you don't touch (`engine/engine.js`, `engine/engine.css`, `engine/page.html`, next to this file). You write one plain script, `~/explanations/<kebab-topic>.content.js`, that declares `META`, `CAST`, `GLOSSARY`, `DIAGRAM` and `STEPS` (see "The content file" below). Start from `examples/token-401.content.js`: copy its shape, replace all of its content. No HTML shell, CSS, engine code or frameworks in it.
 3. **Cold-reader check (required).** Claude can't see its own assumptions, so test the page on someone who has none of the conversation. Spawn a fresh subagent (`Agent` tool, `general-purpose`, never a fork — a fork inherits the context) and give it **only the page's text**: `META`, `CAST`, `GLOSSARY` and every step's fields, in order — not the conversation, not the source explanation. Ask it to read as a newcomer to this project and list, per step: every term or name it couldn't place, every jump where it didn't see how this follows from the previous step, every "why?" left unanswered, and anything it had to guess. For each item, fix the page: add a `CAST`/`GLOSSARY` entry, add a sentence or prerequisite to the Context step, add a transition, or split out a new step. Fix only with verified facts (see the accuracy rule). Re-run the check once if you added steps; then move on. If the `Agent` tool is unavailable, do the same pass yourself, reading strictly as someone who has only the page.
-4. **Deliver locally.** Write the file to `~/explanations/<kebab-topic>.html` and run `open <path>` (macOS) / `xdg-open` (Linux). Never publish to claude.ai or use the `Artifact` tool unless the user explicitly asks for it.
+4. **Build and deliver locally.** Run `node <this skill's directory>/build.mjs ~/explanations/<kebab-topic>.content.js` (Node 22+, no install). It checks the content, inlines it with the engine into `~/explanations/<kebab-topic>.html` (one self-contained file, works offline) and prints the path. If it lists errors, fix the content file and run it again; fix its warnings too (a `<dfn>` with no `CAST`/`GLOSSARY` entry, a missing `summary`, a 2-option quiz…). Then run `open <path>` (macOS) / `xdg-open` (Linux). Keep the `.content.js` next to the page: to change the page later, edit the content and rebuild — never edit the built HTML. Never publish to claude.ai or use the `Artifact` tool unless the user explicitly asks for it.
 5. Reply in chat with **one line**: what the page covers + file path. Don't repeat the explanation in chat.
+
+## The content file
+
+A plain script (not a module) with top-level `const` declarations; the build runs it, checks it, and inlines it into the page before the engine:
+
+```js
+const META = { title: "Why an expired token gets a 401", bigPicture: "One sentence: what this is and why it matters." };
+const CAST = { "orders-svc": "The service that returns a customer's orders." };   // optional
+const GLOSSARY = { "token": "A signed string the client sends to prove who it is." };   // optional
+const DIAGRAM = `<svg viewBox="0 0 640 170" role="img" aria-label="…"> <g data-id="gw">…</g> … </svg>`;   // optional
+const STEPS = [ { title, summary, context, body, diagram, … }, …, { title: "Recap", body, diagram: {} } ];
+```
+
+- `META` and `STEPS` are required; `CAST`, `GLOSSARY` and `DIAGRAM` may be left out.
+- Strings hold HTML (`<dfn>`, `<mark>`, `<code>`, `<strong>`); use template literals for multi-line `body`, `deeper` and `DIAGRAM`.
+- Plain data only: the content runs before the engine, so no DOM code, no `<script>` or `<link>`, no external URLs (the build rejects them).
+- Rebuild an existing page: `node build.mjs <topic>.content.js`. A page whose content file is lost (or one made with the old `template.html`): `node build.mjs --extract <page>.html` writes `<page>.content.js` next to it, then build that.
 
 ## Content rules per step
 
@@ -55,11 +72,11 @@ Global rules:
 - **One diagram, same positions in every step** (the `DIAGRAM` + `diagram.hl` mechanism): consistency beats novelty. Follow the rules in `diagram-recipes.md` (labelled arrows, 1–3 parts per step, ≤ ~7 boxes, no sentences in boxes).
 - Colour carries one meaning: `<mark>` and `.hl` (orange) = the thing this step is about; key ideas are just **bold**.
 - Use the user's actual names (files, services, functions) from the conversation, not generic placeholders.
-- Final step is always **Recap**: a 1–2 sentence `body` + a "how it all fits" `visual`. Don't write the step list yourself; the template builds it from each step's `title` + `summary` (clickable, with quiz marks) and adds the finish panel (score, Start over, Review all, Glossary).
+- Final step is always **Recap**: a 1–2 sentence `body` + a "how it all fits" `visual`. Don't write the step list yourself; the engine builds it from each step's `title` + `summary` (clickable, with quiz marks) and adds the finish panel (score, Start over, Review all, Glossary).
 - No external network resources (fonts, CDNs, images). Must work offline and in light/dark mode.
 - Accuracy over flourish: **add background context freely when it is verified** — from code you read, docs, or the conversation itself — because missing context is the most common reason an explanation can't be followed. Never invent it: if a fact the reader needs can't be verified, check it (read the file, grep) or say plainly on the page that it's an assumption.
 
-## Template features (already implemented — keep them)
+## Engine features (already implemented — you get them by building)
 
 - **Fits the viewport**: fixed top bar / sidebar / footer; only the step area scrolls. On wide screens each step is two columns (text left, visual + code right); code wraps instead of being clipped.
 - **Orientation**: the sidebar lists every step title (current / visited, plus ✓ / ? quiz marks) under the big picture. The big picture also opens step 1 on every screen. On phones the top bar shows title + `n / N`, and the ☰ drawer holds the steps, Glossary, Show all and the theme switch.
