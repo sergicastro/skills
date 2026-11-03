@@ -95,6 +95,36 @@ test("built sample: features work in a browser", { skip }, async () => {
   assert.equal(await js(`document.querySelectorAll("#outline .mk")[2].textContent`), "?");
   assert.match(await js(`document.querySelector("#live").textContent`), /Nothing is forwarded/);
 
+  // "Still confused here": copies a prompt with the step's text, its terms, the missed check and what the reader typed
+  await js(`window.__copied = null; navigator.clipboard.writeText = t => (window.__copied = t, Promise.resolve())`);
+  await js(`(d => (d.open = true, d.querySelector("textarea").value = "why not the service?", d.querySelector("[data-copy]").click()))(document.querySelector("#step-3 .stuck"))`);
+  await sleep(50);
+  const prompt = await js(`window.__copied`);
+  assert.match(prompt, /"Why an expired token gets a 401".*step 3 of 6: "/s);
+  assert.match(prompt, /What this step says:\n- In short: .+\n- \S/);
+  assert.doesNotMatch(prompt, /Terms it uses/, "step 3 has no <dfn>");
+  assert.match(prompt, /I got this step's check wrong\. Question: ".+" The answer is ".+"\./);
+  assert.match(prompt, /What's unclear to me: why not the service\?/);
+  assert.doesNotMatch(prompt, /file:|\/Users\/|\/home\/|<\w/, "no path or markup in the prompt");
+  assert.ok(await js(`document.querySelector("#step-3 .stuck .stuck-out").hidden`));
+  assert.match(await js(`document.querySelector("#step-3 .stuck-msg").textContent`), /^Copied/);
+  // step 2 uses <dfn>Gateway</dfn>: its definition goes along; nothing typed gets a stock line
+  await js(`document.querySelector("#step-2 .stuck [data-copy]").click()`);
+  await sleep(50);
+  const prompt2 = await js(`window.__copied`);
+  assert.match(prompt2, /Terms it uses, as the page defines them:\n- Gateway: \S/);
+  assert.match(prompt2, /What's unclear to me: I can't say exactly/);
+  assert.doesNotMatch(prompt2, /check wrong/);
+  // no clipboard at all: the prompt is shown, selected, to copy by hand
+  await js(`navigator.clipboard.writeText = () => Promise.reject(new Error("denied")); document.execCommand = () => false`);
+  await js(`document.querySelector("#step-3 .stuck [data-copy]").click()`);
+  await sleep(50);
+  assert.ok(await js(`(o => !o.hidden && o.value.includes("step 3 of 6") && document.activeElement === o && getComputedStyle(o).display !== "none")(document.querySelector("#step-3 .stuck-out"))`));
+  assert.match(await js(`document.querySelector("#live").textContent`), /Couldn't copy/);
+  // typing in the box doesn't change step
+  await js(`document.querySelector("#step-3 .stuck textarea").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }))`);
+  assert.equal(await step(), 2);
+
   // build stages: step 4 hides "deny" until Reveal
   await js(`document.querySelector("#next").click()`);
   assert.equal(await step(), 3);
@@ -158,7 +188,9 @@ test("a page from the old template.html renders the same after extract + rebuild
   let old;
   try { old = execFileSync("git", ["show", "7de652b:plugins/explain-interactive/skills/explain-interactive/template.html"], { cwd: SKILL, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }); }
   catch { return t.skip("old template not in git history here"); }
-  const snapshot = `JSON.stringify({ title: document.title, stage: document.querySelector("#stage").innerHTML,
+  // The rebuilt page has engine features the old template lacked ("Still confused here"); compare the rest
+  const snapshot = `document.querySelectorAll(".stuck").forEach(e => e.remove()), JSON.stringify({ title: document.title,
+    stage: document.querySelector("#stage").innerHTML.replace(/>\\s+</g, "><"),
     outline: document.querySelector("#outline").innerHTML, gloss: document.querySelector("#gloss").innerHTML,
     next: document.querySelector("#next").textContent })`;
   const a = join(tmp, "old.html"), b = join(tmp, "rebuilt.html");

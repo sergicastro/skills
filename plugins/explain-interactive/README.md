@@ -3,7 +3,8 @@
 A Claude Code skill that turns an explanation you found hard to follow into a
 self-contained, step-by-step interactive HTML page. Each page follows one running
 example through a single shared diagram, highlights the part each step is about, and
-adds a glossary, a recap and short quizzes.
+adds a glossary, a recap and short quizzes. A reader still stuck on a step can copy a
+ready-made prompt about that step and paste it back into Claude.
 Besides that walkthrough, a page can be built around a decision (options against criteria,
 with a recommendation), a before/after diff, a debugging story (hypotheses ruled out one
 by one) or a concept built up layer by layer; the skill picks the type that fits.

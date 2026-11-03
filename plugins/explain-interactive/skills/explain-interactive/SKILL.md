@@ -30,6 +30,8 @@ Turn a complex explanation into a single self-contained HTML page that a human c
 5. **Build and deliver locally.** Run `node <this skill's directory>/build.mjs ~/explanations/<kebab-topic>.content.js` (Node 22+, no install). It checks the content, inlines it with the engine into `~/explanations/<kebab-topic>.html` (one self-contained file, works offline) and prints the path. If it lists errors, fix the content file and run it again; fix its warnings too (a `<dfn>` with no `CAST`/`GLOSSARY` entry, a missing `summary`, a 2-option quiz…). Then run `open <path>` (macOS) / `xdg-open` (Linux). Keep the `.content.js` next to the page: to change the page later, edit the content and rebuild — never edit the built HTML. Never publish to claude.ai or use the `Artifact` tool unless the user explicitly asks for it.
 6. Reply in chat with **one line**: what the page covers, its type, and the file path. Don't repeat the explanation in chat.
 
+**When the reader comes back stuck.** Each step has a "Still confused here" box that copies a prompt starting *I'm reading an explainer page, "<title>", and I'm stuck on step n of N*. It carries the step's text, the terms it uses, a missed check and what the reader typed. Answer it in chat, aimed at what they said is unclear. If the answer shows the page itself skips or gets something wrong, fix that step in the `.content.js` and rebuild, and say so in one line.
+
 ## Page types
 
 Every type keeps the same page: sidebar, Next/Back, Context step, quizzes, glossary, Recap. The type adds one panel, drawn next to each step's text, that holds the thing the page is built around. Set it with `META.type`; leave it out for a walkthrough.
@@ -168,6 +170,7 @@ Global rules:
 - **Shared diagram**: one `DIAGRAM`, per-step `diagram.hl` lighting, auto-ghosting of parts not yet introduced, legend, staged `build` reveals, diagram kit classes (`.label .zone .lifeline .bad .ok .flow .dim`), arrowheads that follow the theme.
 - **Orientation**: every step shows "Step n of N"; steps slide in from the direction of travel; code lines with `←` are highlighted.
 - **Quiz**: options shown in a shuffled (but stable across reloads) order; one retry before the answer is revealed, with option-specific hints; results show in the sidebar and the Recap.
+- **Still confused here**: a box under every step. The reader can say what's unclear, then copy a prompt to paste back into Claude: page title, step n of N, the step's summary, text and analogy, the terms it uses, a missed check, and what they typed. Nothing is sent anywhere, and the prompt holds no file path. Copying works from `file://`; where the browser refuses, the prompt is shown selected to copy by hand. Hidden when printing.
 - **Progress is remembered** per page (localStorage): visited steps, quiz answers, last step.
 - "Show all" for skimming / printing; the sidebar and counter follow the scroll position.
 - **Context card** on step 1 (`context` field) and a **Who's who** section (`CAST`) shown first in the Glossary drawer; `<dfn>` tooltips look up both `CAST` and `GLOSSARY`.
