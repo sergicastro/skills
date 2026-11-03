@@ -14,19 +14,100 @@ Turn a complex explanation into a single self-contained HTML page that a human c
 
 ## Workflow
 
-0. **Find the reader's gap.** From the user's message, work out *what* they found hard to follow and what they likely already know (their role, what they've said, what they've done in the conversation). Pitch the page at that level and give the confusing point the most room. If the source explanation is a reply inside a conversation, assume it leans on context the reader never saw: files Claude read, earlier turns, how the system is laid out.
-1. **List the assumptions, then decompose.** Before planning steps, write down (internally) everything the source explanation takes for granted: terms, project names, how the system is laid out, why the problem exists, what the starting state is. Each item must end up somewhere on the page — the Context step, a step of its own, `CAST`, or `GLOSSARY` — never left unstated. Then produce the learning path:
+0. **Pick the page type** from "Page types" below: it decides what the page is built around (a mechanism, a choice, a change, an investigation, a concept). Say which one you picked in your final line.
+1. **Find the reader's gap.** From the user's message, work out *what* they found hard to follow and what they likely already know (their role, what they've said, what they've done in the conversation). Pitch the page at that level and give the confusing point the most room. If the source explanation is a reply inside a conversation, assume it leans on context the reader never saw: files Claude read, earlier turns, how the system is laid out.
+2. **List the assumptions, then decompose.** Before planning steps, write down (internally) everything the source explanation takes for granted: terms, project names, how the system is laid out, why the problem exists, what the starting state is. Each item must end up somewhere on the page — the Context step, a step of its own, `CAST`, or `GLOSSARY` — never left unstated. Then produce the learning path:
    - One-sentence **big picture** (what & why).
    - A **Context step** (always step 1, see below): the question, where it happens, why it matters, prerequisites, the running example set up in full.
    - One **running example**: a concrete case from the conversation (a specific request, file, value — e.g. "`GET /orders` with an expired token") that every step follows. It supplies the real values for diagram labels and code.
    - 4–10 **steps**, each introducing ONE new idea, ordered so each builds only on earlier ones.
    - **Prerequisite terms** → `GLOSSARY` entries; **every project-specific name** on the page (service, file, function, team, flag) → a `CAST` one-liner.
+   - For a type other than walkthrough, plan its structure first (the options and criteria, the two versions, the hypotheses, the layers) and give each step one piece of it; see "Page types".
    - Where the real mechanism is spatial/temporal (flows, layers, sequences, state changes), plan **one diagram for the whole page**: pick the pattern from `diagram-recipes.md` (read it), then decide which parts each step lights up.
    - The 2–3 points where a learner most likely gets confused → **check-your-understanding** questions. Each wrong option should be a real misconception from the source.
-2. **Write only the content file.** The page's look and behaviour live in an engine you don't touch (`engine/engine.js`, `engine/engine.css`, `engine/page.html`, next to this file). You write one plain script, `~/explanations/<kebab-topic>.content.js`, that declares `META`, `CAST`, `GLOSSARY`, `DIAGRAM` and `STEPS` (see "The content file" below). Start from `examples/token-401.content.js`: copy its shape, replace all of its content. No HTML shell, CSS, engine code or frameworks in it.
-3. **Cold-reader check (required).** Claude can't see its own assumptions, so test the page on someone who has none of the conversation. Spawn a fresh subagent (`Agent` tool, `general-purpose`, never a fork — a fork inherits the context) and give it **only the page's text**: `META`, `CAST`, `GLOSSARY` and every step's fields, in order — not the conversation, not the source explanation. Ask it to read as a newcomer to this project and list, per step: every term or name it couldn't place, every jump where it didn't see how this follows from the previous step, every "why?" left unanswered, and anything it had to guess. For each item, fix the page: add a `CAST`/`GLOSSARY` entry, add a sentence or prerequisite to the Context step, add a transition, or split out a new step. Fix only with verified facts (see the accuracy rule). Re-run the check once if you added steps; then move on. If the `Agent` tool is unavailable, do the same pass yourself, reading strictly as someone who has only the page.
-4. **Build and deliver locally.** Run `node <this skill's directory>/build.mjs ~/explanations/<kebab-topic>.content.js` (Node 22+, no install). It checks the content, inlines it with the engine into `~/explanations/<kebab-topic>.html` (one self-contained file, works offline) and prints the path. If it lists errors, fix the content file and run it again; fix its warnings too (a `<dfn>` with no `CAST`/`GLOSSARY` entry, a missing `summary`, a 2-option quiz…). Then run `open <path>` (macOS) / `xdg-open` (Linux). Keep the `.content.js` next to the page: to change the page later, edit the content and rebuild — never edit the built HTML. Never publish to claude.ai or use the `Artifact` tool unless the user explicitly asks for it.
-5. Reply in chat with **one line**: what the page covers + file path. Don't repeat the explanation in chat.
+3. **Write only the content file.** The page's look and behaviour live in an engine you don't touch (`engine/engine.js`, `engine/engine.css`, `engine/page.html`, next to this file). You write one plain script, `~/explanations/<kebab-topic>.content.js`, that declares `META`, `CAST`, `GLOSSARY`, `DIAGRAM` and `STEPS` (see "The content file" below). Start from the example for your page type (table below): copy its shape, replace all of its content. No HTML shell, CSS, engine code or frameworks in it.
+4. **Cold-reader check (required).** Claude can't see its own assumptions, so test the page on someone who has none of the conversation. Spawn a fresh subagent (`Agent` tool, `general-purpose`, never a fork — a fork inherits the context) and give it **only the page's text**: `META`, `CAST`, `GLOSSARY`, the type's own structure (`DECISION`, `HYPOTHESES` or `LAYERS`) and every step's fields, in order — not the conversation, not the source explanation. Ask it to read as a newcomer to this project and list, per step: every term or name it couldn't place, every jump where it didn't see how this follows from the previous step, every "why?" left unanswered, and anything it had to guess. For each item, fix the page: add a `CAST`/`GLOSSARY` entry, add a sentence or prerequisite to the Context step, add a transition, or split out a new step. Fix only with verified facts (see the accuracy rule). Re-run the check once if you added steps; then move on. If the `Agent` tool is unavailable, do the same pass yourself, reading strictly as someone who has only the page.
+5. **Build and deliver locally.** Run `node <this skill's directory>/build.mjs ~/explanations/<kebab-topic>.content.js` (Node 22+, no install). It checks the content, inlines it with the engine into `~/explanations/<kebab-topic>.html` (one self-contained file, works offline) and prints the path. If it lists errors, fix the content file and run it again; fix its warnings too (a `<dfn>` with no `CAST`/`GLOSSARY` entry, a missing `summary`, a 2-option quiz…). Then run `open <path>` (macOS) / `xdg-open` (Linux). Keep the `.content.js` next to the page: to change the page later, edit the content and rebuild — never edit the built HTML. Never publish to claude.ai or use the `Artifact` tool unless the user explicitly asks for it.
+6. Reply in chat with **one line**: what the page covers, its type, and the file path. Don't repeat the explanation in chat.
+
+## Page types
+
+Every type keeps the same page: sidebar, Next/Back, Context step, quizzes, glossary, Recap. The type adds one panel, drawn next to each step's text, that holds the thing the page is built around. Set it with `META.type`; leave it out for a walkthrough.
+
+| If the explanation is about… | Type | The page is built around | Example |
+|---|---|---|---|
+| how something works: a request's path, a sequence, what calls what | `walkthrough` (default) | one shared `DIAGRAM`, lit part by part | `examples/token-401.content.js` |
+| which of several options to pick, and why | `decision` | an options × criteria table (`DECISION`), with cost and a recommendation | `examples/session-store.content.js` |
+| what a change does: a refactor, a config change, a migration | `before-after` | a line diff of the two versions per step (`diff`), and the two states side by side on step 1 | `examples/multistage-build.content.js` |
+| why something broke, and how that was found | `debugging` | phases (symptom → hypothesis → evidence → cause → fix), evidence blocks, and a board of hypotheses ruled out or confirmed | `examples/cron-twice.content.js` |
+| an idea made of parts that build on each other: a protocol stack, a mental model, layers of an abstraction | `concept` | a stack of layers (`LAYERS`), one added per step, foundation at the bottom | `examples/https-layers.content.js` |
+
+How to choose:
+- Ask what the reader has to come away with. A path through a system → walkthrough. A choice → decision. A difference between two versions → before-after. A cause → debugging. A model they can reuse → concept.
+- If the user's question starts with "which", "should we" or "X or Y", it is a decision. "What changed" or "what does this PR do" is before-after. "Why did X happen" about a past failure is debugging. "How does X work" is a walkthrough when X has moving parts, and a concept when X is an idea with levels.
+- When two fit, pick the one whose panel the reader would look at most. A debugging story can still carry a `DIAGRAM` or a `code` snippet on a step; a decision step can still show a `visual`.
+- Don't force it: if none fits clearly, use walkthrough.
+
+### `decision`
+
+```js
+const META = { type: "decision", title, bigPicture };
+const DECISION = {
+  options:  [{ id: "redis", name: "Redis", summary: "one shared store" }, …],   // the columns, 2–4
+  criteria: [{ id: "speed", name: "Read speed" }, …],                          // the rows, 2–6
+  ratings:  { redis: { speed: { level: "good", note: "under a millisecond" } }, … },   // level: good | fair | poor; or just "good"
+  cost:     { redis: "One more service to run", … },   // optional: adds a last "Cost" row (its id is "cost")
+  recommend: "redis",
+  why: "the one sentence that decides it",
+};
+```
+
+- Each step names what it discusses with `matrix: { criteria: [ids], options: [ids] }`: those rows and columns are lit, rows not discussed yet are ghosted, the Recap shows all. Discuss **one criterion per step**, in the order that eliminates options fastest, and use the running example ("Ana's second request lands on another server") to show why the criterion matters.
+- The step that concludes sets `matrix: { …, recommend: true }`; from there on the recommended column is marked and `why` shown under the table. Without it the recommendation appears only on the Recap.
+- Fill every cell: a missing rating is a warning. A `note` says why, in a few words; the level alone does not.
+- The step 1 `context.question` names the choice; `why` says what goes wrong with the wrong pick.
+
+### `before-after`
+
+```js
+const META = { type: "before-after", title, bigPicture, before: "One stage: the image also holds the compiler.", after: "Two stages: …" };
+// on a step:
+diff: { label: "Dockerfile", before: `…`, after: `…` },
+```
+
+- `META.before` / `META.after` (one sentence each, HTML allowed) are shown side by side on step 1.
+- Each step's `diff` shows **only the part that step changes**, with a line or two around it for orientation. The engine works out the changed lines and aligns them; a step with a `diff` is always wide. Put the starting version in step 1's `code`, and the whole diff on the Recap.
+- One change per step, in the order that makes each one make sense ("name the stage" before "copy from it"). The `body` says why the change is needed, not only what it is: the diff already shows what.
+
+### `debugging`
+
+```js
+const META = { type: "debugging", title, bigPicture };
+const HYPOTHESES = [{ id: "retry", text: "The mail server retried a send" }, …];
+// on a step:
+phase: "evidence",                                      // symptom | hypothesis | evidence | cause | fix
+verdicts: { retry: "ruled-out" },                       // open | ruled-out | confirmed
+evidence: { label: "grep 'Nightly report' mail.log", text: `…` },
+```
+
+- Step 1 is the symptom (`phase: "symptom"`, with its `evidence`). Then the story runs in the order it was found: raise a hypothesis (`verdicts: { id: "open" }`), show evidence, rule it out or keep it, until one is `confirmed` at the `cause` step; then the `fix`.
+- The board on each step lists the hypotheses raised so far with their current state; the ones this step changes are lit. A hypothesis not raised yet is not shown, so the page does not give the answer away. Raise every hypothesis in `HYPOTHESES` at some step.
+- `evidence.text` is a log line, command output or code, ≤ 15 lines; `label` is the command or file it came from. Lines with `←` are highlighted. Use the real output from the conversation; never make it up.
+- Include the wrong turns that were actually taken: they are where the reader learns how to rule things out.
+
+### `concept`
+
+```js
+const META = { type: "concept", title, bigPicture };
+const LAYERS = [{ id: "ip", name: "IP", text: "Moves packets, with no promise they arrive." }, …];   // foundation first
+// on a step:
+layer: "ip",
+```
+
+- `LAYERS[0]` is the foundation and is drawn at the bottom; each later layer sits on the one before. Each step from step 2 on adds **exactly one** layer, bottom-up; the layer's `text` is the one-line summary that stays on the stack.
+- Layers not reached yet show their name only, ghosted, so the reader sees where the explanation is going without its answers.
+- Each `body` says what the new layer adds that the ones below could not do; that gap is why the layer exists.
+- The Context step and the Recap have no `layer`: they show the stack ghosted and complete.
 
 ## The content file
 
@@ -40,7 +121,7 @@ const DIAGRAM = `<svg viewBox="0 0 640 170" role="img" aria-label="…"> <g data
 const STEPS = [ { title, summary, context, body, diagram, … }, …, { title: "Recap", body, diagram: {} } ];
 ```
 
-- `META` and `STEPS` are required; `CAST`, `GLOSSARY` and `DIAGRAM` may be left out.
+- `META` and `STEPS` are required; `CAST`, `GLOSSARY` and `DIAGRAM` may be left out. `META.type` picks the page type, and `decision`, `debugging` and `concept` pages also declare `DECISION`, `HYPOTHESES` or `LAYERS` (see "Page types").
 - Strings hold HTML (`<dfn>`, `<mark>`, `<code>`, `<strong>`); use template literals for multi-line `body`, `deeper` and `DIAGRAM`.
 - Plain data only: the content runs before the engine, so no DOM code, no `<script>` or `<link>`, no external URLs (the build rejects them).
 - Rebuild an existing page: `node build.mjs <topic>.content.js`. A page whose content file is lost (or one made with the old `template.html`): `node build.mjs --extract <page>.html` writes `<page>.content.js` next to it, then build that.
@@ -61,11 +142,12 @@ Each step object has:
 | `code` | Optional minimal snippet (≤ 15 lines) — only the lines that matter. Lines containing `←` (e.g. `// ← this`) are highlighted in the diagram's colour. |
 | `deeper` | Optional "go deeper" detail, hidden behind a toggle. Edge cases and nuance go here, NOT in `body`. |
 | `quiz` | Optional `{q, options[], answer, why}` — for the confusing steps. Use 3–4 options: the reader gets one retry before the answer is revealed, and with only 2 options the retry would give it away. Ask a **prediction** ("what happens if…", "which component…"), not recall of the text. An option may be `{t, why}`: `why` is shown on the retry and explains why *that* answer is wrong (name the misconception). `why` on the quiz explains the right answer and names the trap. A quiz may sit on the step *after* a concept is introduced, to apply it. The page shuffles the options on display, so write them in any order and don't try to vary the right answer's position yourself. |
+| `matrix`, `diff`, `phase`, `verdicts`, `evidence`, `layer` | Page-type fields; see "Page types". `panel: false` hides the type's panel on one step. |
 | `wide` | Optional `true` — puts `visual`/`code` under the text at full width instead of beside it. Use for very wide diagrams. The Recap is always wide. |
 
 Global rules:
 - **One new concept per step.** If a step needs "and also…", split it.
-- **Context before mechanism**: step 1 is always the Context step (`title` like "What we're figuring out", `context` card, a one-sentence `body` saying what the steps will follow, `diagram: {}` so the whole map appears ghosted as the setting). No reader should meet the mechanism before knowing the question, the setting and why it matters.
+- **Context before mechanism**: step 1 is always the Context step, whatever the type (`title` like "What we're figuring out", `context` card, a one-sentence `body` saying what the steps will follow, `diagram: {}` so the whole map appears ghosted as the setting). No reader should meet the mechanism before knowing the question, the setting and why it matters.
 - **Concrete before abstract**: from step 2 on, each `body` starts with what happens to the running example, then states the general rule. Diagram labels and code use the example's real values. Step 2 lights only the entry point.
 - **No unexplained names**: every project-specific name used anywhere on the page is in `CAST`, and wrapped in `<dfn>` the first time it appears. Every jargon term is in `GLOSSARY`, same treatment.
 - **No gaps between steps**: reading only the step titles and the first clause of each body should tell a continuous story.
@@ -82,6 +164,7 @@ Global rules:
 - **Orientation**: the sidebar lists every step title (current / visited, plus ✓ / ? quiz marks) under the big picture. The big picture also opens step 1 on every screen. On phones the top bar shows title + `n / N`, and the ☰ drawer holds the steps, Glossary, Show all and the theme switch.
 - **Navigation**: footer Back (hidden on step 1) / Next with a "Next: <title>" preview (shown on the button on phones); ← / → keys; swipe on phones; each step is a browser-history entry, so browser Back/Forward move between steps; `#step-N` deep links.
 - **Ending**: on the last step Next becomes "Finish ✓" and jumps to the finish panel (score, Start over, Review all steps, Open glossary).
+- **Page types**: the decision matrix, line diff, hypothesis board and layer stack described in "Page types", each with the same new / introduced / coming-later ghosting as the diagram.
 - **Shared diagram**: one `DIAGRAM`, per-step `diagram.hl` lighting, auto-ghosting of parts not yet introduced, legend, staged `build` reveals, diagram kit classes (`.label .zone .lifeline .bad .ok .flow .dim`), arrowheads that follow the theme.
 - **Orientation**: every step shows "Step n of N"; steps slide in from the direction of travel; code lines with `←` are highlighted.
 - **Quiz**: options shown in a shuffled (but stable across reloads) order; one retry before the answer is revealed, with option-specific hints; results show in the sidebar and the Recap.

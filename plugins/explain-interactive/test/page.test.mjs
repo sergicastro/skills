@@ -169,3 +169,97 @@ test("a page from the old template.html renders the same after extract + rebuild
   await open(b); await js("localStorage.clear()"); await open(b);
   assert.equal(await js(snapshot), before);
 });
+
+// One page per type: each draws its own panel, and walking every step raises no console problems
+async function openSample(name) {
+  const page = join(tmp, `${name}.html`);
+  writeFileSync(page, build(readFileSync(join(SKILL, `examples/${name}.content.js`), "utf8")).html);
+  await open(page); await js("localStorage.clear()"); await open(page);
+  return page;
+}
+const goTo = n => js(`document.querySelectorAll("#outline button")[${n - 1}].click()`);
+const walkAll = async () => { const n = await js(`document.querySelectorAll(".step").length`); for (let i = 1; i < n; i++) await js(`document.querySelector("#next").click()`); };
+
+test("decision page: options × criteria matrix, lit per step, recommendation", { skip }, async () => {
+  problems.length = 0;
+  await openSample("session-store");
+  assert.ok(await js(`document.body.classList.contains("type-decision")`));
+  assert.equal(await js(`document.querySelectorAll("#step-1 .matrix thead th[scope=col]").length`), 3);
+  assert.equal(await js(`document.querySelectorAll("#step-1 .matrix tbody tr").length`), 4);   // 3 criteria + cost
+  // step 2 lights the "shared" row and the memory column; later rows are ghosted; no recommendation yet
+  assert.ok(await js(`(t => t.querySelector("tbody tr").classList.contains("hl") && t.querySelectorAll("tbody tr.dim").length === 3
+    && t.querySelector("thead th.hl").textContent.startsWith("Server memory"))(document.querySelector("#step-2 .matrix"))`));
+  assert.ok(await js(`!document.querySelector("#step-2 .matrix .rec") && !document.querySelector("#step-2 .rec-why")`));
+  // ratings carry their level for screen readers too
+  assert.match(await js(`document.querySelector("#step-2 .matrix .lv.poor").textContent`), /poor/);
+  // step 5 sets recommend: the Redis column is marked and the reason shown, on that step and on the Recap
+  for (const s of [5, 6]) {
+    assert.match(await js(`document.querySelector("#step-${s} .matrix thead th.rec").textContent`), /Redis.*Recommended/);
+    assert.match(await js(`document.querySelector("#step-${s} .rec-why").textContent`), /^Why Redis:/);
+  }
+  assert.ok(await js(`!document.querySelector("#step-6 .matrix .dim")`));
+  await walkAll();
+  assert.deepEqual(problems, []);
+});
+
+test("before/after page: banner and an aligned line diff that stacks on phones", { skip }, async () => {
+  problems.length = 0;
+  await openSample("multistage-build");
+  assert.ok(await js(`document.body.classList.contains("type-before-after")`));
+  assert.match(await js(`document.querySelector("#step-1 .ba").textContent`), /Before.*After/s);
+  // step 2: one line changed → one del and one add on the same row
+  assert.deepEqual(await js(`[...document.querySelectorAll("#step-2 .diff-grid .c:not(.hd)")].map(c => c.classList[2])`), ["del", "add", "same", "same"]);
+  assert.ok(await js(`(c => c[0].style.getPropertyValue("--r") === c[1].style.getPropertyValue("--r"))(document.querySelectorAll("#step-2 .diff-grid .del, #step-2 .diff-grid .add"))`));
+  // step 4: three added lines on the After side are padded on the Before side
+  assert.equal(await js(`document.querySelectorAll("#step-4 .diff-grid .R.add").length`), 3);
+  assert.equal(await js(`document.querySelectorAll("#step-4 .diff-grid .L.pad").length`), 3);
+  assert.ok(await js(`document.querySelector("#step-4").classList.contains("wide")`));
+  // diff text is shown as text, not markup
+  assert.match(await js(`document.querySelector("#step-4 .diff-grid").textContent`), /COPY --from=build/);
+  // two columns on a wide screen, one on a phone (the whole Before, then the whole After)
+  await goTo(4);
+  const cols = () => js(`getComputedStyle(document.querySelector("#step-4 .diff-grid")).gridTemplateColumns.split(" ").length`);
+  assert.equal(await cols(), 2);
+  await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 800, deviceScaleFactor: 1, mobile: true });
+  assert.equal(await cols(), 1);
+  // every Before line sits above the After header
+  assert.ok(await js(`(g => { const top = e => e.getBoundingClientRect().top, after = top(g.querySelector(".R.hd"));
+    return [...g.querySelectorAll(".L:not(.pad)")].every(e => top(e) < after); })(document.querySelector("#step-4 .diff-grid"))`));
+  assert.ok(await js(`document.querySelector("#stage").scrollWidth <= document.querySelector("#stage").clientWidth + 1`), "no sideways scroll on a phone");
+  await send("Emulation.clearDeviceMetricsOverride");
+  await walkAll();
+  assert.deepEqual(problems, []);
+});
+
+test("debugging page: phases, evidence and a case board that changes per step", { skip }, async () => {
+  problems.length = 0;
+  await openSample("cron-twice");
+  assert.ok(await js(`document.body.classList.contains("type-debugging")`));
+  assert.equal(await js(`document.querySelector("#step-1 .eyebrow .phase").textContent`), "Symptom");
+  assert.equal(await js(`document.querySelectorAll("#outline .ph").length`), 7);
+  assert.ok(await js(`!!document.querySelector("#step-1 .evidence pre") && !document.querySelector("#step-1 .board")`));
+  // the board shows only hypotheses raised so far, with their state as of that step
+  const board = s => js(`[...document.querySelectorAll("#step-${s} .board li")].map(l => l.className)`);
+  assert.deepEqual(await board(2), ["v-open hl"]);
+  assert.deepEqual(await board(3), ["v-ruled-out hl"]);
+  assert.deepEqual(await board(5), ["v-ruled-out", "v-ruled-out", "v-open hl"]);
+  assert.deepEqual(await board(6), ["v-ruled-out", "v-ruled-out", "v-confirmed hl"]);
+  assert.deepEqual(await board(8), ["v-ruled-out", "v-ruled-out", "v-confirmed"]);
+  await walkAll();
+  assert.deepEqual(problems, []);
+});
+
+test("concept page: a layer stack that grows bottom-up", { skip }, async () => {
+  problems.length = 0;
+  await openSample("https-layers");
+  assert.ok(await js(`document.body.classList.contains("type-concept")`));
+  const stack = s => js(`[...document.querySelectorAll("#step-${s} .layer")].map(l => l.querySelector("b").textContent + ":" + (l.classList[1] || ""))`);
+  assert.deepEqual(await stack(1), ["HTTP:dim", "TLS:dim", "TCP:dim", "IP:dim"]);
+  assert.deepEqual(await stack(2), ["HTTP:dim", "TLS:dim", "TCP:dim", "IP:hl"]);
+  assert.deepEqual(await stack(4), ["HTTP:dim", "TLS:hl", "TCP:", "IP:"]);
+  assert.deepEqual(await stack(6), ["HTTP:", "TLS:", "TCP:", "IP:"]);
+  // a layer not reached yet shows its name only, so the page doesn't explain it early
+  assert.equal(await js(`document.querySelector("#step-2 .layer.dim span")`), null);
+  await walkAll();
+  assert.deepEqual(problems, []);
+});

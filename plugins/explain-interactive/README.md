@@ -4,6 +4,9 @@ A Claude Code skill that turns an explanation you found hard to follow into a
 self-contained, step-by-step interactive HTML page. Each page follows one running
 example through a single shared diagram, highlights the part each step is about, and
 adds a glossary, a recap and short quizzes.
+Besides that walkthrough, a page can be built around a decision (options against criteria,
+with a recommendation), a before/after diff, a debugging story (hypotheses ruled out one
+by one) or a concept built up layer by layer; the skill picks the type that fits.
 
 ![A generated page stepping through why an expired token gets a 401: the context card, then one diagram part lit up per step](docs/demo.gif)
 
@@ -29,7 +32,7 @@ On Claude Code older than 2.1.275, add the marketplace first:
 - `skills/explain-interactive/SKILL.md`: the workflow and the data format for each step
 - `skills/explain-interactive/engine/`: the page shell, styles and script shared by every page (`page.html`, `engine.css`, `engine.js`)
 - `skills/explain-interactive/build.mjs`: inlines a content file into the engine and writes one offline HTML file (Node 22+, no dependencies)
-- `skills/explain-interactive/examples/`: a sample content file
+- `skills/explain-interactive/examples/`: one sample content file per page type (walkthrough, decision, before/after, debugging story, concept)
 - `test/`: `node --test plugins/explain-interactive/test/*.test.mjs` (the browser test needs Chrome or Chromium; set `CHROME=` to pick one)
 
 Claude writes only `~/explanations/<topic>.content.js` (`META`, `CAST`, `GLOSSARY`, `DIAGRAM`, `STEPS`); the build turns it into the page. To change a page, edit its content file and rebuild:
