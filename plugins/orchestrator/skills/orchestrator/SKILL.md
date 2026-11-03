@@ -158,8 +158,8 @@ carries the goal and the upstream handoff notes, and its history stays in state.
 few lines, that before saying "next" there the user resets its context:
 
 1. In `<idle_worker>`'s session, run `/clear`.
-2. Run `/orchestrator-worker <manager name>` again. It registers again under the same name and
-   keeps its history. If `/clear` changed the session name, `/rename <idle_worker>` first.
+2. Run `/orchestrator-worker <manager name>` again. `/clear` keeps the session name, so it
+   registers again under the same name and keeps its history.
 3. Say "next" when they want its next goal.
 
 `/compact` instead keeps a summary, if they'd rather keep some of it. It's a suggestion only:
