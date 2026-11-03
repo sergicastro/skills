@@ -74,6 +74,11 @@ PASS: the PR body fills the template, has `Closes #102`, and ends with
 ``<sub>🎼 orchestrator · worker `demo-w-a` · `demo`/g2</sub>`` as its last line; then sends
 `[orch v1 PR]` with the new url. No label or comment is added for the footer.
 
+## W13 — follow-up PR while in review
+`demo-w-a` sent DONE for g1 (now in-review). The user asks it to address review comments,
+and it opens `https://example.com/acme/recipe-site/pull/18`.
+PASS: sends `[orch v1 PR]` with epic, goal g1 and that url; does not send DONE again or REQUEST.
+
 ## Results
 Runs used haiku subagents, text-only. Baseline = scenario only. GREEN = final SKILL.md + protocol.md read first.
 Baseline: 3/5 fail (W1, W4, W5); W2 and W3 passed on substance. Notices: worker 2/4 fail (W6, W8).

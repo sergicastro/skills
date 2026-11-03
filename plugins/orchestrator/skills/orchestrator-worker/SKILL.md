@@ -63,6 +63,8 @@ in the manager session (`rename-worker`).
 9. ERROR → show it to the user and stop. If it says you already hold a goal, wait for the
    ASSIGN or ask the user.
 10. If the user says the goal was sent back, keep working it and send DONE again; don't REQUEST.
+11. While the goal is in review, if the user has you open another PR for it (e.g. review fixes),
+    send `[orch v1 PR]` as in step 6. Don't send DONE again or REQUEST.
 
 ## Notices
 

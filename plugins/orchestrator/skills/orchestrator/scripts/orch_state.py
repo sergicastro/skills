@@ -333,9 +333,9 @@ def require_worker(state, name):
     return w
 
 
-def owned_goal(state, worker, gid):
+def owned_goal(state, worker, gid, statuses=("assigned", "needs-user")):
     g = goal(state, gid)
-    if g["worker"] != worker or g["status"] not in ("assigned", "needs-user"):
+    if g["worker"] != worker or g["status"] not in statuses:
         raise OrchError(f"{gid} is not assigned to {worker}")
     return g
 
@@ -420,7 +420,8 @@ def report_status(state, name, gid, new, reason):
 
 def report_pr(state, name, gid, url):
     require_worker(state, name)
-    g = owned_goal(state, name, gid)
+    # in-review too: review fixes can need a follow-up PR after DONE.
+    g = owned_goal(state, name, gid, ("assigned", "needs-user", "in-review"))
     url = (url or "").strip()
     if not url:
         raise OrchError("url is required")

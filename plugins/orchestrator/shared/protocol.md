@@ -38,7 +38,9 @@ goal: <goal id>
 url: <pr url>
 ```
 Sent right after the worker opens a PR for its goal. A goal can have several. It does not
-change the goal's status. The manager answers `ACK` and ignores a URL it already has.
+change the goal's status. It is also accepted after `DONE` while the goal is `in-review`
+(e.g. a PR with review fixes), from the worker that sent the `DONE`. The manager answers
+`ACK` and ignores a URL it already has.
 
 ```
 [orch v1 DONE]
@@ -124,7 +126,8 @@ reason: <why it was rejected>
 2. The manager accepts messages only from registered senders whose name has the
    worker prefix. `REGISTER` is the only exception, and it still needs the prefix.
    Anything else gets `ERROR`.
-3. A worker reports only on the goal it was assigned. Anything else gets `ERROR`.
+3. A worker reports only on the goal it was assigned. Anything else gets `ERROR`. The one
+   report allowed after `DONE` is `PR`, while that goal is `in-review`.
 4. A worker accepts `ASSIGN` only from the manager it registered with, and only
    in reply to its own `REQUEST`. It accepts `CLOSED` only from that manager.
 5. A worker sends `REQUEST` only when the user tells it to. It never asks for
