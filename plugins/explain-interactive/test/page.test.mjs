@@ -286,3 +286,69 @@ test("concept page: a layer stack that grows bottom-up", { skip }, async () => {
   await walkAll();
   assert.deepEqual(problems, []);
 });
+
+test("what-if controls: a choice and a slider switch the outcome and the diagram, by mouse, keyboard and screen reader", { skip }, async () => {
+  problems.length = 0;
+  const page = await openSample("cache-read");
+  const lit = s => js(`[...document.querySelectorAll("#step-${s} .wi-view:not([hidden]) [data-id].hl")].map(e => e.dataset.id).sort()`);
+  const shown = s => js(`[...document.querySelectorAll("#step-${s} .wi-out")].filter(o => !o.hidden).map(o => o.dataset.wi)`);
+  const key = async k => { for (const type of ["keyDown", "keyUp"]) await send("Input.dispatchKeyEvent", { type, key: k, code: k, windowsVirtualKeyCode: { ArrowRight: 39, ArrowLeft: 37 }[k] }); };
+
+  // choice: the first option is picked on arrival, and only its outcome and its diagram are shown
+  await goTo(4);
+  assert.deepEqual(await shown(4), ["hit"]);
+  assert.deepEqual(await lit(4), ["hit"]);
+  assert.equal(await js(`document.querySelectorAll("#step-4 .wi-view:not([hidden])").length`), 1);
+  assert.ok(await js(`document.querySelector('#step-4 input[value="hit"]').checked`));
+  // a click picks the other one, and the outcome is announced
+  await js(`document.querySelector('#step-4 input[value="miss"]').click()`);
+  assert.deepEqual(await shown(4), ["miss"]);
+  assert.deepEqual(await lit(4), ["db", "miss", "query"]);
+  assert.match(await js(`document.querySelector("#live").textContent`), /^not in Redis: A cache miss: Redis returns \(nil\)/);
+  // keyboard: arrows move between the radios (native group) and don't change the step
+  await js(`document.querySelector('#step-4 input[value="miss"]').focus()`);
+  await key("ArrowLeft");
+  assert.deepEqual(await shown(4), ["hit"]);
+  assert.equal(await js(`location.hash`), "#step-4");
+  // screen reader: a group named by its legend, holding radios named by their labels
+  const ax = await send("Accessibility.getFullAXTree");
+  const named = (role, name) => ax.nodes.some(n => n.role && n.role.value === role && n.name && n.name.value.replace(/\s+/g, " ").trim() === name);
+  assert.ok(named("group", "What if the key is…"), "fieldset named by its legend");
+  assert.ok(named("radio", "in Redis") && named("radio", "not in Redis"));
+
+  // slider: a native range input; its value is read out as the option's label
+  await goTo(6);
+  assert.deepEqual(await shown(6), ["10s"]);
+  assert.equal(await js(`document.querySelector("#step-6 input[type=range]").getAttribute("aria-valuetext")`), "10 s old");
+  await js(`document.querySelector("#step-6 input[type=range]").focus()`);
+  await key("ArrowRight"); await key("ArrowRight");
+  assert.deepEqual(await shown(6), ["61s"]);
+  assert.deepEqual(await lit(6), ["miss", "query"]);
+  assert.equal(await js(`document.querySelector("#step-6 input[type=range]").getAttribute("aria-valuetext")`), "61 s old");
+  assert.equal(await js(`document.querySelector("#step-6 .wi-ticks .on").textContent`), "61 s old");
+  assert.equal(await js(`location.hash`), "#step-6");
+  // a tick label is clickable too
+  await js(`document.querySelectorAll("#step-6 .wi-ticks span")[1].click()`);
+  assert.deepEqual(await shown(6), ["59s"]);
+
+  // parts any option lit count as introduced on later steps, so they are not ghosted there
+  assert.ok(await js(`!document.querySelector('#step-7 [data-id=query]').classList.contains("dim")`));
+
+  // "Still confused here" says which case the reader was looking at
+  await js(`window.__copied = null; navigator.clipboard.writeText = t => (window.__copied = t, Promise.resolve())`);
+  await js(`document.querySelector("#step-6 .stuck [data-copy]").click()`);
+  await sleep(50);
+  assert.match(await js(`window.__copied`), /I set its "What if the cached entry is…" control to "59 s old", which shows: One second left/);
+
+  // the choice is remembered across a reload, and Start over resets it
+  await open(page);
+  await goTo(6);
+  assert.deepEqual(await shown(6), ["59s"]);
+  await goTo(8);
+  await js(`document.querySelector('[data-finish="restart"]').click()`);
+  assert.deepEqual(await shown(6), ["10s"]);
+
+  // every step can be walked without console problems
+  await walkAll();
+  assert.deepEqual(problems, []);
+});

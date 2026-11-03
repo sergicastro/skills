@@ -24,11 +24,12 @@ Turn a complex explanation into a single self-contained HTML page that a human c
    - **Prerequisite terms** → `GLOSSARY` entries; **every project-specific name** on the page (service, file, function, team, flag) → a `CAST` one-liner.
    - For a type other than walkthrough, plan its structure first (the options and criteria, the two versions, the hypotheses, the layers) and give each step one piece of it; see "Page types".
    - Where the real mechanism is spatial/temporal (flows, layers, sequences, state changes), plan **one diagram for the whole page**: read `diagram-recipes.md`, pick the layout (`sequence`, `chain`, `layers` or `states`) that matches the mechanism, list its nodes and edges, then decide which parts each step lights up.
+   - Where the outcome depends on a condition the reader would want to flip (token expired or not, cache hit or miss, a value crossing a limit), plan a **what-if control** on that step instead of two near-identical steps; see "What-if controls".
    - The 2–3 points where a learner most likely gets confused → **check-your-understanding** questions. Each wrong option should be a real misconception from the source.
 3. **Write only the content file.** The page's look and behaviour live in an engine you don't touch (`engine/engine.js`, `engine/engine.css`, `engine/page.html`, next to this file). You write one plain script, `~/explanations/<kebab-topic>.content.js`, that declares `META`, `CAST`, `GLOSSARY`, `DIAGRAM` and `STEPS` (see "The content file" below). Start from the example for your page type (table below): copy its shape, replace all of its content. No HTML shell, CSS, engine code or frameworks in it.
 4. **Check the content (required).** Run `node <this skill's directory>/build.mjs --check ~/explanations/<kebab-topic>.content.js`. It writes nothing and lists every problem as `error:` or `warning:` with the step it is on. Errors: a `diagram` id that is not a `data-id` in `DIAGRAM`, a quiz `answer` out of range, an external resource, and other broken structure. Warnings: a `<dfn>` with no `CAST`/`GLOSSARY` entry, a step that lights more than 3 diagram parts, a lit part with no `<mark>` in the body, a body over 5 sentences, a title over 6 words or a summary over 8, `code` over 15 lines or 60 characters wide, a quiz with other than 3–4 options. Fix all of them in the content file and run it again until it prints `ok`. A warning you keep on purpose (e.g. a long command that can't be wrapped) needs a reason you can state.
 5. **Cold-reader check (required).** Claude can't see its own assumptions, so test the page on someone who has none of the conversation. Spawn a fresh subagent (`Agent` tool, `general-purpose`, never a fork — a fork inherits the context) and give it **only the page's text**: `META`, `CAST`, `GLOSSARY`, the type's own structure (`DECISION`, `HYPOTHESES` or `LAYERS`) and every step's fields, in order — not the conversation, not the source explanation. Ask it to read as a newcomer to this project and list, per step: every term or name it couldn't place, every jump where it didn't see how this follows from the previous step, every "why?" left unanswered, and anything it had to guess. For each item, fix the page: add a `CAST`/`GLOSSARY` entry, add a sentence or prerequisite to the Context step, add a transition, or split out a new step. Fix only with verified facts (see the accuracy rule). Re-run the check once if you added steps; then move on. If the `Agent` tool is unavailable, do the same pass yourself, reading strictly as someone who has only the page.
-6. **Build and review the screenshots (required).** Run `node <this skill's directory>/build.mjs ~/explanations/<kebab-topic>.content.js`. It runs the same checks, inlines the content with the engine into `~/explanations/<kebab-topic>.html` (one self-contained file, works offline) and prints the path; on errors it writes nothing. Then run `node <this skill's directory>/shots.mjs ~/explanations/<kebab-topic>.html --phone`: it renders every step in headless Chrome, as the reader sees it on arrival with all build stages revealed, saves `step-NN.png` (desktop) and `step-NN-phone.png` and prints their paths. **Look at every image** (`Read` each one) and fix the content for what you see: a label that overlaps or is cut off, the wrong part lit, text that doesn't match the picture, a step that needs scrolling, an empty or broken panel. Also fix every `finding:` it prints (a middle step much taller than the screen, a diagram that scrolls sideways, diagram text too small, console errors, external requests). Rebuild and re-shoot after changes. If no Chrome/Chromium is installed it says so; skip the images then and tell the user in your final line.
+6. **Build and review the screenshots (required).** Run `node <this skill's directory>/build.mjs ~/explanations/<kebab-topic>.content.js`. It runs the same checks, inlines the content with the engine into `~/explanations/<kebab-topic>.html` (one self-contained file, works offline) and prints the path; on errors it writes nothing. Then run `node <this skill's directory>/shots.mjs ~/explanations/<kebab-topic>.html --phone`: it renders every step in headless Chrome, as the reader sees it on arrival with all build stages revealed, saves `step-NN.png` (desktop) and `step-NN-phone.png` and prints their paths. A step with a what-if control is also saved once per other option, as `step-NN-<option id>.png`. **Look at every image** (`Read` each one) and fix the content for what you see: a label that overlaps or is cut off, the wrong part lit, text that doesn't match the picture, a step that needs scrolling, an empty or broken panel. Also fix every `finding:` it prints (a middle step much taller than the screen, a diagram that scrolls sideways, diagram text too small, console errors, external requests). Rebuild and re-shoot after changes. If no Chrome/Chromium is installed it says so; skip the images then and tell the user in your final line.
 7. **Deliver locally.** Run `open <path>` (macOS) / `xdg-open` (Linux). Keep the `.content.js` next to the page: to change the page later, edit the content and rebuild — never edit the built HTML. Never publish to claude.ai or use the `Artifact` tool unless the user explicitly asks for it.
 8. Reply in chat with **one line**: what the page covers, its type, and the file path. Don't repeat the explanation in chat.
 
@@ -40,7 +41,7 @@ Every type keeps the same page: sidebar, Next/Back, Context step, quizzes, gloss
 
 | If the explanation is about… | Type | The page is built around | Example |
 |---|---|---|---|
-| how something works: a request's path, a sequence, what calls what | `walkthrough` (default) | one shared `DIAGRAM`, lit part by part | `examples/token-401.content.js` |
+| how something works: a request's path, a sequence, what calls what | `walkthrough` (default) | one shared `DIAGRAM`, lit part by part | `examples/token-401.content.js`; with what-if controls, `examples/cache-read.content.js` |
 | which of several options to pick, and why | `decision` | an options × criteria table (`DECISION`), with cost and a recommendation | `examples/session-store.content.js` |
 | what a change does: a refactor, a config change, a migration | `before-after` | a line diff of the two versions per step (`diff`), and the two states side by side on step 1 | `examples/multistage-build.content.js` |
 | why something broke, and how that was found | `debugging` | phases (symptom → hypothesis → evidence → cause → fix), evidence blocks, and a board of hypotheses ruled out or confirmed | `examples/cron-twice.content.js` |
@@ -113,6 +114,31 @@ layer: "ip",
 - Each `body` says what the new layer adds that the ones below could not do; that gap is why the layer exists.
 - The Context step and the Recap have no `layer`: they show the stack ghosted and complete.
 
+## What-if controls
+
+A step whose outcome depends on a condition can let the reader flip it: a toggle or a slider above the step's visual switches which diagram parts are lit and which outcome text is shown. Use it where the reader's natural question is "and what if it weren't?": an expired or a valid token, a cache hit or a miss, a value under or over a limit.
+
+```js
+// on a step:
+whatif: {
+  label: "the key is…",                       // read as "What if the key is…"
+  control: "choice",                           // choice (default): a row of buttons; slider: ordered values on a track
+  options: [                                   // 2–4; the first is shown on arrival
+    { id: "hit",  label: "in Redis",     outcome: `A <dfn>cache hit</dfn>: Redis returns <mark>the cached product</mark>.`,
+      diagram: { hl: ["hit"] } },
+    { id: "miss", label: "not in Redis", outcome: `A <dfn>cache miss</dfn>, so the <mark>SELECT</mark> runs.`,
+      diagram: { hl: ["miss", "query"] } },
+  ],
+},
+```
+
+- `label` finishes the sentence "What if …". Each option's `label` is the value the reader picks (a few words), and its `outcome` (1–2 sentences, HTML allowed) says what happens in that case. Wrap the part it lights in `<mark>`.
+- An option's `diagram` takes `hl`, `hide` and `dim` and replaces the step's own `diagram` fields while that option is picked. Leave it out and the option keeps the step's diagram, changing the outcome text only. Every part any option lights counts as introduced on later steps, so they aren't ghosted there.
+- Use `slider` when the options are points on one scale in order (an entry 10 s, 59 s and 61 s old; 1, 10 and 100 requests a second); `choice` for cases with no order. Put the case that makes the step's point first.
+- The `body` sets up the condition and says what to try ("Switch between the two cases"); the outcomes carry the difference. A `quiz` on the same step or the next one can ask the reader to predict a case.
+- A step can't have both a what-if and `build` stages, and the Recap takes none. On a step with its own `visual`, options change only the outcome text.
+- The reader's pick is remembered with the rest of the progress, "Start over" resets it, and the "Still confused here" prompt says which case they were looking at.
+
 ## The content file
 
 A plain script (not a module) with top-level `const` declarations; the build runs it, checks it, and inlines it into the page before the engine:
@@ -148,6 +174,7 @@ Each step object has:
 | `code` | Optional minimal snippet (≤ 15 lines) — only the lines that matter. Lines containing `←` (e.g. `// ← this`) are highlighted in the diagram's colour. |
 | `deeper` | Optional "go deeper" detail, hidden behind a toggle. Edge cases and nuance go here, NOT in `body`. |
 | `quiz` | Optional `{q, options[], answer, why}` — for the confusing steps. Use 3–4 options: the reader gets one retry before the answer is revealed, and with only 2 options the retry would give it away. Ask a **prediction** ("what happens if…", "which component…"), not recall of the text. An option may be `{t, why}`: `why` is shown on the retry and explains why *that* answer is wrong (name the misconception). `why` on the quiz explains the right answer and names the trap. A quiz may sit on the step *after* a concept is introduced, to apply it. The page shuffles the options on display, so write them in any order and don't try to vary the right answer's position yourself. |
+| `whatif` | Optional `{ label, control?, options: [{ id, label, outcome, diagram? }] }`: a toggle or slider that switches the step's outcome text and lit diagram parts. See "What-if controls". |
 | `matrix`, `diff`, `phase`, `verdicts`, `evidence`, `layer` | Page-type fields; see "Page types". `panel: false` hides the type's panel on one step. |
 | `wide` | Optional `true` — puts `visual`/`code` under the text at full width instead of beside it. Steps whose `DIAGRAM` is wider than 680 units get this on their own, and the Recap is always wide; set it for a wide `visual`. |
 
@@ -173,6 +200,7 @@ Global rules:
 - **Page types**: the decision matrix, line diff, hypothesis board and layer stack described in "Page types", each with the same new / introduced / coming-later ghosting as the diagram.
 - **Shared diagram**: one `DIAGRAM`, laid out from a spec (`sequence`, `chain`, `layers`, `states`) or written as SVG; per-step `diagram.hl` lighting, auto-ghosting of parts not yet introduced, legend, staged `build` reveals, diagram kit classes (`.label .zone .lifeline .bad .ok .flow .dim`), arrowheads that follow the theme.
 - **Orientation**: every step shows "Step n of N"; steps slide in from the direction of travel; code lines with `←` are highlighted.
+- **What-if controls**: a native radio group or range input per `whatif` step, so Tab, the arrow keys and screen readers work as they do on any form; the picked option's outcome is announced, its diagram state shown, and the choice remembered. ←/→ on the control change the option, not the step.
 - **Quiz**: options shown in a shuffled (but stable across reloads) order; one retry before the answer is revealed, with option-specific hints; results show in the sidebar and the Recap.
 - **Still confused here**: a box under every step. The reader can say what's unclear, then copy a prompt to paste back into Claude: page title, step n of N, the step's summary, text and analogy, the terms it uses, a missed check, and what they typed. Nothing is sent anywhere, and the prompt holds no file path. Copying works from `file://`; where the browser refuses, the prompt is shown selected to copy by hand. Hidden when printing.
 - **Progress is remembered** per page (localStorage): visited steps, quiz answers, last step.

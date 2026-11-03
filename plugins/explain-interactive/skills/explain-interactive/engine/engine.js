@@ -9,6 +9,7 @@ if (!META || !Array.isArray(STEPS) || !STEPS.length) {
 }
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
+const plain = h => new DOMParser().parseFromString(String(h || ""), "text/html").body.textContent.replace(/\s+/g, " ").trim();
 const esc = s => s.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 const N = STEPS.length, LAST = N - 1;
 const terms = Object.keys(GLOSSARY), cast = Object.keys(CAST);
@@ -22,14 +23,20 @@ $$(".bigpic-text").forEach(e => e.textContent = META.bigPicture);
 // Saved progress (visited steps, quiz answers, last step) — per page, in this browser only
 const KEY = "explain-progress:" + location.pathname + ":" + META.title;
 let saved = {}; try { saved = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
-let results = saved.results || {}, maxSeen = saved.maxSeen || 0, cur = 0;
-const save = () => { try { localStorage.setItem(KEY, JSON.stringify({ cur, maxSeen, results })); } catch (e) {} };
+let results = saved.results || {}, maxSeen = saved.maxSeen || 0, cur = 0, choices = saved.choices || {};
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify({ cur, maxSeen, results, choices })); } catch (e) {} };
 
 // Shared diagram: clone DIAGRAM for step i. New parts get .hl, parts not introduced yet are ghosted (.dim), the Recap shows all.
 const buildStages = STEPS.map(s => Math.max(s.build || 0, ((s.diagram || {}).build || []).length));
-function diagramFor(i) {
-  const d = STEPS[i].diagram || {}, recap = i === LAST && N > 1;
-  const seen = new Set(); STEPS.slice(0, i).forEach(t => ((t.diagram || {}).hl || []).forEach(x => seen.add(x)));
+// What-if options: each may relight the step's diagram. Whatever any option lit counts as introduced for later steps,
+// since the reader may have picked it.
+const wiOpts = s => (s.whatif && Array.isArray(s.whatif.options) ? s.whatif.options : []);
+const litBy = s => [...((s.diagram || {}).hl || []), ...wiOpts(s).flatMap(o => (o.diagram || {}).hl || [])];
+// The step's diagram with option o's hl/hide/dim in place of the step's own
+const diagramOf = (s, o) => o && o.diagram ? { ...(s.diagram || {}), ...o.diagram } : s.diagram || {};
+function diagramFor(i, d = STEPS[i].diagram || {}) {
+  const recap = i === LAST && N > 1;
+  const seen = new Set(); STEPS.slice(0, i).forEach(t => litBy(t).forEach(x => seen.add(x)));
   const hl = new Set(d.hl || []), hide = new Set(d.hide || []), dim = new Set(d.dim || []);
   const box = document.createElement("div"); box.innerHTML = DIAGRAM;
   box.querySelectorAll("[data-id]").forEach(el => {
@@ -150,6 +157,18 @@ function shuffled(n, seed) {
   }
   return idx;
 }
+// What-if control: one native radio group (choice) or range input (slider), so arrow keys and screen readers work as usual.
+// Every option's outcome is rendered up front and only the picked one shown, so <dfn> tooltips work in all of them.
+const attr = s => esc(String(s)).replace(/"/g, "&quot;");
+function whatifHtml(i) {
+  const w = STEPS[i].whatif, opts = wiOpts(STEPS[i]), name = `wi-${i}`;
+  const ctl = w.control === "slider"
+    ? `<input type="range" id="${name}" min="0" max="${opts.length - 1}" step="1" value="0" aria-label="${attr(plain(w.label))}">
+       <div class="wi-ticks" aria-hidden="true" style="--n:${opts.length}">${opts.map((o, k) => `<span data-k="${k}">${o.label}</span>`).join("")}</div>`
+    : `<div class="wi-opts">${opts.map(o => `<label><input type="radio" name="${name}" value="${attr(o.id)}"><span>${o.label}</span></label>`).join("")}</div>`;
+  return `<fieldset class="whatif${w.control === "slider" ? " slider" : ""}" data-step="${i}"><legend><span class="wi-q">What if</span> ${w.label}</legend>
+    ${ctl}${opts.map(o => `<div class="wi-out" data-wi="${attr(o.id)}" hidden>${o.outcome || ""}</div>`).join("")}</fieldset>`;
+}
 // Code lines carrying a "←" marker get the diagram's highlight colour
 const codeHtml = c => esc(c).split("\n").map(l => `<span class="ln${l.includes("←") ? " hl-line" : ""}">${l || " "}</span>`).join("");
 
@@ -165,8 +184,11 @@ const baHtml = TYPE === "before-after" && (META.before || META.after)
 // A diagram wider than this would shrink its text below ~12px in the side column, so its steps go full width
 const WIDE_DIAGRAM = +((DIAGRAM.match(/viewBox="[\d.-]+ [\d.-]+ ([\d.]+)/) || [])[1] || 0) > 680;
 $("#stage").innerHTML = STEPS.map((s, i) => {
-  const recap = i === LAST && N > 1, wide = s.wide || recap || !!s.diff || (!s.visual && !!s.diagram && WIDE_DIAGRAM);
-  const vis = s.visual || (s.diagram && DIAGRAM ? diagramFor(i) : "");
+  const recap = i === LAST && N > 1, wide = s.wide || recap || !!s.diff || (!s.visual && !!(s.diagram || wiOpts(s).some(o => o.diagram)) && WIDE_DIAGRAM);
+  // A what-if step whose options relight the diagram gets one copy per option; the picked one is shown
+  const wiViews = !s.visual && DIAGRAM && wiOpts(s).some(o => o.diagram);
+  const vis = s.visual || (wiViews ? wiOpts(s).map(o => `<div class="wi-view" data-wi="${attr(o.id)}" hidden>${diagramFor(i, diagramOf(s, o))}</div>`).join("")
+    : s.diagram && DIAGRAM ? diagramFor(i) : "");
   const panel = panelFor(i);
   const look = (panel ? `<div class="panel">${panel}</div>` : "") + (s.diff ? diffHtml(s.diff) : "") +
     (vis ? `<div class="visual">${vis}</div>` : "") + (s.code ? `<pre><code>${codeHtml(s.code)}</code></pre>` : "") +
@@ -182,6 +204,7 @@ $("#stage").innerHTML = STEPS.map((s, i) => {
         ${s.context ? contextHtml(s.context) : ""}
         <div class="body">${s.body || ""}</div>
         ${s.analogy ? `<div class="analogy"><span>${s.analogy}</span></div>` : ""}
+        ${wiOpts(s).length ? whatifHtml(i) : ""}
         ${wide && look ? `<div class="look">${look}</div>` : ""}
         ${recap ? `<ol class="recap-list">${STEPS.slice(0, LAST).map((t, j) => `<li><button data-go="${j}">
           <span class="n">${j + 1}</span><span><b>${t.title}</b>${t.summary ? ` <span class="s">— ${t.summary}</span>` : ""}</span>
@@ -331,10 +354,9 @@ function paintMarks() {
 
 // The prompt carries what the page said at this step, so Claude can answer without the page open.
 // It names no file path: a page's location can hold a user name.
-const plain = h => new DOMParser().parseFromString(String(h || ""), "text/html").body.textContent.replace(/\s+/g, " ").trim();
 function stuckPrompt(i, unclear) {
   const s = STEPS[i], r = results[i];
-  const used = [...new Set($$(`#step-${i + 1} .read dfn`).map(d => (d.dataset.term || d.textContent).trim()))]
+  const used = [...new Set($$(`#step-${i + 1} .read dfn`).filter(d => !d.closest("[hidden]")).map(d => (d.dataset.term || d.textContent).trim()))]
     .map(t => [t, findTerm({ dataset: {}, textContent: t })]).filter(([, d]) => d);
   const lines = [
     `I'm reading an explainer page, "${plain(META.title)}", and I'm stuck on step ${i + 1} of ${N}: "${plain(s.title)}".`, "",
@@ -343,6 +365,7 @@ function stuckPrompt(i, unclear) {
     ...(s.summary ? [`- In short: ${plain(s.summary)}`] : []),
     `- ${plain(s.body) || "(no text)"}`,
     ...(s.analogy ? [`- Analogy: ${plain(s.analogy)}`] : []),
+    ...wiOpts(s).filter(o => o.id === picked(i)).map(o => `- I set its "What if ${plain(s.whatif.label)}" control to "${plain(o.label)}", which shows: ${plain(o.outcome)}`),
     ...(used.length ? ["", "Terms it uses, as the page defines them:", ...used.map(([t, d]) => `- ${t}: ${plain(d)}`)] : []),
   ];
   if (r && r.res === "miss" && s.quiz) {
@@ -372,6 +395,27 @@ $$(".stuck").forEach(box => box.querySelector("[data-copy]").addEventListener("c
   if (!ok) out.select();
   $("#live").textContent = msg.textContent;
 }));
+
+// What-if: picking an option shows its outcome and its diagram, remembers the choice and announces the outcome
+const picked = i => (wiOpts(STEPS[i]).find(o => o.id === choices[i]) || wiOpts(STEPS[i])[0] || {}).id;
+function paintChoice(i, announce) {
+  const s = STEPS[i], f = $(`#step-${i + 1} .whatif`); if (!f) return;
+  const id = picked(i), k = wiOpts(s).findIndex(o => o.id === id), o = wiOpts(s)[k];
+  $$(`#step-${i + 1} [data-wi]`).forEach(el => el.hidden = el.dataset.wi !== id);
+  const r = f.querySelector("input[type=range]");
+  if (r) { r.value = k; r.setAttribute("aria-valuetext", plain(o.label)); f.querySelectorAll(".wi-ticks span").forEach(t => t.classList.toggle("on", +t.dataset.k === k)); }
+  else f.querySelectorAll("input[type=radio]").forEach(x => x.checked = x.value === id);
+  if (announce) $("#live").textContent = `${plain(o.label)}: ${plain(o.outcome)}`;
+}
+$$(".whatif").forEach(f => {
+  const i = +f.dataset.step, opts = wiOpts(STEPS[i]);
+  const pick = (id, announce = true) => { choices[i] = id; paintChoice(i, announce); save(); };
+  f.addEventListener("change", e => { if (e.target.type === "radio") pick(e.target.value); });
+  f.addEventListener("input", e => { if (e.target.type === "range") pick(opts[+e.target.value].id); });
+  // The tick labels under a slider are clickable too; the slider itself stays the keyboard and screen-reader control
+  f.querySelectorAll(".wi-ticks span").forEach(t => t.onclick = () => { pick(opts[+t.dataset.k].id); f.querySelector("input[type=range]").focus({ preventScroll: true }); });
+  paintChoice(i, false);
+});
 
 // Stepper
 $("#outline").innerHTML = STEPS.map((s, i) => `<li><button data-i="${i}"><span class="n">${i + 1}</span><span class="t">${s.title}${s.phase && PHASE[s.phase] ? `<span class="ph ph-${s.phase}">${PHASE[s.phase]}</span>` : ""}</span><span class="mk"></span></button></li>`).join("");
@@ -440,7 +484,7 @@ stage.addEventListener("click", e => {
   const g = e.target.closest("[data-go]");
   if (g) { e.preventDefault(); if (isAll()) setMode("all", false); go(+g.dataset.go); return; }
   const f = e.target.closest("[data-finish]"); if (!f) return;
-  if (f.dataset.finish === "restart") { results = {}; maxSeen = 0; quizzes.forEach(paintQuiz); paintMarks(); setMode("all", false); go(0); }
+  if (f.dataset.finish === "restart") { results = {}; choices = {}; maxSeen = 0; STEPS.forEach((_, j) => paintChoice(j)); quizzes.forEach(paintQuiz); paintMarks(); setMode("all", false); go(0); }
   if (f.dataset.finish === "all") { setMode("all", true); go(0); }
   if (f.dataset.finish === "gloss") setMode("gloss", true);
 });
@@ -457,10 +501,10 @@ stage.addEventListener("scroll", () => {
 // Browser Back/Forward move between steps
 addEventListener("popstate", () => { const m = location.hash.match(/step-(\d+)/); go(m ? +m[1] - 1 : 0, { push: false }); });
 
-// Swipe left/right on phones (ignored on diagrams and code, which scroll sideways)
+// Swipe left/right on phones (ignored on diagrams and code, which scroll sideways, and on a what-if slider)
 let touch = null;
 stage.addEventListener("touchstart", e => {
-  touch = e.target.closest(".visual, pre") || isAll() ? null : { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  touch = e.target.closest(".visual, pre, .whatif") || isAll() ? null : { x: e.touches[0].clientX, y: e.touches[0].clientY };
 }, { passive: true });
 stage.addEventListener("touchend", e => {
   if (!touch) return;

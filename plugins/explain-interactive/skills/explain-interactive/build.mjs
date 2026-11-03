@@ -90,6 +90,7 @@ export function check(c) {
       if ((d.build || []).length > 4) warnings.push(`${at}: diagram.build has ${d.build.length} stages (keep it ≤ 4)`);
     }
     if (s.visual && s.build && !/data-b\s*=/.test(s.visual)) warnings.push(`${at}: build is set but visual has no data-b parts`);
+    checkWhatif(s, i, STEPS.length, at, { ids, hasDiagram: !!(DIAGRAM || spec) }, errors, warnings);
     const q = s.quiz;
     if (q) {
       if (!q.q || !Array.isArray(q.options)) errors.push(`${at}: quiz needs q and options[]`);
@@ -119,10 +120,50 @@ export function check(c) {
   return { errors, warnings, svg: spec ? DIAGRAM : null };
 }
 
+// ---------- What-if control: options that switch the step's outcome text and diagram state ----------
+const CONTROLS = ["choice", "slider"];
+function checkWhatif(s, i, n, at, { ids, hasDiagram }, errors, warnings) {
+  const w = s.whatif;
+  if (w === undefined) return;
+  if (!w || typeof w !== "object" || !Array.isArray(w.options)) return errors.push(`${at}: whatif needs label and options[] ({ id, label, outcome, diagram? })`);
+  if (!w.label) errors.push(`${at}: whatif.label is missing (it reads "What if <label>")`);
+  if (w.control !== undefined && !CONTROLS.includes(w.control)) errors.push(`${at}: whatif.control "${w.control}" is not one of ${CONTROLS.join(", ")}`);
+  if (w.options.length < 2) errors.push(`${at}: whatif has ${w.options.length} option(s); a what-if switches between at least 2`);
+  if (w.options.length > LIMITS.whatifOptions) warnings.push(`${at}: whatif has ${w.options.length} options (2–${LIMITS.whatifOptions}): keep the cases that change the outcome`);
+  if (i === n - 1 && n > 1) warnings.push(`${at}: the Recap shows the whole picture; put the what-if on the step it is about`);
+  if (((s.diagram || {}).build || []).length || s.build) errors.push(`${at}: a step can't have both build stages and a what-if control`);
+  if (s.visual && w.options.some(o => o && o.diagram)) warnings.push(`${at}: whatif options set diagram, but the step shows its own visual, so they change nothing`);
+  const seen = new Set();
+  w.options.forEach((o, j) => {
+    const name = `whatif option ${o && o.id ? `"${o.id}"` : j}`;
+    if (!o || typeof o !== "object") return errors.push(`${at}: whatif option ${j} is not an object`);
+    if (!o.id) errors.push(`${at}: whatif option ${j} needs an id`);
+    else if (seen.has(o.id)) errors.push(`${at}: whatif repeats the option id "${o.id}"`);
+    seen.add(o.id);
+    if (!o.label) errors.push(`${at}: ${name} needs a label`);
+    if (!o.outcome) errors.push(`${at}: ${name} needs an outcome (what happens in that case)`);
+    else if (sentences(o.outcome) > LIMITS.outcomeSentences) warnings.push(`${at}: ${name} outcome has ${sentences(o.outcome)} sentences (≤ ${LIMITS.outcomeSentences})`);
+    const d = o.diagram;
+    if (d === undefined) return;
+    if (!d || typeof d !== "object") return errors.push(`${at}: ${name} diagram must be { hl, hide, dim }`);
+    if (!hasDiagram) errors.push(`${at}: ${name} has a diagram but DIAGRAM is empty`);
+    if (d.build !== undefined) errors.push(`${at}: ${name} diagram can't have build stages`);
+    for (const k of ["hl", "hide", "dim"]) {
+      if (d[k] === undefined) continue;
+      if (!Array.isArray(d[k])) { errors.push(`${at}: ${name} diagram.${k} must be an array`); continue; }
+      d[k].forEach(id => { if (!ids.has(id)) errors.push(`${at}: ${name} diagram.${k} names "${id}", which is not a data-id in DIAGRAM`); });
+    }
+    const hl = [...new Set(d.hl || [])];
+    if (hl.length > LIMITS.hlParts) warnings.push(`${at}: ${name} lights ${hl.length} parts (${hl.join(", ")}); light 1–${LIMITS.hlParts}`);
+    if (hl.length && o.outcome && !/<mark\b/.test(o.outcome) && !/<mark\b/.test(s.body || ""))
+      warnings.push(`${at}: ${name} lights ${hl.join(", ")} but neither its outcome nor the body has a <mark>`);
+  });
+}
+
 // ---------- Size and focus: each step fits one screen and is about one thing ----------
 // The limits SKILL.md gives; over them is a warning, since a page can still be built.
 export const LIMITS = { titleWords: 6, summaryWords: 8, bodySentences: 5, bodyWords: 120, hlParts: 3,
-  codeLines: 15, codeWidth: 60, prereqs: 3, contextSentences: 2, quizOptions: 4 };
+  codeLines: 15, codeWidth: 60, prereqs: 3, contextSentences: 2, quizOptions: 4, whatifOptions: 4, outcomeSentences: 2 };
 const text = s => String(s).replace(/<[^>]*>/g, " ").replace(/&[a-z#0-9]+;/gi, " ").replace(/\s+/g, " ").trim();
 const words = s => (text(s).match(/\S+/g) || []).length;
 // A sentence ends at . ! ? (or …) followed by the end or by a space and a capital, digit or quote; "e.g. this" stays one sentence
