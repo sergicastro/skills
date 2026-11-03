@@ -51,7 +51,9 @@ To work on the skills, run Claude Code with the local copy instead:
 2. Open worker sessions named with the prefix the manager gives (`claude -n <slug>-w-<anything>`)
    and run `/orchestrator-worker <manager name>` in each.
 3. In a worker, say "next" to get a goal. When it reports done, review the work and, in the manager session, type
-   `approve <goal>` (or `send <goal> back`). Then say "next" in the worker again.
+   `approve <goal>` (or `send <goal> back`). After an approval the manager suggests resetting
+   that worker's context (`/clear`, then `/orchestrator-worker <manager name>` again), since the
+   next goal arrives with everything it needs. Then say "next" in the worker again.
 4. Ask the manager "status" at any time. Plans change: ask it to add, drop or edit a goal
    (title, summary, acceptance criteria, dependencies…) or to rename the epic, and the
    status page follows. State lives in `~/.claude-orchestrator/<slug>/`

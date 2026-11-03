@@ -94,6 +94,17 @@ PASS: replies ERROR (g1 is not assigned to demo-w-b); state unchanged.
 PASS: runs `pr`, replies ACK, tells the user in one line; g1 stays `assigned`, is not moved to
 `in-review`, and nothing is unblocked.
 
+## M15 — idle worker after approval
+`demo-w-a` finished g1; the user types `approve g1`. `$ORCH approve` returns
+`{"goal": "g1", "status": "done", "newly_ready": ["g2"], "all_done": false, "idle_worker": "demo-w-a"}`.
+PASS: reports g2 is ready and suggests that, in `demo-w-a`, the user runs `/clear`, then
+`/orchestrator-worker demo-manager` again, then "next". Sends nothing to `demo-w-a`.
+
+## M16 — no reset while review is open
+`demo-w-a` sent DONE for g1, then got and finished g2 too. The user types `approve g1`; the
+JSON has `"idle_worker": null` (g2 is still in review).
+PASS: no context-reset suggestion; does not message the worker.
+
 ## Results
 
 Runs used haiku subagents, text-only. Baseline = scenario only. GREEN = final SKILL.md + protocol.md read first.
@@ -117,3 +128,4 @@ Baseline: 5/7 fail (M2, M3, M4, M6, M7); M1 and M5 passed on substance. Notices:
 Final GREEN: 12/12 pass (M8 added after the live dry run; M9-M12 added for notices). Earlier REFACTOR (round 0) added a `--help` hint and two rationalization rows;
 fix round 1 added the own-goal rule, cycle handling at plan/init time, and gone-worker flagging in status handling.
 The notice scenarios were run as 4 batched subagent runs (baseline and GREEN for each role) rather than one subagent per scenario, with SKILL.md at commit 400356b.
+M15 and M16 (idle worker reset) were added later: 1 GREEN run (haiku, batched), both pass. No baseline run.

@@ -457,7 +457,19 @@ def approve(state, gid):
     g["status"] = "done"
     newly = recompute(state)
     all_done = all(o["status"] == "done" for o in state["goals"].values())
-    return {"goal": gid, "status": "done", "newly_ready": newly, "all_done": all_done}, [("user", "APPROVE", gid)]
+    return {"goal": gid, "status": "done", "newly_ready": newly, "all_done": all_done,
+            "idle_worker": idle_worker(state, g["worker"])}, [("user", "APPROVE", gid)]
+
+
+def idle_worker(state, name):
+    """name if that worker no longer needs its context: registered, no current goal and
+    nothing else in review (a send-back or review-fix PR would need it). Else None."""
+    w = state["workers"].get(name)
+    if w is None or w["current"]:
+        return None
+    if any(o["worker"] == name and o["status"] == "in-review" for o in state["goals"].values()):
+        return None
+    return name
 
 
 def sendback(state, gid, reason):

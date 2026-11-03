@@ -38,6 +38,10 @@ sending anything) and `github.md` (`gh` procedures for board updates).
 4. Send `[orch v1 REGISTER]` to the manager. On ACK, tell the user you're registered and to say
    "next" when they want a goal. On ERROR, show it to the user.
 
+After `/clear` (e.g. the manager suggested a context reset once your goal was approved), the
+user invokes this skill again: run Setup as usual. REGISTER again is fine; the manager keeps
+your history. Then wait for "next".
+
 If the user renames this session later, register again and tell the user to confirm the move
 in the manager session (`rename-worker`).
 
