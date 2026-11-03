@@ -1,0 +1,21 @@
+name: Plugin version check
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check manifests and version bumps
+        env:
+          SKIP_VERSION_BUMP: ${{ contains(github.event.pull_request.labels.*.name, 'skip-version-bump') }}
+        run: .github/scripts/check-plugin-versions.sh "origin/${{ github.base_ref }}"
