@@ -177,3 +177,51 @@ test("a diff about <script src> is not an external resource", () => {
 const STEPS = [{ title: "A", summary: "a", body: "<p>a</p>", diff: { before: "<script src='https://cdn.example.com/a.js'></script>", after: "" } }, { title: "Recap", body: "<p>r</p>" }];`;
   assert.deepEqual(build(code).errors, []);
 });
+
+test("check: size and focus rules give one clear warning each", () => {
+  const long = Array.from({ length: 6 }, (_, k) => `Sentence number ${k + 1} is here.`).join(" ");
+  const c = loadContent(`const META = { title: "T", bigPicture: "B" };
+const GLOSSARY = { token: "t" };
+const DIAGRAM = \`<svg viewBox="0 0 10 10"><g data-id="a"></g><g data-id="b"></g><g data-id="c"></g><g data-id="d"></g></svg>\`;
+const STEPS = [
+  { title: "Context", summary: "s", body: "<p>x</p>", context: { question: "One. Two. Three.", prereqs: ["a", "b", "c", "d"] } },
+  { title: "One two three four five six seven", summary: "one two three four five six seven eight nine", body: ${JSON.stringify(long)},
+    diagram: { hl: ["a", "b", "c", "d"] }, code: Array.from({ length: 16 }, () => "x").join("\\n") },
+  { title: "Lit", summary: "s", body: "<p>No mark here, e.g. this stays one sentence.</p>", diagram: { hl: ["a"] },
+    code: "y".repeat(61), evidence: { text: "z".repeat(200) }, context: { question: "q" },
+    quiz: { q: "?", options: ["a", "b", "c", "d", "e"], answer: 0, why: "w" } },
+  { title: "Recap", body: "<p>r</p>", diagram: { hl: ["a", "b"] } },
+];`);
+  const { errors, warnings } = check(c);
+  assert.deepEqual(errors, []);
+  const has = (re, n = 1) => assert.equal(warnings.filter(w => re.test(w)).length, n, `${re}\n${warnings.join("\n")}`);
+  has(/step 2 .*title has 7 words \(≤ 6\)/);
+  has(/step 2 .*summary has 9 words \(≤ 8\)/);
+  has(/step 2 .*body has 6 sentences \(≤ 5\)/);
+  has(/step 2 .*diagram lights 4 parts \(a, b, c, d\); light 1–3/);
+  has(/step 2 .*code has 16 lines \(≤ 15\)/);
+  has(/step 3 .*diagram lights a but body has no <mark>/);
+  has(/step 3 .*code has 1 line over 60 characters/);
+  has(/evidence.text has .*over/, 0);      // evidence is real output: no width rule
+  has(/step 3 .*body has \d+ sentences/, 0);   // "e.g. this" is not a sentence break
+  has(/step 3 .*quiz has 5 options \(3–4\)/);
+  has(/step 3 .*context is only for step 1/);
+  has(/step 1 .*context.prereqs has 4 items \(≤ 3\)/);
+  has(/step 1 .*context.question has 3 sentences/);
+  has(/step 4 .*no <mark>/, 0);            // the Recap may light everything without a <mark>
+});
+
+test("CLI --check lists problems and writes nothing", () => {
+  const src = join(tmp, "chk.content.js");
+  writeFileSync(src, minimal().replace('hl: ["a"]', () => 'hl: ["a", "zz"]'));
+  const r = run("--check", src);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /error: step 1 \("One"\): diagram.hl names "zz"/);
+  assert.match(r.stderr, /check failed \(1 error, 1 warning\)/);
+  assert.ok(!existsSync(join(tmp, "chk.html")));
+  writeFileSync(src, minimal().replace('"<p>x</p>"', () => '"<p><mark>a</mark></p>"'));
+  const ok = run("--check", src);
+  assert.equal(ok.status, 0, ok.stderr);
+  assert.match(ok.stdout, /chk\.content\.js: ok/);
+  assert.ok(!existsSync(join(tmp, "chk.html")));
+});

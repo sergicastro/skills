@@ -1,6 +1,6 @@
 # Diagram recipes
 
-Read this when planning the page's diagram (workflow step 1). One diagram serves the whole page: define it once as `DIAGRAM` in the content file, then each step lists which parts to light up.
+Read this when planning the page's diagram (workflow step 2). One diagram serves the whole page: define it once as `DIAGRAM` in the content file, then each step lists which parts to light up.
 
 ## Pick the pattern from the mechanism
 
