@@ -2,60 +2,27 @@
 // Skipped when no Chrome/Chromium is found; set CHROME=/path/to/chrome to choose one.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
-import { spawn, execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
 import { build, extract } from "../skills/explain-interactive/build.mjs";
+import { findChrome, launch } from "../skills/explain-interactive/cdp.mjs";
 
 const SKILL = join(dirname(fileURLToPath(import.meta.url)), "../skills/explain-interactive");
-const CANDIDATES = [process.env.CHROME, "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-  "/Applications/Chromium.app/Contents/MacOS/Chromium", "/usr/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser"];
-const CHROME = CANDIDATES.find(p => p && existsSync(p));
-const skip = CHROME ? false : "no Chrome/Chromium found (set CHROME=…)";
+const skip = findChrome() ? false : "no Chrome/Chromium found (set CHROME=…)";
 
 const tmp = mkdtempSync(join(tmpdir(), "explain-page-"));
-let proc, ws, seq = 0;
-const pending = new Map(), events = [];
-const send = (method, params = {}) => new Promise((res, rej) => {
-  const id = ++seq; pending.set(id, { res, rej }); ws.send(JSON.stringify({ id, method, params }));
-});
-const js = async expr => {
-  const r = await send("Runtime.evaluate", { expression: expr, awaitPromise: true, returnByValue: true });
-  if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text);
-  return r.result.value;
-};
-async function open(file) {
-  const loaded = new Promise(res => { const h = m => m.method === "Page.loadEventFired" && (events.splice(events.indexOf(h), 1), res()); events.push(h); });
-  await send("Page.navigate", { url: pathToFileURL(file).href });
-  await loaded; await sleep(100);
-}
-const problems = [], requests = [];
+let browser, send, js, open, problems = [], requests = [];
 
 before(async () => {
   if (skip) return;
-  const profile = join(tmp, "profile");
-  proc = spawn(CHROME, ["--headless=new", "--remote-debugging-port=0", `--user-data-dir=${profile}`, "--no-first-run",
-    "--no-default-browser-check", "--window-size=1280,800", "about:blank"], { stdio: "ignore" });
-  const portFile = join(profile, "DevToolsActivePort");
-  for (let i = 0; i < 100 && !existsSync(portFile); i++) await sleep(100);
-  const port = readFileSync(portFile, "utf8").split("\n")[0];
-  const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
-  ws = new WebSocket(targets.find(t => t.type === "page").webSocketDebuggerUrl);
-  await new Promise(r => ws.addEventListener("open", r, { once: true }));
-  ws.addEventListener("message", ({ data }) => {
-    const m = JSON.parse(data);
-    if (m.id && pending.has(m.id)) { const p = pending.get(m.id); pending.delete(m.id); m.error ? p.rej(new Error(m.error.message)) : p.res(m.result); return; }
-    if (m.method === "Runtime.exceptionThrown") problems.push(m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text);
-    if (m.method === "Runtime.consoleAPICalled" && ["error", "warning"].includes(m.params.type)) problems.push(m.params.args.map(a => a.value).join(" "));
-    if (m.method === "Network.requestWillBeSent") requests.push(m.params.request.url);
-    [...events].forEach(h => h(m));
-  });
-  await Promise.all(["Page.enable", "Runtime.enable", "Network.enable"].map(m => send(m)));
+  browser = await launch();
+  ({ send, js, open, problems, requests } = browser);
 });
-after(() => { ws?.close(); proc?.kill(); try { rmSync(tmp, { recursive: true, force: true }); } catch {} });
+after(() => { browser?.close(); try { rmSync(tmp, { recursive: true, force: true }); } catch {} });
 
 test("built sample: features work in a browser", { skip }, async () => {
   const page = join(tmp, "sample.html");
