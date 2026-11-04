@@ -1045,6 +1045,57 @@ class ViewModelTests(Base):
         self.assertNotIn("pr-dot", plain)
 
 
+class GithubRefTests(Base):
+    def test_full_issue_and_pr_urls_become_links(self):
+        out = orch_view.gh_links("see https://github.com/acme/recipe-site/issues/7 and "
+                                 "https://github.com/acme/recipe-site/pull/12.", "acme/recipe-site")
+        self.assertIn('<a href="https://github.com/acme/recipe-site/issues/7">#7</a>', out)
+        self.assertIn('<a href="https://github.com/acme/recipe-site/pull/12">#12</a>.', out)
+
+    def test_url_from_another_repo_keeps_the_repo_in_the_label(self):
+        out = orch_view.gh_links("https://github.com/acme/api/pull/3", "acme/recipe-site")
+        self.assertEqual(out, '<a href="https://github.com/acme/api/pull/3">acme/api#3</a>')
+
+    def test_qualified_refs_link_without_a_repo(self):
+        out = orch_view.gh_links("blocked on acme/api#45", None)
+        self.assertEqual(out, 'blocked on <a href="https://github.com/acme/api/issues/45">acme/api#45</a>')
+
+    def test_bare_refs_link_only_with_a_repo(self):
+        self.assertEqual(orch_view.gh_links("Fix #123", None), "Fix #123")
+        self.assertEqual(orch_view.gh_links("Fix #123", "acme/recipe-site"),
+                         'Fix <a href="https://github.com/acme/recipe-site/issues/123">#123</a>')
+
+    def test_lookalikes_are_left_alone(self):
+        for text in ("color #fff", "a#1", "item#2", "https://example.com/acme/x/issues/1", "#12abc"):
+            self.assertNotIn("<a ", orch_view.gh_links(text, "acme/recipe-site"), text)
+
+    def test_text_is_escaped(self):
+        out = orch_view.gh_links('<b>"x"</b> #1', "acme/recipe-site")
+        self.assertTrue(out.startswith("&lt;b&gt;&quot;x&quot;&lt;/b&gt; <a "))
+
+    def test_view_model_resolves_each_goals_repo(self):
+        state = orch_state.init("demo", plan(epic={"slug": "demo", "title": "Demo epic",
+                                                   "source": "https://github.com/acme/recipe-site/issues/100"}))
+        state["goals"]["g2"]["repo"] = "acme/api"
+        state["goals"]["g3"]["repo"] = "~/code/local-path"
+        by_id = {g["id"]: g for g in orch_state.view_model(state, [])["goals"]}
+        self.assertEqual(by_id["g1"]["repo"], "acme/recipe-site")
+        self.assertEqual(by_id["g2"]["repo"], "acme/api")
+        self.assertEqual(by_id["g3"]["repo"], "acme/recipe-site")
+
+    def test_view_model_repo_without_any_github_hint_is_none(self):
+        state = orch_state.init("demo", plan())
+        self.assertIsNone(orch_state.view_model(state, [])["goals"][0]["repo"])
+
+    def test_main_html_links_refs_in_title_and_reason(self):
+        state = orch_state.init("demo", plan())
+        state["goals"]["g1"].update(title="Port acme/api#9", repo="acme/recipe-site", reason="waiting on #4")
+        page = orch_view.main_html(orch_state.view_model(state, []))
+        self.assertIn('<td>Port <a href="https://github.com/acme/api/issues/9">acme/api#9</a></td>', page)
+        self.assertIn('<td>waiting on <a href="https://github.com/acme/recipe-site/issues/4">#4</a></td>', page)
+        self.assertIn("<title>g1: Port acme/api#9</title>", page)
+
+
 class HtmlTests(Base):
     def page(self, p=None):
         self.init(p)

@@ -12,6 +12,7 @@ The manager can also propose a change notice to the affected workers when a goal
 or a merged goal settles a design question. It sends the notice only after the user approves;
 workers acknowledge it and change course only on the user's say-so.
 Workers report each PR as soon as they open it, so the status page lists a goal's PRs while it is still in progress.
+GitHub issue and PR references in a goal's title or reason (`#123`, `owner/repo#123`, or a full URL) are links on the status page; a bare `#123` uses the goal's repo, or the epic's when the goal has none.
 Each PR a worker opens ends with a small footer naming the worker, epic and goal, so you can tell who opened it from the PR alone.
 
 ## Goals

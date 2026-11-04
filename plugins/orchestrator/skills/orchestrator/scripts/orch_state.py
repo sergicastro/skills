@@ -277,6 +277,7 @@ def view_model(state, events, problems=()):
         "counts": [(s, sum(1 for g in goals.values() if g["status"] == s)) for s in STATES],
         "goals": [{"id": gid, "title": g["title"], "status": g["status"], "worker": g["worker"],
                    "prs": goal_prs(g), "reason": g.get("reason"),
+                   "repo": orch_view.gh_repo(g.get("repo")) or orch_view.gh_repo(e.get("source")),
                    "depends_on": g["depends_on"], "col": col[gid], "row": rows[gid]}
                   for gid, g in goals.items()],
         "edges": [{"from": dep, "to": gid, "met": goals[dep]["status"] in ok}
