@@ -63,6 +63,44 @@ To work on the skills, run Claude Code with the local copy instead:
    what to do: delete the state directory, stop the status server (if no other
    orchestration is left), and tell the workers they can end their sessions.
 
+## Goal lifecycle
+
+```mermaid
+stateDiagram-v2
+    state "needs-user" as needs_user
+    state "in-review" as in_review
+
+    [*] --> blocked: goal added
+    blocked --> ready: dependencies met, or user says "start now"
+    ready --> assigned: worker says "next"
+    assigned --> needs_user: worker reports needs-user or blocked
+    needs_user --> assigned: worker resumes
+    assigned --> in_review: worker reports DONE
+    in_review --> done: user says "approve"
+    in_review --> assigned: user says "send back"
+    assigned --> blocked: user says "release"
+    needs_user --> blocked: user says "release"
+    in_review --> blocked: user says "release"
+    done --> [*]
+```
+
+| Status | Meaning | Leaves it when |
+| --- | --- | --- |
+| `blocked` | Waiting on dependencies | Every dependency is `done` (or `in-review`, see below), or you say `start <goal> now` → `ready` |
+| `ready` | Can be handed out | A worker says "next" and gets it → `assigned` |
+| `assigned` | A worker is on it | The worker needs you → `needs-user`; it reports DONE → `in-review` |
+| `needs-user` | The worker is waiting on you, with a reason (a worker reporting "blocked" lands here too, with a `blocked:` reason) | The worker resumes → `assigned` |
+| `in-review` | Work is done and waits for your review | `approve <goal>` → `done`; `send <goal> back` → `assigned` (same worker) |
+| `done` | Approved | Final |
+
+- `release <goal>` takes a goal off its worker (gone, or you want someone else on it) from
+  `assigned`, `needs-user` or `in-review`. It passes through `blocked` and goes straight on
+  to `ready` if its dependencies are still met.
+- By default a goal's dependents unblock only when it is `done`. Ask the manager to unblock
+  on review and they start once it reaches `in-review`.
+- Opening a PR never changes a goal's status.
+- Only `blocked` or `ready` goals can be dropped, and only when nothing depends on them.
+
 ## Live status page
 
 The manager starts a small local server the first time you create or resume an
