@@ -54,7 +54,7 @@ comment on the issue: `gh issue comment <n> --repo <owner/repo> --body "PR: <url
 End the PR body with this footer line, so anyone looking at the PR can see which worker
 opened it:
 ```
-<sub>🎼 orchestrator · worker `<your name>` · `<slug>`/<goal id></sub>
+<sub>🎼 orchestrator · worker `<your name>` · `<slug>`/`<goal id>`</sub>
 ```
 `<your name>` is the name you registered with; `<slug>` and `<goal id>` come from the ASSIGN.
 Put it last, after `Closes #<n>` and any template sections. Add it only to PRs you open,
