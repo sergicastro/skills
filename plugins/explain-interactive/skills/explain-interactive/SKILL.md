@@ -178,7 +178,7 @@ Each step object has:
 | `whatif` | Optional `{ label, control?, options: [{ id, label, outcome, diagram? }] }`: a toggle or slider that switches the step's outcome text and lit diagram parts. See "What-if controls". |
 | `matrix`, `diff`, `phase`, `verdicts`, `evidence`, `layer` | Page-type fields; see "Page types". `panel: false` hides the type's panel on one step. |
 | `depth` | Optional `"full"`: a **background step** (a refresher on a prerequisite, how the system is laid out) that a reader who already knows it can skip. The page's **Short** switch hides these steps, and the Context card's `setting`, `why` and `prereqs`; the steps are renumbered and Next skips over them. Leave it off the steps the mechanism needs, and don't light diagram parts on a background step (later steps would show them as already introduced). Ignored on step 1 and the Recap. |
-| `wide` | Optional `true` — puts `visual`/`code` under the text at full width instead of beside it. Steps whose `DIAGRAM` is wider than 680 units, steps with a `diff`, and decision steps without a quiz get this on their own, and the Recap is always wide; set it for a wide `visual`. |
+| `wide` | Optional `true` — puts `visual`/`code` under the text at full width instead of beside it. Steps whose `DIAGRAM` is wider than 680 units, steps with a `diff`, and decision steps without a quiz get this on their own, and the Recap is always wide; set it for a wide `visual`. On a step with a wide `DIAGRAM` and a quiz, the quiz sits beside the diagram, so the step still fits one screen. |
 
 Global rules:
 - **One new concept per step.** If a step needs "and also…", split it.

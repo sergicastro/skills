@@ -161,7 +161,8 @@ test("spec diagrams: every layout renders, a wide one puts its steps full width,
     assert.equal(await js(`document.querySelector(".step.active").classList.contains("wide")`), wide, f);
     // the diagram is drawn: parts have real size, and its text stays at least 11px on screen
     assert.ok(await js(`${boxes}.length`) > 2, f);
-    const px = await js(`(s => s.getBoundingClientRect().width / s.viewBox.baseVal.width * 14)(document.querySelector(".step.active .visual svg"))`);
+    // the drawing fits both sides of the svg's box, so the smaller scale is the one it is drawn at
+    const px = await js(`(s => (r => Math.min(r.width / s.viewBox.baseVal.width, r.height / s.viewBox.baseVal.height))(s.getBoundingClientRect()) * 14)(document.querySelector(".step.active .visual svg"))`);
     assert.ok(px >= 11, `${f}: label text renders at ${px.toFixed(1)}px`);
   }
   // raw <svg> escape hatch: a hand-written DIAGRAM still takes hl/dim from the step
@@ -411,6 +412,81 @@ test("depth: the short version skips background steps, renumbers, and is remembe
   assert.equal(await js(`document.querySelector("#count").textContent`), "1 / 6");
   await js(`localStorage.removeItem("explain-depth")`);
   assert.deepEqual(problems, []);
+});
+
+test("a wide, tall diagram with a quiz: the quiz sits beside it and the step fits 1280×800; a narrow screen stacks them", { skip }, async () => {
+  problems.length = 0;
+  await send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
+  await openSample("dns-lookup");
+  const fit = `(st => st.scrollHeight - st.clientHeight)(document.querySelector("#stage"))`;
+  const rects = `(a => [a.querySelector(".visual"), a.querySelector(".quiz")].map(e => e.getBoundingClientRect()))(document.querySelector(".step.active"))`;
+  const px = `(s => (r => Math.min(r.width / s.viewBox.baseVal.width, r.height / s.viewBox.baseVal.height))(s.getBoundingClientRect()) * 14)(document.querySelector(".step.active .visual svg"))`;
+  for (const n of [2, 3, 4, 5]) {
+    await goTo(n);
+    assert.ok(await js(`document.querySelector(".step.active").classList.contains("wide")`), `step ${n}`);
+    const [v, q] = await js(`${rects}.map(r => ({ left: r.left, right: r.right, top: r.top }))`);
+    assert.ok(q.left >= v.right && Math.abs(q.top - v.top) < 2, `step ${n}: the quiz is beside the diagram`);
+    assert.ok(await js(fit) <= 0.15 * 800, `step ${n}: ${await js(fit)}px taller than the screen`);
+    assert.ok(await js(px) >= 10, `step ${n}: label text renders at ${(await js(px)).toFixed(1)}px`);
+  }
+  // a step with no quiz keeps the diagram on its own
+  await goTo(6);
+  assert.ok(!(await js(`!!document.querySelector(".step.active .beside")`)));
+  // too narrow for both side by side: the quiz goes under the diagram
+  await send("Emulation.setDeviceMetricsOverride", { width: 1000, height: 800, deviceScaleFactor: 1, mobile: false });
+  await goTo(3);
+  const [v, q] = await js(`${rects}.map(r => ({ bottom: r.bottom, top: r.top }))`);
+  assert.ok(q.top >= v.bottom, "the quiz wraps under the diagram");
+  await send("Emulation.clearDeviceMetricsOverride");
+  assert.deepEqual(problems, []);
+});
+
+test("depth: a step skipped in the short version is not marked visited in the full one, nor counted by the index", { skip }, async () => {
+  problems.length = 0;
+  const page = await openSample("filter-chain");
+  const done = () => js(`[...document.querySelectorAll("#outline button")].map((b, i) => b.classList.contains("done") ? i : -1).filter(i => i >= 0)`);
+  // short: step 1 → (background step 2 skipped) → step 3 → step 4
+  await js(`document.querySelector('.top [data-act="depth"]').click()`);
+  await js(`document.querySelector("#next").click()`); await js(`document.querySelector("#next").click()`);
+  // back to full: steps 1 and 3 are visited, the background step is not
+  await js(`document.querySelector('.top [data-act="depth"]').click()`);
+  assert.deepEqual(await done(), [0, 2]);
+  // the same after a reload
+  await open(page);
+  assert.deepEqual(await done(), [0, 2]);
+  // a step visited only in full stays marked when going short and back
+  await goTo(2); await goTo(4);
+  assert.deepEqual(await done(), [0, 1, 2]);
+  await js(`document.querySelector('.top [data-act="depth"]').click()`);
+  await js(`document.querySelector('.top [data-act="depth"]').click()`);
+  assert.deepEqual(await done(), [0, 1, 2]);
+  // progress saved by an older engine (a high-water mark) still reads as the steps up to it
+  await js(`localStorage.setItem(Object.keys(localStorage).find(k => k.startsWith("explain-progress:")), JSON.stringify({ cur: 2, maxSeen: 2, results: {}, choices: {} }))`);
+  await open(page);
+  assert.deepEqual(await done(), [0, 1]);
+  await js(`localStorage.removeItem("explain-depth")`);
+  assert.deepEqual(problems, []);
+});
+
+test("index page: counts the steps a page saved as visited, old and new format", { skip }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), "explain-index-"));
+  writeFileSync(join(dir, "filter-chain.html"), build(readFileSync(join(SKILL, "examples/filter-chain.content.js"), "utf8")).html);
+  const { writeIndex } = await import("../skills/explain-interactive/build.mjs");
+  const index = writeIndex(dir), page = join(dir, "filter-chain.html");
+  await open(page); await js("localStorage.clear()"); await open(page);
+  const prog = async () => { await open(index); return js(`document.querySelector("#list .prog").textContent`); };
+  // short: steps 1, 3, 4 visited, the background step 2 skipped
+  await js(`document.querySelector('.top [data-act="depth"]').click()`);
+  await js(`document.querySelector("#next").click()`); await js(`document.querySelector("#next").click()`);
+  assert.equal(await prog(), "read 3 of 6");
+  // reaching the Recap in the short version reads to the end
+  await open(page); await goTo(6);
+  assert.equal(await prog(), "✓ read to the end");
+  // an older page's high-water mark
+  await js(`localStorage.setItem(Object.keys(localStorage).find(k => k.startsWith("explain-progress:")), JSON.stringify({ cur: 1, maxSeen: 1 }))`);
+  assert.equal(await prog(), "read 2 of 6");
+  await js("localStorage.clear()");
+  rmSync(dir, { recursive: true, force: true });
 });
 
 test("depth: no switch on a page with nothing to skip", { skip }, async () => {

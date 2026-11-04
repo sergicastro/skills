@@ -33,9 +33,11 @@ const MEASURE = `(() => {
   const clipped = vis.filter(v => v.scrollWidth > v.clientWidth + 2).length;
   let minText = Infinity;
   art.querySelectorAll(".visual svg").forEach(svg => {
-    const vb = svg.viewBox && svg.viewBox.baseVal, w = svg.getBoundingClientRect().width;
-    if (!vb || !vb.width || !w) return;
-    svg.querySelectorAll("text").forEach(t => { const fs = parseFloat(getComputedStyle(t).fontSize); if (fs) minText = Math.min(minText, fs * w / vb.width); });
+    // The drawing is scaled to fit both sides of the svg's box: a height cap can draw it smaller than the box is wide
+    const vb = svg.viewBox && svg.viewBox.baseVal, r = svg.getBoundingClientRect();
+    if (!vb || !vb.width || !vb.height || !r.width) return;
+    const k = Math.min(r.width / vb.width, r.height / vb.height);
+    svg.querySelectorAll("text").forEach(t => { const fs = parseFloat(getComputedStyle(t).fontSize); if (fs) minText = Math.min(minText, fs * k); });
   });
   return { over, clipped, minText: minText === Infinity ? null : Math.round(minText * 10) / 10, title: art.querySelector("h2").textContent };
 })()`;

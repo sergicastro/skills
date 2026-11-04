@@ -449,15 +449,19 @@ ${pages.map(item).join("\n")}
 <p class="empty" id="none" hidden>No page matches.</p>` : `<p class="empty">No pages yet. Build one with <code>node build.mjs &lt;topic&gt;.content.js</code>.</p>`}
 </main>
 <script>
-// Progress as each page saved it (visited steps); the key is the page's path plus its title
+// Progress as each page saved it (visited steps); the key is the page's path plus its title.
+// A page saves the step indexes it showed (seen); one built by an older engine saved a high-water mark (maxSeen).
+// Reaching the Recap counts as read to the end, since the Short version never shows its background steps.
 document.querySelectorAll("#list li").forEach(li => {
   try {
     const path = new URL(li.querySelector("a").getAttribute("href"), location.href).pathname;
     const p = JSON.parse(localStorage.getItem("explain-progress:" + path + ":" + li.dataset.title));
     if (!p) return;
-    const seen = (p.maxSeen || 0) + 1, n = +li.dataset.steps, el = li.querySelector(".prog");
-    el.textContent = seen >= n ? "✓ read to the end" : "read " + seen + " of " + n;
-    el.classList.toggle("done", seen >= n);
+    const n = +li.dataset.steps, el = li.querySelector(".prog");
+    const seen = Array.isArray(p.seen) ? p.seen : [...Array((p.maxSeen || 0) + 1).keys()];
+    const end = seen.includes(n - 1);
+    el.textContent = end ? "✓ read to the end" : "read " + seen.length + " of " + n;
+    el.classList.toggle("done", end);
   } catch (e) {}
 });
 const q = document.getElementById("q");

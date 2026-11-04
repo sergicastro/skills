@@ -23,8 +23,11 @@ $$(".bigpic-text").forEach(e => e.textContent = META.bigPicture || "");
 // Saved progress (visited steps, quiz answers, last step) — per page, in this browser only
 const KEY = "explain-progress:" + location.pathname + ":" + META.title;
 let saved = {}; try { saved = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
-let results = saved.results || {}, maxSeen = saved.maxSeen || 0, cur = 0, choices = saved.choices || {};
-const save = () => { try { localStorage.setItem(KEY, JSON.stringify({ cur, maxSeen, results, choices })); } catch (e) {} };
+// Visited steps are kept as a list of step indexes, not a high-water mark: the Short version jumps over background
+// steps, and a mark past them would count them as read. Progress an older engine saved as maxSeen reads as 0..maxSeen.
+let results = saved.results || {}, cur = 0, choices = saved.choices || {};
+let seen = new Set(Array.isArray(saved.seen) ? saved.seen : [...Array((saved.maxSeen || 0) + 1).keys()]);
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify({ cur, seen: [...seen].sort((a, b) => a - b), results, choices })); } catch (e) {} };
 
 // Glossary lookup shared by <dfn> tooltips, diagram parts and the "Still confused" prompt: the name, then its singular.
 // <dfn data-term="token">tokens</dfn> names the entry explicitly; otherwise its text is looked up.
@@ -224,7 +227,10 @@ const stuckHtml = i => `<details class="stuck" data-step="${i}"><summary>Still c
 const baHtml = TYPE === "before-after" && (META.before || META.after)
   ? `<div class="ba"><div><b>Before</b>${META.before || ""}</div><div><b>After</b>${META.after || ""}</div></div>` : "";
 // A diagram wider than this would shrink its text below ~12px in the side column, so its steps go full width
-const WIDE_DIAGRAM = +((DIAGRAM.match(/viewBox="[\d.-]+ [\d.-]+ ([\d.]+)/) || [])[1] || 0) > 680;
+const VIEWBOX = (DIAGRAM.match(/viewBox="[\d.-]+ [\d.-]+ ([\d.]+) ([\d.]+)/) || []).slice(1).map(Number);
+const WIDE_DIAGRAM = (VIEWBOX[0] || 0) > 680;
+// Its width over its height: a full-width diagram is capped in height, so this says how much width it really takes
+const DIAGRAM_AR = VIEWBOX[1] ? Math.round(VIEWBOX[0] / VIEWBOX[1] * 1000) / 1000 : 0;
 $("#stage").innerHTML = STEPS.map((s, i) => {
   // A decision table beside the text wraps its notes a word per line, so its steps go full width too,
   // unless a quiz needs the text column (under a full-width table it would fall off the screen)
@@ -238,6 +244,14 @@ $("#stage").innerHTML = STEPS.map((s, i) => {
     (vis ? `<div class="visual">${vis}</div>` : "") + (s.code ? `<pre><code>${codeHtml(s.code)}</code></pre>` : "") +
     (s.evidence ? evidenceHtml(s.evidence) : "");
   const split = look && !wide;
+  // A quiz under a full-width diagram pushes the step past the screen. The diagram is capped in height, so it leaves
+  // width spare beside it, and the quiz goes there (the row wraps back to one column on a narrow screen)
+  const beside = wide && !!s.quiz && !s.visual && !!vis && WIDE_DIAGRAM && !!DIAGRAM_AR && !panel && !s.diff;
+  const quiz = s.quiz ? `<div class="quiz" data-step="${i}" data-answer="${s.quiz.answer}"><p>${s.quiz.q}</p>
+          <div class="opts">${shuffled(s.quiz.options.length, s.quiz.q).map(j => { const o = s.quiz.options[j];
+            return `<button data-i="${j}">${typeof o === "string" ? o : o.t}</button>`; }).join("")}</div>
+          <div class="retry">Not quite, one more try.</div>
+          <div class="why"><span class="verdict"></span> ${s.quiz.why || ""}</div></div>` : "";
   return `
   <article class="step${split ? " split" : ""}${wide ? " wide" : ""}${FULL[i] ? " full-only" : ""}" id="step-${i + 1}" aria-labelledby="h-${i}">
     ${i === 0 ? `<div class="bigpic"><b>Big picture</b>${esc(META.bigPicture || "")}</div>${baHtml}` : ""}
@@ -250,16 +264,12 @@ $("#stage").innerHTML = STEPS.map((s, i) => {
         <div class="body">${s.body || ""}</div>
         ${s.analogy ? `<div class="analogy"><span>${s.analogy}</span></div>` : ""}
         ${wiOpts(s).length ? whatifHtml(i) : ""}
-        ${wide && look ? `<div class="look">${look}</div>` : ""}
+        ${wide && look ? beside ? `<div class="beside"><div class="look" style="--ar:${DIAGRAM_AR}">${look}</div>${quiz}</div>` : `<div class="look">${look}</div>` : ""}
         ${recap ? `<ol class="recap-list">${STEPS.slice(0, LAST).map((t, j) => `<li${FULL[j] ? ` class="full-only"` : ""}><button data-go="${j}">
           <span class="n">${j + 1}</span><span><b>${t.title}</b>${t.summary ? ` <span class="s">— ${t.summary}</span>` : ""}</span>
           <span class="mk" data-mk="${j}"></span></button></li>`).join("")}</ol>` : ""}
         ${s.deeper ? `<details><summary>Go deeper</summary>${s.deeper}</details>` : ""}
-        ${s.quiz ? `<div class="quiz" data-step="${i}" data-answer="${s.quiz.answer}"><p>${s.quiz.q}</p>
-          <div class="opts">${shuffled(s.quiz.options.length, s.quiz.q).map(j => { const o = s.quiz.options[j];
-            return `<button data-i="${j}">${typeof o === "string" ? o : o.t}</button>`; }).join("")}</div>
-          <div class="retry">Not quite, one more try.</div>
-          <div class="why"><span class="verdict"></span> ${s.quiz.why || ""}</div></div>` : ""}
+        ${beside ? "" : quiz}
         ${stuckHtml(i)}
         ${recap ? `<section class="finish" aria-label="Finished">
           <h3>You made it to the end</h3><p id="score"></p>
@@ -486,10 +496,10 @@ const isAll = () => document.body.classList.contains("all");
 
 // Update every "where am I" indicator without moving the page
 function mark(i) {
-  cur = i; maxSeen = Math.max(maxSeen, cur);
+  cur = i; seen.add(cur);
   document.body.classList.toggle("first", cur === 0);
   items.forEach((d, j) => {
-    d.classList.toggle("cur", j === cur); d.classList.toggle("done", j <= maxSeen && j !== cur);
+    d.classList.toggle("cur", j === cur); d.classList.toggle("done", seen.has(j) && j !== cur);
     if (j === cur) d.setAttribute("aria-current", "step"); else d.removeAttribute("aria-current");
   });
   items[cur].scrollIntoView({ block: "nearest" });
@@ -549,7 +559,7 @@ stage.addEventListener("click", e => {
   const g = e.target.closest("[data-go]");
   if (g) { e.preventDefault(); if (isAll()) setMode("all", false); go(+g.dataset.go); return; }
   const f = e.target.closest("[data-finish]"); if (!f) return;
-  if (f.dataset.finish === "restart") { results = {}; choices = {}; maxSeen = 0; STEPS.forEach((_, j) => paintChoice(j)); quizzes.forEach(paintQuiz); paintMarks(); setMode("all", false); go(0); }
+  if (f.dataset.finish === "restart") { results = {}; choices = {}; seen = new Set(); STEPS.forEach((_, j) => paintChoice(j)); quizzes.forEach(paintQuiz); paintMarks(); setMode("all", false); go(0); }
   if (f.dataset.finish === "all") { setMode("all", true); go(0); }
   if (f.dataset.finish === "gloss") setMode("gloss", true);
 });
