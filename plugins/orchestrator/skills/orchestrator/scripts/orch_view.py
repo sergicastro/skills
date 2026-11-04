@@ -4,6 +4,7 @@ Every function takes the view model built by orch_state.view_model() and returns
 This module imports only the stdlib so orch_state can import it without a cycle.
 """
 import html
+import re
 import string
 from pathlib import Path
 
@@ -66,6 +67,48 @@ def link(url, text=None):
         return f'<a href="{esc(u)}">{esc(text or u)}</a>'
     return esc(text or u)
 
+
+REPO = r"[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?/[\w.-]+"
+REPO_RE = re.compile(rf"(?:https://github\.com/)?({REPO})(?:/.*)?")
+GH_REF_RE = re.compile(
+    rf"https://github\.com/(?P<urepo>{REPO})/(?P<kind>issues|pull)/(?P<unum>\d+)(?P<frag>#[\w-]+)?(?![\w/])"
+    rf"|(?<![\w/.-])(?P<qrepo>{REPO})#(?P<qnum>\d+)(?!\w)"
+    r"|(?<![\w/#])#(?P<bnum>\d+)(?!\w)")
+
+
+def gh_repo(value):
+    """owner/repo from an 'owner/repo' string or a github.com URL, else None."""
+    m = REPO_RE.fullmatch(str(value or "").strip())
+    if not m or (not str(value).startswith("https://") and str(value).count("/") != 1):
+        return None
+    return m.group(1).removesuffix(".git")
+
+
+def gh_links(text, repo=None):
+    """Escape text and turn GitHub issue/PR references into links.
+
+    Handles full github.com issue/PR URLs, owner/repo#123, and bare #123 when repo is known.
+    """
+    text = "" if text is None else str(text)
+    out, pos = [], 0
+    for m in GH_REF_RE.finditer(text):
+        if m["urepo"]:
+            r, num = m["urepo"], m["unum"]
+            href = m.group(0)
+        elif m["qrepo"]:
+            r, num = m["qrepo"], m["qnum"]
+            href = f"https://github.com/{r}/issues/{num}"
+        elif repo:
+            r, num = repo, m["bnum"]
+            href = f"https://github.com/{r}/issues/{num}"
+        else:
+            continue
+        label = f"#{num}" if r == repo else f"{r}#{num}"
+        out.append(esc(text[pos:m.start()]))
+        out.append(f'<a href="{esc(href)}">{esc(label)}</a>')
+        pos = m.end()
+    out.append(esc(text[pos:]))
+    return "".join(out)
 
 def pr_label(url):
     tail = str(url).rstrip("/").rsplit("/", 1)[-1]
@@ -178,9 +221,9 @@ def main_html(vm, health=None):
     legend = PR_LEGEND if health is not None and any(g["prs"] for g in vm["goals"]) else ""
     goal_rows = "".join(
         f'<tr id="goal-{esc(g["id"])}" data-goal="{esc(g["id"])}" data-status="{esc(g["status"])}">'
-        f'<td>{esc(g["id"])}</td><td>{esc(g["title"])}</td><td>{badge(g["status"])}</td>'
+        f'<td>{esc(g["id"])}</td><td>{gh_links(g["title"], g.get("repo"))}</td><td>{badge(g["status"])}</td>'
         f'<td>{esc(g["worker"] or "-")}</td><td>{prs_html(g["prs"], health)}</td>'
-        f'<td>{esc(g["reason"] or "")}</td></tr>'
+        f'<td>{gh_links(g["reason"], g.get("repo"))}</td></tr>'
         for g in vm["goals"])
     worker_rows = "".join(
         f'<tr><td>{esc(w["name"])}</td><td>{esc(w["current"] or "-")}</td>'
