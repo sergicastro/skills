@@ -101,18 +101,19 @@ The diagram and the table use the same colors as the status page.
 
 | Status | Meaning | Leaves it when |
 | --- | --- | --- |
-| ⚪ `blocked` | Waiting on dependencies | Every dependency is `done` (or `in-review`, see below), or you say `start <goal> now` → `ready` |
-| 🔵 `ready` | Can be handed out | A worker says "next" and gets it → `assigned` |
-| 🟠 `assigned` | A worker is on it | The worker needs you → `needs-user`; it reports DONE → `in-review` |
-| 🔴 `needs-user` | The worker is waiting on you, with a reason (a worker reporting "blocked" lands here too, with a `blocked:` reason) | The worker resumes → `assigned` |
-| 🟣 `in-review` | Work is done and waits for your review | `approve <goal>` → `done`; `send <goal> back` → `assigned` (same worker) |
-| 🟢 `done` | Approved | Final |
+| ⚪&nbsp;`blocked` | Waiting on dependencies | Every dependency is `done` (or `in-review`, see below), or you say `start <goal> now` → `ready` |
+| 🔵&nbsp;`ready` | Can be handed out | A worker says "next" and gets it → `assigned` |
+| 🟠&nbsp;`assigned` | A worker is on it | The worker needs you → `needs-user`; it reports DONE → `in-review` |
+| 🔴&nbsp;`needs-user` | The worker is waiting on you, with a reason | The worker resumes → `assigned` |
+| 🟣&nbsp;`in-review` | Work is done and waits for your review | `approve <goal>` → `done`; `send <goal> back` → `assigned` (same worker) |
+| 🟢&nbsp;`done` | Approved | Final |
 
 - `release <goal>` takes a goal off its worker (gone, or you want someone else on it) from
   `assigned`, `needs-user` or `in-review`. It passes through `blocked` and goes straight on
   to `ready` if its dependencies are still met.
 - By default a goal's dependents unblock only when it is `done`. Ask the manager to unblock
   on review and they start once it reaches `in-review`.
+- A worker that reports "blocked" lands in `needs-user` too, with a `blocked:` reason.
 - Opening a PR never changes a goal's status.
 - Only `blocked` or `ready` goals can be dropped, and only when nothing depends on them.
 
