@@ -63,6 +63,60 @@ To work on the skills, run Claude Code with the local copy instead:
    what to do: delete the state directory, stop the status server (if no other
    orchestration is left), and tell the workers they can end their sessions.
 
+## Goal lifecycle
+
+```mermaid
+stateDiagram-v2
+    state "needs-user" as needs_user
+    state "in-review" as in_review
+
+    [*] --> blocked: goal added
+    blocked --> ready: dependencies met, or user says "start now"
+    ready --> assigned: worker says "next"
+    assigned --> needs_user: worker reports needs-user or blocked
+    needs_user --> assigned: worker resumes
+    assigned --> in_review: worker reports DONE
+    in_review --> done: user says "approve"
+    in_review --> assigned: user says "send back"
+    assigned --> blocked: user says "release"
+    needs_user --> blocked: user says "release"
+    in_review --> blocked: user says "release"
+    done --> [*]
+
+    classDef blocked fill:#ececea,stroke:#8a8a85,color:#1f1f1f
+    classDef ready fill:#e3edfc,stroke:#2f6fdb,color:#1f1f1f
+    classDef assigned fill:#fbf0dc,stroke:#b7791f,color:#1f1f1f
+    classDef needsUser fill:#fbe4e4,stroke:#d14343,color:#1f1f1f
+    classDef inReview fill:#efe7fb,stroke:#7c4dcc,color:#1f1f1f
+    classDef done fill:#e2f3e7,stroke:#2f8f4e,color:#1f1f1f
+    class blocked blocked
+    class ready ready
+    class assigned assigned
+    class needs_user needsUser
+    class in_review inReview
+    class done done
+```
+
+The diagram and the table use the same colors as the status page.
+
+| Status | Meaning | Leaves it when |
+| --- | --- | --- |
+| ⚪&nbsp;`blocked` | Waiting on dependencies | Every dependency is `done` (or `in-review`, see below), or you say `start <goal> now` → `ready` |
+| 🔵&nbsp;`ready` | Can be handed out | A worker says "next" and gets it → `assigned` |
+| 🟠&nbsp;`assigned` | A worker is on it | The worker needs you → `needs-user`; it reports DONE → `in-review` |
+| 🔴&nbsp;`needs-user` | The worker is waiting on you, with a reason | The worker resumes → `assigned` |
+| 🟣&nbsp;`in-review` | Work is done and waits for your review | `approve <goal>` → `done`; `send <goal> back` → `assigned` (same worker) |
+| 🟢&nbsp;`done` | Approved | Final |
+
+- `release <goal>` takes a goal off its worker (gone, or you want someone else on it) from
+  `assigned`, `needs-user` or `in-review`. It passes through `blocked` and goes straight on
+  to `ready` if its dependencies are still met.
+- By default a goal's dependents unblock only when it is `done`. Ask the manager to unblock
+  on review and they start once it reaches `in-review`.
+- A worker that reports "blocked" lands in `needs-user` too, with a `blocked:` reason.
+- Opening a PR never changes a goal's status.
+- Only `blocked` or `ready` goals can be dropped, and only when nothing depends on them.
+
 ## Live status page
 
 The manager starts a small local server the first time you create or resume an
