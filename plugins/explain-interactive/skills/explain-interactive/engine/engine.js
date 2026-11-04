@@ -32,7 +32,7 @@ const save = () => { try { localStorage.setItem(KEY, JSON.stringify({ cur, seen:
 // Glossary lookup shared by <dfn> tooltips, diagram parts and the "Still confused" prompt: the name, then its singular.
 // <dfn data-term="token">tokens</dfn> names the entry explicitly; otherwise its text is looked up.
 const GL = Object.fromEntries([...cast.map(t => [t.toLowerCase(), CAST[t]]), ...terms.map(t => [t.toLowerCase(), GLOSSARY[t]])]);
-const lookup = t => { const k = String(t).trim().toLowerCase(); return GL[k] ?? GL[k.replace(/(es|s)$/, "")] ?? GL[k.replace(/s$/, "")]; };
+const lookup = t => { const k = String(t).replace(/\s+/g, " ").trim().toLowerCase(); return GL[k] ?? GL[k.replace(/(es|s)$/, "")] ?? GL[k.replace(/s$/, "")]; };
 const findTerm = d => lookup(d.dataset.term || d.textContent);
 
 // Diagram parts that name a CAST/GLOSSARY entry (by data-term, else their own text, else their id) show it on click

@@ -570,3 +570,15 @@ test("Show all reveals a step left halfway through its stages; a page with no bi
   await js(`document.querySelector('[data-act="all"]').click()`); await sleep(50);
   assert.equal(await js(`document.querySelectorAll(".pend").length`), 0);
 });
+
+test("a <dfn> that wraps over a line break finds its entry, as build.mjs --check expects", { skip }, async () => {
+  const page = join(tmp, "wrapped.html");
+  writeFileSync(page, build(`const META = { title: "Wrapped", bigPicture: "B" };
+const GLOSSARY = { "rate limit": "how many calls a client may make", "CI&CD": "both" };
+const STEPS = [{ title: "One", summary: "s", body: \`<p>A <dfn>rate
+  limit</dfn> and <dfn>CI&amp;CD</dfn>.</p>\` }, { title: "Recap", body: "<p>y</p>" }];`).html);
+  problems.length = 0;
+  await open(page);
+  assert.equal(await js(`[...document.querySelectorAll("#step-1 dfn")].filter(d => d.tabIndex === 0).length`), 2);
+  assert.deepEqual(problems.filter(p => /glossary/i.test(p)), []);
+});

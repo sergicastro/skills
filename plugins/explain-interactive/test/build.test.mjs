@@ -397,3 +397,64 @@ test("index: never replaces a page built as index.html, nor an index.html the bu
   assert.equal(r.status, 1);
   assert.equal(readFileSync(join(dir, "index.html"), "utf8"), "<!doctype html><title>My docs</title>");
 });
+
+// ---------- <dfn> coverage, nested diagram lists, depth with what-if ----------
+test("dfn check: every field rendered as HTML is covered, with the field named", () => {
+  const code = `const META = { type: "before-after", title: "T", bigPicture: "B", before: "<dfn>m1</dfn>", after: "<p><dfn>m2</dfn></p>" };
+const GLOSSARY = { known: "k", "CI&CD": "both", "a<b": "less" };
+const CAST = { Alice: "uses <dfn>c1</dfn>" };
+const STEPS = [
+  { title: "One", summary: "s", body: "<p><dfn>known</dfn> <dfn>CI&amp;CD</dfn> <dfn data-term='a&lt;b'>it</dfn></p>",
+    context: { question: "<dfn>x1</dfn>?", prereqs: ["<dfn>x2</dfn>: r"] }, deeper: "<dfn>x3</dfn>",
+    quiz: { q: "<dfn>x4</dfn>?", options: ["a", { t: "b", why: "<dfn>x5</dfn>" }, "c"], answer: 0, why: "<dfn>x6</dfn>" },
+    code: "<dfn>escaped</dfn>", diff: { before: "<dfn>escaped</dfn>", after: "b" }, evidence: { label: "<dfn>x7</dfn>", text: "<dfn>escaped</dfn>" } },
+  { title: "Recap", body: "<p>r</p>" },
+];`;
+  const w = check(loadContent(code)).warnings.filter(x => /<dfn>/.test(x));
+  const has = re => assert.ok(w.some(x => re.test(x)), `${re}\n${w.join("\n")}`);
+  has(/^META\.before: <dfn>m1<\/dfn> has no CAST or GLOSSARY entry/);
+  has(/^META\.after: <dfn>m2<\/dfn>/);
+  has(/^CAST "Alice": <dfn>c1<\/dfn>/);
+  for (const k of ["x1", "x2", "x3", "x4", "x5", "x6", "x7"]) has(new RegExp(`^step 1 \\("One"\\): <dfn>${k}</dfn>`));
+  assert.ok(!w.some(x => /known|CI&|a<b|escaped/.test(x)), w.join("\n"));
+  assert.equal(w.length, 10, w.join("\n"));
+});
+
+test("dfn check: DECISION, HYPOTHESES and LAYERS text, and what-if options", () => {
+  const page = (type, extra, step = "") => check(loadContent(`const META = { type: "${type}", title: "T", bigPicture: "B" };
+${extra}
+const STEPS = [{ title: "One", summary: "s", body: "<p>x</p>"${step} }, { title: "Recap", body: "<p>y</p>" }];`)).warnings.filter(x => /<dfn>/.test(x)).join("\n");
+  const d = page("decision", `const DECISION = { options: [{ id: "a", name: "<dfn>d1</dfn>", summary: "<dfn>d2</dfn>" }, { id: "b", name: "B" }],
+  criteria: [{ id: "c", name: "<dfn>d3</dfn>" }], ratings: { a: { c: { level: "good", note: "<dfn>d4</dfn>" } }, b: { c: "poor" } },
+  cost: { a: "<dfn>d5</dfn>" }, recommend: "a", why: "<dfn>d6</dfn>" };`);
+  for (const k of ["d1", "d2", "d3", "d4", "d5", "d6"]) assert.match(d, new RegExp(`^DECISION: <dfn>${k}</dfn>`, "m"));
+  assert.match(page("debugging", `const HYPOTHESES = [{ id: "h", text: "<dfn>h1</dfn>" }];`), /^HYPOTHESES: <dfn>h1<\/dfn>/m);
+  assert.match(page("concept", `const LAYERS = [{ id: "l", name: "<dfn>l1</dfn>", text: "<dfn>l2</dfn>" }];`), /^LAYERS: <dfn>l1<\/dfn>[\s\S]*^LAYERS: <dfn>l2<\/dfn>/m);
+  const wi = page("walkthrough", "", `, whatif: { label: "<dfn>w1</dfn>", options: [{ id: "p", label: "<dfn>w2</dfn>", outcome: "<dfn>w3</dfn>" }, { id: "q", label: "q", outcome: "o" }] }`);
+  for (const k of ["w1", "w2", "w3"]) assert.match(wi, new RegExp(`^step 1 \\("One"\\): <dfn>${k}</dfn>`, "m"));
+});
+
+test("dfn check: a term spread over lines, and numeric entities, are read as the browser would", () => {
+  const code = minimal(`const GLOSSARY = { "rate limit": "r", "café": "c" };`).replace('"<p>x</p>"', '"<p><dfn>rate\\n limit</dfn> <dfn>caf&#233;</dfn> <dfn>caf&#xE9;</dfn> <dfn>gone</dfn></p>"');
+  const w = check(loadContent(code)).warnings.filter(x => /<dfn>/.test(x));
+  assert.deepEqual(w, ['step 1 ("One"): <dfn>gone</dfn> has no CAST or GLOSSARY entry']);
+});
+
+test("check: hl, hide and dim take ids, not nested lists; build stages may be lists", () => {
+  const e = d => check(loadContent(minimal().replace('diagram: { hl: ["a"] }', `diagram: ${d}`))).errors.join("\n");
+  assert.match(e(`{ hl: [["a"]] }`), /step 1 \("One"\): diagram\.hl item 0 is a list; hl takes data-id strings \(only build stages can be lists\)/);
+  assert.match(e(`{ hide: ["a", ["a"]] }`), /diagram\.hide item 1 is a list/);
+  assert.match(e(`{ dim: [3] }`), /diagram\.dim item 0 must be a data-id string/);
+  assert.equal(e(`{ build: [["a"], "a"] }`), "");
+  assert.match(e(`{ build: [[["a"]]] }`), /diagram\.build stage 0 must be a data-id or a list of data-ids/);
+  const wi = check(loadContent(minimal().replace('diagram: { hl: ["a"] }', `diagram: {}, whatif: { label: "x", options: [{ id: "p", label: "p", outcome: "o" }, { id: "q", label: "q", outcome: "<mark>o</mark>", diagram: { hl: [["a"]] } }] }`))).errors.join("\n");
+  assert.match(wi, /whatif option "q" diagram\.hl item 0 is a list/);
+});
+
+test("depth: a full step whose what-if options light parts is a warning too", () => {
+  const opts = hl => `whatif: { label: "x", options: [{ id: "p", label: "p", outcome: "o" }, { id: "q", label: "q", outcome: "<mark>A</mark>", diagram: { hl: ${hl} } }] }`;
+  let { warnings } = check(loadContent(steps3(`{ title: "Bg", summary: "s", body: "<p>b</p>", depth: "full", diagram: {}, ${opts('["a"]')} }`)));
+  assert.ok(warnings.some(w => /step 2 \("Bg"\): a depth "full" step lights diagram parts \(a in its what-if options\)/.test(w)), warnings.join("\n"));
+  ({ warnings } = check(loadContent(steps3(`{ title: "Bg", summary: "s", body: "<p>b</p>", depth: "full", diagram: {}, ${opts("[]")} }`))));
+  assert.ok(!warnings.some(w => /depth/.test(w)), warnings.join("\n"));
+});

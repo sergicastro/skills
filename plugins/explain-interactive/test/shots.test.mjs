@@ -7,6 +7,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { findChrome } from "../skills/explain-interactive/cdp.mjs";
+import { optionNames, shotFile, SHOT_FILE } from "../skills/explain-interactive/shots.mjs";
 
 const SKILL = join(dirname(fileURLToPath(import.meta.url)), "../skills/explain-interactive");
 const skip = findChrome() ? false : "no Chrome/Chromium found (set CHROME=…)";
@@ -74,5 +75,39 @@ test("shots: a what-if step is shot once per option", { skip }, () => {
     assert.deepEqual(files.filter(f => /^step-0[46]/.test(f)), ["step-04-miss.png", "step-04.png", "step-06-59s.png", "step-06-61s.png", "step-06.png"]);
     assert.equal(files.length, 11);
     assert.doesNotMatch(r.stderr, /finding:/);
+  } finally { rmSync(out, { recursive: true, force: true }); }
+});
+
+test("shot names: never collide, whatever the option ids", () => {
+  // "a b" and "a_b" sanitise alike; "phone" and "x-phone" would read as phone shots
+  const names = optionNames(["first", "a b", "a_b", "phone", "x-phone", "a_b_2", "ok-1"]);
+  assert.deepEqual(names, [null, "a_b", "a_b_2", "phone_2", "x_phone", "a_b_2_2", "ok_1"]);
+  const files = [];
+  for (const size of ["desktop", "phone"]) names.forEach(o => files.push(shotFile(3, o, size)));
+  assert.equal(new Set(files).size, files.length, files.join("\n"));
+  assert.equal(shotFile(3, null, "desktop"), "step-04.png");
+  assert.equal(shotFile(3, null, "phone"), "step-04-phone.png");
+  assert.equal(shotFile(3, "miss", "phone"), "step-04-miss-phone.png");
+  // every name is still matched by the clean-up of old shots
+  files.forEach(f => assert.match(f, SHOT_FILE));
+});
+
+test("shots: what-if ids that sanitise alike get their own images", { skip }, () => {
+  const out = mkdtempSync(join(tmpdir(), "explain-shots-"));
+  try {
+    const src = join(out, "ids.content.js");
+    const o = id => `{ id: ${JSON.stringify(id)}, label: ${JSON.stringify(id)}, outcome: "o" }`;
+    writeFileSync(src, `const META = { title: "Ids", bigPicture: "B" };
+const STEPS = [
+  { title: "Context", summary: "s", body: "<p>c</p>" },
+  { title: "Pick", summary: "s", body: "<p>p</p>", whatif: { label: "x", options: [${o("first")}, ${o("a b")}, ${o("a_b")}, ${o("phone")}] } },
+  { title: "Recap", body: "<p>r</p>" },
+];`);
+    const r = run(src, "-o", out, "--phone");
+    assert.equal(r.status, 0, r.stderr);
+    const files = readdirSync(out).filter(f => f.endsWith(".png")).sort();
+    assert.deepEqual(files.filter(f => f.startsWith("step-02")), ["step-02-a_b-phone.png", "step-02-a_b.png", "step-02-a_b_2-phone.png", "step-02-a_b_2.png",
+      "step-02-phone.png", "step-02-phone_2-phone.png", "step-02-phone_2.png", "step-02.png"]);
+    assert.match(r.stdout, /12 screenshots in /);
   } finally { rmSync(out, { recursive: true, force: true }); }
 });
