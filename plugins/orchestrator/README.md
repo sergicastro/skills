@@ -99,14 +99,14 @@ stateDiagram-v2
 
 The diagram and the table use the same colors as the status page.
 
-| Status | Color | Meaning | Leaves it when |
-| --- | --- | --- | --- |
-| `blocked` | ⚪ grey | Waiting on dependencies | Every dependency is `done` (or `in-review`, see below), or you say `start <goal> now` → `ready` |
-| `ready` | 🔵 blue | Can be handed out | A worker says "next" and gets it → `assigned` |
-| `assigned` | 🟠 amber | A worker is on it | The worker needs you → `needs-user`; it reports DONE → `in-review` |
-| `needs-user` | 🔴 red | The worker is waiting on you, with a reason (a worker reporting "blocked" lands here too, with a `blocked:` reason) | The worker resumes → `assigned` |
-| `in-review` | 🟣 purple | Work is done and waits for your review | `approve <goal>` → `done`; `send <goal> back` → `assigned` (same worker) |
-| `done` | 🟢 green | Approved | Final |
+| Status | Meaning | Leaves it when |
+| --- | --- | --- |
+| ⚪ `blocked` | Waiting on dependencies | Every dependency is `done` (or `in-review`, see below), or you say `start <goal> now` → `ready` |
+| 🔵 `ready` | Can be handed out | A worker says "next" and gets it → `assigned` |
+| 🟠 `assigned` | A worker is on it | The worker needs you → `needs-user`; it reports DONE → `in-review` |
+| 🔴 `needs-user` | The worker is waiting on you, with a reason (a worker reporting "blocked" lands here too, with a `blocked:` reason) | The worker resumes → `assigned` |
+| 🟣 `in-review` | Work is done and waits for your review | `approve <goal>` → `done`; `send <goal> back` → `assigned` (same worker) |
+| 🟢 `done` | Approved | Final |
 
 - `release <goal>` takes a goal off its worker (gone, or you want someone else on it) from
   `assigned`, `needs-user` or `in-review`. It passes through `blocked` and goes straight on
