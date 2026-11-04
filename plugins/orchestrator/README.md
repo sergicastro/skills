@@ -82,9 +82,22 @@ stateDiagram-v2
     needs_user --> blocked: user says "release"
     in_review --> blocked: user says "release"
     done --> [*]
+
+    classDef blocked fill:#ececea,stroke:#8a8a85,color:#1f1f1f
+    classDef ready fill:#e3edfc,stroke:#2f6fdb,color:#1f1f1f
+    classDef assigned fill:#fbf0dc,stroke:#b7791f,color:#1f1f1f
+    classDef needsUser fill:#fbe4e4,stroke:#d14343,color:#1f1f1f
+    classDef inReview fill:#efe7fb,stroke:#7c4dcc,color:#1f1f1f
+    classDef done fill:#e2f3e7,stroke:#2f8f4e,color:#1f1f1f
+    class blocked blocked
+    class ready ready
+    class assigned assigned
+    class needs_user needsUser
+    class in_review inReview
+    class done done
 ```
 
-The colors are the ones the status page uses for each status.
+The diagram and the table use the same colors as the status page.
 
 | Status | Color | Meaning | Leaves it when |
 | --- | --- | --- | --- |
