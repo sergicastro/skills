@@ -9,7 +9,8 @@
 //   --dark     dark theme instead of light
 //
 // A content file is built first (into the output directory). Each step is shown as the reader sees it on arrival,
-// with every build stage revealed. A step with a what-if control is also shot once per other option: step-NN-<option>.png. Besides the images it lists what it can measure on each step:
+// with every build stage revealed. A step with a what-if control is also shot once per other option: step-NN-<option>.png
+// (naming: see optionNames below; names never collide). Besides the images it lists what it can measure on each step:
 // a middle step much taller than the screen, a diagram too wide for its box, diagram text rendered too small,
 // console errors or warnings (e.g. a <dfn> with no glossary entry), and any request the page makes.
 // Exit code: 0 rendered (findings are printed, not fatal), 1 the page failed, 2 bad arguments or no browser.
@@ -40,8 +41,26 @@ const MEASURE = `(() => {
   return { over, clipped, minText: minText === Infinity ? null : Math.round(minText * 10) / 10, title: art.querySelector("h2").textContent };
 })()`;
 
-// The active step's what-if options, as file-name-safe ids, and how to pick one the way a reader would
-const WHATIF_IDS = `[...document.querySelectorAll(".step.active .whatif .wi-out")].map(o => o.dataset.wi.replace(/[^\\w-]+/g, "_"))`;
+// File names: step-NN.png, then step-NN-<option>.png for each what-if option after the first; phone shots add -phone
+// before .png. <option> is the option id with each run of characters other than letters, digits and _ turned into _,
+// so it never holds a "-" and can't read as the -phone suffix. One that is "phone", or that an earlier option of the step
+// already gave, gets _2 (then _3, …) until it is unique, so "a b" and "a_b" become a_b and a_b_2.
+export const SHOT_FILE = /^step-\d+(-[\w-]+)?\.png$/;   // what a run removes from the output directory first
+export function optionNames(ids) {
+  const used = new Set(["phone"]);
+  return ids.map((id, k) => {
+    if (!k) return null;   // the first option is the step as the reader finds it: step-NN.png
+    const base = String(id).replace(/[^A-Za-z0-9_]+/g, "_") || "_";
+    let name = base;
+    for (let n = 2; used.has(name); n++) name = `${base}_${n}`;
+    used.add(name);
+    return name;
+  });
+}
+export const shotFile = (i, option, size) => `step-${String(i + 1).padStart(2, "0")}${option ? `-${option}` : ""}${size === "phone" ? "-phone" : ""}.png`;
+
+// The active step's what-if option ids, and how to pick one the way a reader would
+const WHATIF_IDS = `[...document.querySelectorAll(".step.active .whatif .wi-out")].map(o => o.dataset.wi)`;
 const pickOption = k => `(f => { const r = f.querySelector("input[type=range]");
   if (r) { r.value = ${k}; r.dispatchEvent(new Event("input", { bubbles: true })); } else f.querySelectorAll("input[type=radio]")[${k}].click(); })(document.querySelector(".step.active .whatif"))`;
 
@@ -73,14 +92,13 @@ export async function shoot(page, { out, phone = false, dark = false } = {}) {
         await b.js(`document.querySelectorAll("#outline button")[${i}].click(); document.activeElement && document.activeElement.blur && document.activeElement.blur()`);
         const stages = await b.js(`Math.max(0, ...[...document.querySelectorAll(".step.active [data-b]")].map(e => +e.dataset.b))`);
         for (let k = 0; k < stages; k++) await b.js(`document.querySelector("#next").click()`);
-        const options = await b.js(WHATIF_IDS);
+        const options = await b.js(WHATIF_IDS), names = optionNames(options);
         for (let k = 0; k < Math.max(1, options.length); k++) {
           if (k) await b.js(pickOption(k));
           await b.js(`document.querySelector("#stage").scrollTop = 0`);
           await sleep(60);
           const m = await b.js(MEASURE);
-          const opt = k ? `-${options[k]}` : "";
-          const file = join(out, `step-${String(i + 1).padStart(2, "0")}${opt}${size === "phone" ? "-phone" : ""}.png`);
+          const file = join(out, shotFile(i, names[k], size));
           const { data } = await b.send("Page.captureScreenshot", { format: "png" });
           writeFileSync(file, Buffer.from(data, "base64"));
           shots.push(file);
@@ -110,7 +128,7 @@ async function main(argv) {
   const src = args[0], topic = basename(src).replace(/(\.content)?\.(m?js|html?)$/i, "");
   out = resolve(out ?? join(tmpdir(), "explain-shots", topic));
   mkdirSync(out, { recursive: true });
-  readdirSync(out).filter(f => /^step-\d+(-[\w-]+)?\.png$/.test(f)).forEach(f => rmSync(join(out, f)));
+  readdirSync(out).filter(f => SHOT_FILE.test(f)).forEach(f => rmSync(join(out, f)));
   let page = resolve(src);
   if (/\.m?js$/i.test(src)) {
     let res;

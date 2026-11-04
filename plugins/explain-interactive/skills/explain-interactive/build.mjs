@@ -96,7 +96,7 @@ export function check(c) {
       for (const k of ["hl", "hide", "dim", "build"]) {
         if (d[k] === undefined) continue;
         if (!Array.isArray(d[k])) { errors.push(`${at}: diagram.${k} must be an array`); continue; }
-        d[k].flat().forEach(id => { if (!ids.has(id)) errors.push(`${at}: diagram.${k} names "${id}", which is not a data-id in DIAGRAM`); });
+        checkParts(d[k], k, `${at}: diagram`, ids, errors);
       }
       if ((d.build || []).length > 4) warnings.push(`${at}: diagram.build has ${d.build.length} stages (keep it ≤ 4)`);
     }
@@ -119,22 +119,28 @@ export function check(c) {
     if (s.depth !== undefined) {
       if (s.depth !== "full") errors.push(`${at}: depth must be "full" (a background step the short version skips) or left out`);
       else if (i === 0 || i === STEPS.length - 1) warnings.push(`${at}: depth "full" is ignored on ${i === 0 ? "the Context step" : "the Recap"}; both are always shown`);
-      else if (d && (d.hl || []).length) warnings.push(`${at}: a depth "full" step lights diagram parts; in the short version later steps show them as already introduced`);
+      else {
+        // The short version skips this step, yet later steps show what it (or any of its what-if options) lit as introduced
+        const lit = x => (x && Array.isArray(x.hl) ? x.hl : []);
+        const own = [...new Set(lit(d))], wi = [...new Set(wiOptions(s).flatMap(o => lit(o && o.diagram)))].filter(x => !own.includes(x));
+        const where = [own.join(", "), wi.length && `${wi.join(", ")} in its what-if options`].filter(Boolean).join("; ");
+        if (where) warnings.push(`${at}: a depth "full" step lights diagram parts (${where}); in the short version later steps show them as already introduced`);
+      }
     }
     checkStepType(type, c, s, at, errors, warnings);
     checkSize(s, i, STEPS.length, at, warnings);
-    // Every <dfn> needs a CAST or GLOSSARY entry, or its tooltip stays empty
-    const html = JSON.stringify(s);
-    for (const m of html.matchAll(/<dfn([^>]*)>(.*?)<\/dfn>/g)) {
-      const term = (m[1].match(/data-term=\\?["']([^"'\\]+)/) || [])[1] || stripTags(m[2]);
-      if (!hasTerm(term.trim().toLowerCase())) warnings.push(`${at}: <dfn>${term}</dfn> has no CAST or GLOSSARY entry`);
-    }
+    checkDfns(rendered(s), at, hasTerm, warnings);
   });
 
   checkTypeCoverage(type, c, warnings);
-  // `code`, `diff` and `evidence` are shown escaped, so a snippet about <script src> is fine; everything else is rendered as HTML
+  // The rest of the text rendered as HTML (META.title and bigPicture are shown as plain text)
+  if (META && typeof META === "object") for (const k of ["before", "after"]) checkDfns(META[k], `META.${k}`, hasTerm, warnings);
+  for (const [name, v] of [["CAST", CAST], ["GLOSSARY", GLOSSARY]])
+    if (v && typeof v === "object") for (const [k, t] of Object.entries(v)) checkDfns(t, `${name} "${k}"`, hasTerm, warnings);
+  for (const name of ["DECISION", "HYPOTHESES", "LAYERS"]) checkDfns(c[name], name, hasTerm, warnings);
+  // A snippet about <script src> in code, diff or evidence is fine: they are shown escaped
   const all = JSON.stringify({ META, CAST, GLOSSARY, spec, DECISION: c.DECISION, HYPOTHESES: c.HYPOTHESES, LAYERS: c.LAYERS,
-    STEPS: STEPS.map(s => ({ ...s, code: undefined, diff: undefined, evidence: s.evidence && { ...s.evidence, text: undefined } })) }) + DIAGRAM;
+    STEPS: STEPS.map(rendered) }) + DIAGRAM;
   for (const [re, what] of EXTERNAL) if (re.test(all.replace(/\\"/g, '"'))) errors.push(`content loads an external resource (${what}); pages must work offline`);
   return { errors, warnings, svg: spec ? DIAGRAM : null };
 }
@@ -170,7 +176,7 @@ function checkWhatif(s, i, n, at, { ids, hasDiagram }, errors, warnings) {
     for (const k of ["hl", "hide", "dim"]) {
       if (d[k] === undefined) continue;
       if (!Array.isArray(d[k])) { errors.push(`${at}: ${name} diagram.${k} must be an array`); continue; }
-      d[k].forEach(id => { if (!ids.has(id)) errors.push(`${at}: ${name} diagram.${k} names "${id}", which is not a data-id in DIAGRAM`); });
+      checkParts(d[k], k, `${at}: ${name} diagram`, ids, errors);
     }
     const hl = [...new Set(d.hl || [])];
     if (hl.length > LIMITS.hlParts) warnings.push(`${at}: ${name} lights ${hl.length} parts (${hl.join(", ")}); light 1–${LIMITS.hlParts}`);
@@ -182,6 +188,37 @@ function checkWhatif(s, i, n, at, { ids, hasDiagram }, errors, warnings) {
 function hasTermIn(CAST, GLOSSARY) {
   const known = new Set([...Object.keys(CAST), ...Object.keys(GLOSSARY)].map(k => k.toLowerCase()));
   return k => known.has(k) || known.has(k.replace(/(es|s)$/, "")) || known.has(k.replace(/s$/, ""));
+}
+// A step's fields as the page renders them: code, diff and evidence.text are shown escaped, so their markup is just text
+const rendered = s => ({ ...s, code: undefined, diff: undefined, evidence: s.evidence && { ...s.evidence, text: undefined } });
+const wiOptions = s => (s.whatif && Array.isArray(s.whatif.options) ? s.whatif.options : []);
+// A term as the browser reads it: tags dropped, entities decoded, white space collapsed (the page's lookup does the same)
+const ENTITIES = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
+const decode = s => s.replace(/&(#x[\da-f]+|#\d+|[a-z]+);/gi, (m, e) => {
+  if (e[0] !== "#") return ENTITIES[e.toLowerCase()] ?? m;
+  const n = /x/i.test(e[1]) ? parseInt(e.slice(2), 16) : +e.slice(1);
+  return n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : m;
+});
+// Every <dfn> in every string of value needs a CAST or GLOSSARY entry, or its tooltip stays empty
+function checkDfns(value, where, hasTerm, warnings) {
+  if (typeof value === "string") {
+    for (const [, attrs, inner] of value.matchAll(/<dfn\b([^>]*)>([\s\S]*?)<\/dfn>/gi)) {
+      const a = attrs.match(/\sdata-term\s*=\s*(?:"([^"]*)"|'([^']*)')/);
+      const term = decode(a ? a[1] ?? a[2] : inner.replace(/<[^>]*>/g, "")).replace(/\s+/g, " ").trim();
+      if (!hasTerm(term.toLowerCase())) warnings.push(`${where}: <dfn>${term}</dfn> has no CAST or GLOSSARY entry`);
+    }
+  } else if (value && typeof value === "object") Object.values(value).forEach(v => checkDfns(v, where, hasTerm, warnings));
+}
+// hl, hide and dim list data-ids; a build stage is a data-id or a list of them (parts revealed together).
+// The engine skips anything else without a word, so a nested list would leave its parts unlit.
+function checkParts(list, k, where, ids, errors) {
+  list.forEach((x, j) => {
+    const part = k === "build" && Array.isArray(x) ? x : [x];
+    if (part.some(y => typeof y !== "string")) return errors.push(k === "build" ? `${where}.build stage ${j} must be a data-id or a list of data-ids`
+      : Array.isArray(x) ? `${where}.${k} item ${j} is a list; ${k} takes data-id strings (only build stages can be lists)`
+      : `${where}.${k} item ${j} must be a data-id string`);
+    part.forEach(id => { if (!ids.has(id)) errors.push(`${where}.${k} names "${id}", which is not a data-id in DIAGRAM`); });
+  });
 }
 // A diagram part with a term opens that CAST/GLOSSARY entry on click; one that names nothing would stay inert
 function checkTerms(spec, svg, hasTerm, warnings) {
