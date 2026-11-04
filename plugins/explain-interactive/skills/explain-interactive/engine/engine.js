@@ -18,7 +18,7 @@ const TYPE = ["decision", "before-after", "debugging", "concept"].includes(META.
 document.body.classList.add("type-" + TYPE);
 document.title = META.title;
 $("#title").textContent = META.title;
-$$(".bigpic-text").forEach(e => e.textContent = META.bigPicture);
+$$(".bigpic-text").forEach(e => e.textContent = META.bigPicture || "");
 
 // Saved progress (visited steps, quiz answers, last step) — per page, in this browser only
 const KEY = "explain-progress:" + location.pathname + ":" + META.title;
@@ -53,7 +53,9 @@ const pos = i => order().indexOf(i) + 1, total = () => order().length;
 const nextShown = (i, dir) => { for (let j = i + dir; j >= 0 && j <= LAST; j += dir) if (shown(j)) return j; return -1; };
 
 // Shared diagram: clone DIAGRAM for step i. New parts get .hl, parts not introduced yet are ghosted (.dim), the Recap shows all.
-const buildStages = STEPS.map(s => Math.max(s.build || 0, ((s.diagram || {}).build || []).length));
+// A visual's highest data-b counts too, so a part staged without a matching `build` is still revealed
+const buildStages = STEPS.map(s => Math.max(s.build || 0, ((s.diagram || {}).build || []).length,
+  ...[...String(s.visual || "").matchAll(/data-b\s*=\s*["']?(\d+)/g)].map(m => +m[1])));
 // What-if options: each may relight the step's diagram. Whatever any option lit counts as introduced for later steps,
 // since the reader may have picked it.
 const wiOpts = s => (s.whatif && Array.isArray(s.whatif.options) ? s.whatif.options : []);
@@ -81,7 +83,9 @@ function diagramFor(i, d = STEPS[i].diagram || {}) {
   return box.innerHTML + (recap ? (HAS_DEFS ? `<div class="legend">${defHint}</div>` : "") : legend);
 }
 const defHint = `<span class="def-hint">Click a part to see what it is</span>`;
-const legend = `<div class="legend"><span><i class="new"></i>new in this step</span><span><i></i>already introduced</span><span><i class="soon"></i>coming later</span>${HAS_DEFS ? defHint : ""}</div>`;
+const legendOf = hint => `<div class="legend"><span><i class="new"></i>new in this step</span><span><i></i>already introduced</span><span><i class="soon"></i>coming later</span>${hint}</div>`;
+// Only diagram parts are clickable, so the panels' legend leaves the hint out
+const legend = legendOf(HAS_DEFS ? defHint : ""), panelLegend = legendOf("");
 // Ids a field of the earlier steps introduced, so a panel can ghost what the reader hasn't met yet (same rule as the diagram)
 const seenBefore = (i, pick) => new Set(STEPS.slice(0, i).flatMap(t => [].concat(pick(t) || [])));
 
@@ -106,7 +110,7 @@ function matrixFor(i) {
   return `<div class="matrix-wrap"><table class="matrix">
     <thead><tr><th></th>${opts.map(o => `<th scope="col" class="${col(o)}">${o.name}${rec === o.id ? `<span class="badge">Recommended</span>` : ""}${o.summary ? `<small>${o.summary}</small>` : ""}</th>`).join("")}</tr></thead>
     <tbody>${rows.map(r => `<tr class="${st(hC, sC, r.id)}"><th scope="row">${r.name}</th>${opts.map(o => cell(o, r)).join("")}</tr>`).join("")}</tbody>
-  </table></div>${rec && D.why ? `<p class="rec-why"><b>Why ${(opts.find(o => o.id === rec) || {}).name || rec}:</b> ${D.why}</p>` : ""}${recap ? "" : legend}`;
+  </table></div>${rec && D.why ? `<p class="rec-why"><b>Why ${(opts.find(o => o.id === rec) || {}).name || rec}:</b> ${D.why}</p>` : ""}${recap ? "" : panelLegend}`;
 }
 
 // Debugging: the case board lists every hypothesis raised so far with its state as of this step.
@@ -131,7 +135,7 @@ function stackFor(i) {
   return `<div class="stack">${[...LAYERS].reverse().map(l => {
     const c = l.id === now ? "hl" : recap || seen.has(l.id) ? "" : "dim";
     return `<div class="layer ${c}"><b>${l.name}</b>${c === "dim" ? "" : `<span>${l.text || ""}</span>`}</div>`;
-  }).join("")}</div>${recap ? "" : legend}`;
+  }).join("")}</div>${recap ? "" : panelLegend}`;
 }
 
 // Before/after: a line diff (longest common subsequence) shown as aligned Before | After columns;
@@ -222,19 +226,21 @@ const baHtml = TYPE === "before-after" && (META.before || META.after)
 // A diagram wider than this would shrink its text below ~12px in the side column, so its steps go full width
 const WIDE_DIAGRAM = +((DIAGRAM.match(/viewBox="[\d.-]+ [\d.-]+ ([\d.]+)/) || [])[1] || 0) > 680;
 $("#stage").innerHTML = STEPS.map((s, i) => {
-  const recap = i === LAST && N > 1, wide = s.wide || recap || !!s.diff || (!s.visual && !!(s.diagram || wiOpts(s).some(o => o.diagram)) && WIDE_DIAGRAM);
+  // A decision table beside the text wraps its notes a word per line, so its steps go full width too,
+  // unless a quiz needs the text column (under a full-width table it would fall off the screen)
+  const recap = i === LAST && N > 1, panel = panelFor(i);
+  const wide = s.wide || recap || !!s.diff || (TYPE === "decision" && !!panel && !s.quiz) || (!s.visual && !!(s.diagram || wiOpts(s).some(o => o.diagram)) && WIDE_DIAGRAM);
   // A what-if step whose options relight the diagram gets one copy per option; the picked one is shown
   const wiViews = !s.visual && DIAGRAM && wiOpts(s).some(o => o.diagram);
   const vis = s.visual || (wiViews ? wiOpts(s).map(o => `<div class="wi-view" data-wi="${attr(o.id)}" hidden>${diagramFor(i, diagramOf(s, o))}</div>`).join("")
     : s.diagram && DIAGRAM ? diagramFor(i) : "");
-  const panel = panelFor(i);
   const look = (panel ? `<div class="panel">${panel}</div>` : "") + (s.diff ? diffHtml(s.diff) : "") +
     (vis ? `<div class="visual">${vis}</div>` : "") + (s.code ? `<pre><code>${codeHtml(s.code)}</code></pre>` : "") +
     (s.evidence ? evidenceHtml(s.evidence) : "");
   const split = look && !wide;
   return `
   <article class="step${split ? " split" : ""}${wide ? " wide" : ""}${FULL[i] ? " full-only" : ""}" id="step-${i + 1}" aria-labelledby="h-${i}">
-    ${i === 0 ? `<div class="bigpic"><b>Big picture</b>${esc(META.bigPicture)}</div>${baHtml}` : ""}
+    ${i === 0 ? `<div class="bigpic"><b>Big picture</b>${esc(META.bigPicture || "")}</div>${baHtml}` : ""}
     <div class="eyebrow">Step <span class="pos">${i + 1}</span> of <span class="tot">${N}</span>${FULL[i] ? ` · <span class="bg-tag">Background</span>` : ""}${s.phase && PHASE[s.phase] ? ` · <span class="phase ph-${s.phase}">${PHASE[s.phase]}</span>` : ""}</div>
     <h2 id="h-${i}" tabindex="-1">${s.title}</h2>
     <div class="cols">
@@ -253,7 +259,7 @@ $("#stage").innerHTML = STEPS.map((s, i) => {
           <div class="opts">${shuffled(s.quiz.options.length, s.quiz.q).map(j => { const o = s.quiz.options[j];
             return `<button data-i="${j}">${typeof o === "string" ? o : o.t}</button>`; }).join("")}</div>
           <div class="retry">Not quite, one more try.</div>
-          <div class="why"><span class="verdict"></span> ${s.quiz.why}</div></div>` : ""}
+          <div class="why"><span class="verdict"></span> ${s.quiz.why || ""}</div></div>` : ""}
         ${stuckHtml(i)}
         ${recap ? `<section class="finish" aria-label="Finished">
           <h3>You made it to the end</h3><p id="score"></p>
@@ -409,13 +415,16 @@ function paintMarks() {
 // It names no file path: a page's location can hold a user name.
 function stuckPrompt(i, unclear) {
   const s = STEPS[i], r = results[i];
-  const used = [...new Set($$(`#step-${i + 1} .read dfn`).filter(d => !d.closest("[hidden]")).map(d => (d.dataset.term || d.textContent).trim()))]
+  // Only terms the reader can see: not a hidden what-if outcome, nor a Context row the Short version hides
+  const used = [...new Set($$(`#step-${i + 1} .read dfn`).filter(d => !d.closest("[hidden]") && !(short && d.closest(".full-only:not(.step)"))).map(d => (d.dataset.term || d.textContent).trim()))]
     .map(t => [t, findTerm({ dataset: {}, textContent: t })]).filter(([, d]) => d);
   const lines = [
     `I'm reading an explainer page, "${plain(META.title)}", and I'm stuck on step ${pos(i)} of ${total()}: "${plain(s.title)}".`, "",
     `The page's big picture: ${plain(META.bigPicture)}`, "",
     "What this step says:",
     ...(s.summary ? [`- In short: ${plain(s.summary)}`] : []),
+    ...(s.context ? [["question", "The question"], ["setting", "Where this happens"], ["why", "Why it matters"], ["example", "The example"]]
+      .filter(([k]) => s.context[k] && !(short && FULL_CTX.includes(k))).map(([k, name]) => `- ${name}: ${plain(s.context[k])}`) : []),
     `- ${plain(s.body) || "(no text)"}`,
     ...(s.analogy ? [`- Analogy: ${plain(s.analogy)}`] : []),
     ...wiOpts(s).filter(o => o.id === picked(i)).map(o => `- I set its "What if ${plain(s.whatif.label)}" control to "${plain(o.label)}", which shows: ${plain(o.outcome)}`),
@@ -492,7 +501,8 @@ function mark(i) {
 // Build stage b of the current step: parts with data-b > b stay hidden until revealed (Show all / print show everything)
 let b = 0;
 function paintBuild() {
-  arts[cur].querySelectorAll("[data-b]").forEach(el => el.classList.toggle("pend", !isAll() && +el.dataset.b > b));
+  // In Show all every step is on screen, so a step left halfway through its stages is shown whole too
+  (isAll() ? stage : arts[cur]).querySelectorAll("[data-b]").forEach(el => el.classList.toggle("pend", !isAll() && +el.dataset.b > b));
 }
 function paintNav() {
   const K = isAll() ? 0 : buildStages[cur], building = b < K;
