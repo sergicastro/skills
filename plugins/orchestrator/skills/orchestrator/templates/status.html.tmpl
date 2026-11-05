@@ -83,6 +83,10 @@ td a { color: var(--s-ready); }
 .card { display: block; padding: 14px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; color: inherit; text-decoration: none; }
 .card:hover { border-color: var(--edge); }
 .card h2 { margin: 0 0 4px; font-size: 16px; }
+.node, .edge { transition: opacity .15s; }
+.graph.hovering .node:not(.related), .graph.hovering .edge:not(.related) { opacity: .2; }
+.graph.hovering .related.edge { stroke: var(--fg); stroke-width: 2; }
+.graph.hovering .node.focus rect { stroke-width: 3; }
 tr.flash td, .node.flash rect { animation: flash 2s ease-out; }
 @keyframes flash { from { background-color: var(--flash); fill: var(--flash); } }
 </style>
@@ -120,7 +124,55 @@ tr.flash td, .node.flash rect { animation: flash 2s ease-out; }
       if (before[el.tagName + ":" + el.dataset.goal] !== el.dataset.status) el.classList.add("flash");
     });
     times();
+    highlight();
   }
+  // Hovering (or focusing) a graph node highlights everything upstream and downstream of it.
+  var hovered = null;
+  function reach(edges, start, from, to) {
+    var seen = Object.create(null), todo = [start];
+    seen[start] = true;
+    while (todo.length) {
+      var cur = todo.pop();
+      edges.forEach(function (e) {
+        var next = e.dataset[to];
+        if (e.dataset[from] === cur && !seen[next]) { seen[next] = true; todo.push(next); }
+      });
+    }
+    return seen;
+  }
+  function highlight() {
+    var graph = document.querySelector("main .graph");
+    if (!graph) return;
+    graph.querySelectorAll(".related, .focus").forEach(function (el) {
+      el.classList.remove("related", "focus");
+    });
+    var nodes = Array.prototype.filter.call(graph.querySelectorAll(".node"), function (n) {
+      return n.dataset.goal === hovered;
+    });
+    if (!nodes.length) { hovered = null; graph.classList.remove("hovering"); return; }
+    var edges = Array.prototype.slice.call(graph.querySelectorAll(".edge[data-from]"));
+    var up = reach(edges, hovered, "to", "from"), down = reach(edges, hovered, "from", "to");
+    graph.querySelectorAll(".node").forEach(function (n) {
+      if (up[n.dataset.goal] || down[n.dataset.goal]) n.classList.add("related");
+    });
+    edges.forEach(function (e) {
+      var f = e.dataset.from, t = e.dataset.to;
+      if ((up[f] && up[t]) || (down[f] && down[t])) e.classList.add("related");
+    });
+    nodes[0].classList.add("focus");
+    graph.classList.add("hovering");
+  }
+  function hover(target) {
+    var node = target && target.closest ? target.closest("main .graph .node") : null;
+    var id = node ? node.dataset.goal : null;
+    if (id === hovered) return;
+    hovered = id;
+    highlight();
+  }
+  document.addEventListener("mouseover", function (e) { hover(e.target); });
+  document.addEventListener("mouseout", function (e) { if (!e.relatedTarget) hover(null); });
+  document.addEventListener("focusin", function (e) { hover(e.target); });
+  document.addEventListener("focusout", function (e) { if (!e.relatedTarget) hover(null); });
   times();
   setInterval(times, 30000);
   if (location.protocol === "file:") {
