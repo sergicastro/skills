@@ -10,7 +10,7 @@ if (!META || !Array.isArray(STEPS) || !STEPS.length) {
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const plain = h => new DOMParser().parseFromString(String(h || ""), "text/html").body.textContent.replace(/\s+/g, " ").trim();
-const esc = s => s.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+const esc = s => String(s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 const N = STEPS.length, LAST = N - 1;
 const terms = Object.keys(GLOSSARY), cast = Object.keys(CAST);
 // Page type: picks the panel drawn next to each step's text. A walkthrough has none and renders as it always has.

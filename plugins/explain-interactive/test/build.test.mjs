@@ -17,6 +17,19 @@ const minimal = extra => `const META = { title: "T", bigPicture: "B" };
 const DIAGRAM = \`<svg viewBox="0 0 10 10"><g data-id="a"></g></svg>\`;
 const STEPS = [{ title: "One", summary: "s", body: "<p>x</p>", diagram: { hl: ["a"] } }, { title: "Recap", body: "<p>y</p>" }];
 ${extra || ""}`;
+// The short fixtures above skip the page's structure (Context step, 4+ steps, a quiz); tests about other rules drop those warnings
+const PAGE_RULES = /^STEPS has \d+ steps|: no context card|^the page has \d+ quizz?e?s?|the last step is the Recap|so the Recap shows the whole DIAGRAM/;
+const own = ws => ws.filter(w => !PAGE_RULES.test(w));
+// A page that follows every structure rule: Context step, 4 steps, a quiz, a Recap showing the whole DIAGRAM
+const page = ({ meta = 'title: "T", bigPicture: "B"', first = "", mid = "", last = "", extra = "" } = {}) => `const META = { ${meta} };
+const DIAGRAM = \`<svg viewBox="0 0 10 10"><g data-id="a"></g></svg>\`;
+${extra}
+const STEPS = [
+  { title: "Context", summary: "s", body: "<p>c</p>", context: { question: "Why?" }, diagram: {}${first} },
+  { title: "One", summary: "s", body: "<p><mark>a</mark></p>", diagram: { hl: ["a"] }${mid} },
+  { title: "Two", summary: "s", body: "<p>t</p>", quiz: { q: "Q?", options: ["a", "b", "c"], answer: 0, why: "w" } },
+  { title: "Recap", body: "<p>r</p>", diagram: {}${last} },
+];`;
 
 test("the sample builds into one self-contained page", () => {
   const { html, errors, warnings } = build(sample, SAMPLE);
@@ -65,7 +78,7 @@ const SPEC = `{ layout: "chain", label: "A calls B", nodes: [{ id: "a", label: "
 test("a DIAGRAM spec is laid out into a template the engine reads; the content script keeps the spec", () => {
   const { html, errors, warnings } = build(specContent(SPEC));
   assert.deepEqual(errors, []);
-  assert.deepEqual(warnings, []);
+  assert.deepEqual(own(warnings), []);
   const tpl = html.match(/<template id="explain-diagram">([\s\S]*?)<\/template>/);
   assert.ok(tpl, "template");
   assert.match(tpl[1], /<svg viewBox="0 0 \d+ \d+" role="img" aria-label="A calls B">/);
@@ -250,13 +263,14 @@ const STEPS = [
 
 test("CLI --check lists problems and writes nothing", () => {
   const src = join(tmp, "chk.content.js");
-  writeFileSync(src, minimal().replace('hl: ["a"]', () => 'hl: ["a", "zz"]'));
+  writeFileSync(src, page().replace('hl: ["a"]', () => 'hl: ["a", "zz"]').replace(', context: { question: "Why?" }', ""));
   const r = run("--check", src);
   assert.equal(r.status, 1);
-  assert.match(r.stderr, /error: step 1 \("One"\): diagram.hl names "zz"/);
+  assert.match(r.stderr, /error: step 2 \("One"\): diagram.hl names "zz"/);
+  assert.match(r.stderr, /warning: step 1 \("Context"\): no context card/);
   assert.match(r.stderr, /check failed \(1 error, 1 warning\)/);
   assert.ok(!existsSync(join(tmp, "chk.html")));
-  writeFileSync(src, minimal().replace('"<p>x</p>"', () => '"<p><mark>a</mark></p>"'));
+  writeFileSync(src, page());
   const ok = run("--check", src);
   assert.equal(ok.status, 0, ok.stderr);
   assert.match(ok.stdout, /chk\.content\.js: ok/);
@@ -270,7 +284,7 @@ const STEPS = [{ title: "One", summary: "s", body: "<p><mark>a</mark></p>", diag
   { title: "Recap", body: "<p>y</p>" }];`));
   const opt = (id, extra = "") => `{ id: "${id}", label: "${id}", outcome: "<p>it is ${id}.</p>" ${extra} }`;
   const ok = steps(`{ label: "x", options: [${opt("p", `, diagram: { hl: ["a"] }`)}, ${opt("q", `, diagram: { hl: ["b"], dim: ["a"] }`)}] }`);
-  assert.deepEqual(ok.errors, []); assert.deepEqual(ok.warnings, []);
+  assert.deepEqual(ok.errors, []); assert.deepEqual(own(ok.warnings), []);
   const e = (...a) => steps(...a).errors.join("\n");
   assert.match(e(`{ options: [] }`), /whatif\.label is missing/);
   assert.match(e(`{ options: [] }`), /whatif has 0 option\(s\); a what-if switches between at least 2/);
@@ -457,4 +471,52 @@ test("depth: a full step whose what-if options light parts is a warning too", ()
   assert.ok(warnings.some(w => /step 2 \("Bg"\): a depth "full" step lights diagram parts \(a in its what-if options\)/.test(w)), warnings.join("\n"));
   ({ warnings } = check(loadContent(steps3(`{ title: "Bg", summary: "s", body: "<p>b</p>", depth: "full", diagram: {}, ${opts("[]")} }`))));
   assert.ok(!warnings.some(w => /depth/.test(w)), warnings.join("\n"));
+});
+
+// ---------- Types of text fields, and the page's structure (#44) ----------
+
+test("check: a page that follows the structure rules has no errors or warnings", () => {
+  assert.deepEqual(check(loadContent(page())), { errors: [], warnings: [], svg: null });
+});
+
+test("check: a text field that isn't a string is an error, and check doesn't crash on it", () => {
+  const e = opts => check(loadContent(page(opts))).errors.join("\n");
+  assert.match(e({ meta: 'title: "T", bigPicture: 42' }), /^META\.bigPicture must be a string \(it is a number\)$/m);
+  assert.match(e({ meta: 'title: ["T"], bigPicture: "B"' }), /^META\.title must be a string \(it is an array\)$/m);
+  assert.match(e({ meta: 'title: "T", bigPicture: "B", type: "before-after", before: 1, after: "a"' }), /^META\.before must be a string/m);
+  assert.match(e({ mid: ", title: 7" }), /^step 2: title must be a string \(it is a number\)$/m);
+  for (const k of ["summary", "body", "analogy", "deeper", "visual", "code"])
+    assert.match(e({ mid: `, ${k}: { x: 1 }` }), new RegExp(`^step 2 \\("One"\\): ${k} must be a string \\(it is an object\\)$`, "m"), k);
+  assert.equal(e({ mid: ", deeper: null, code: null, analogy: null" }), "");   // null means "none", as in the examples
+  assert.match(e({ first: ', context: { question: 1, prereqs: ["a", 2] }' }), /step 1 \("Context"\): context\.question must be a string[\s\S]*context\.prereqs item 1 must be a string/);
+  assert.match(e({ first: ', context: { question: "q", prereqs: "a" }' }), /context\.prereqs must be a list of strings/);
+  assert.match(e({ mid: ', quiz: { q: 3, options: ["a", { t: "b", why: 2 }, "c"], answer: 0, why: false }' }),
+    /quiz\.q must be a string[\s\S]*quiz\.why must be a string \(it is a boolean\)[\s\S]*quiz option 1 why must be a string/);
+  assert.match(e({ mid: ', diagram: {}, whatif: { label: 5, options: [{ id: "p", label: 1, outcome: 2 }, { id: "q", label: "q", outcome: "o" }] }' }),
+    /whatif\.label must be a string[\s\S]*whatif option "p" label must be a string[\s\S]*whatif option "p" outcome must be a string/);
+  assert.match(e({ mid: ', evidence: { label: 1, text: "t" }' }), /evidence\.label must be a string/);
+  assert.match(e({ extra: 'const CAST = { Alice: 1 }; const GLOSSARY = { term: ["x"] };' }), /^CAST "Alice" must be a string \(it is a number\)$[\s\S]*^GLOSSARY "term" must be a string \(it is an array\)$/m);
+  assert.match(check(loadContent(page({ meta: 'type: "concept", title: "T", bigPicture: "B"', extra: 'const LAYERS = [{ id: "l", name: 2, text: "t" }];', mid: ', layer: "l"' }))).errors.join("\n"), /LAYERS "l" name must be a string/);
+});
+
+test("check: the structure rules SKILL.md gives are warnings", () => {
+  const w = (code, re, n = 1) => {
+    const ws = check(loadContent(code)).warnings;
+    assert.equal(ws.filter(x => re.test(x)).length, n, `${re}\n${ws.join("\n")}`);
+  };
+  // step 1 is the Context step
+  w(page().replace(', context: { question: "Why?" }', ""), /^step 1 \("Context"\): no context card; step 1 is the Context step/);
+  // the last step is the Recap, and shows the whole DIAGRAM
+  w(page().replace('title: "Recap"', 'title: "Done"'), /^step 4 \("Done"\): the last step is the Recap; title it "Recap"/);
+  w(page().replace('body: "<p>r</p>", diagram: {}', 'body: "<p>r</p>"'), /^step 4 \("Recap"\): no diagram; set diagram: \{\} so the Recap shows the whole DIAGRAM/);
+  w(page().replace('body: "<p>r</p>", diagram: {}', 'body: "<p>r</p>", visual: "<svg></svg>"'), /Recap shows the whole DIAGRAM/);   // a visual is for pages without a DIAGRAM
+  w(page().replace(/const DIAGRAM.*\n/, "").replace(/diagram: \{[^}]*\}/g, "").replace("<mark>a</mark>", "a"), /Recap/, 0);
+  // step count, Context and Recap included
+  const steps = n => page().replace(/\{ title: "Two".*\n/, Array.from({ length: n - 3 }, (_, k) => `{ title: "S${k}", summary: "s", body: "<p>s</p>", quiz: { q: "Q?", options: ["a", "b", "c"], answer: 0, why: "w" } },\n`).join(""));
+  w(steps(3), /^STEPS has 3 steps; plan 4–10, Context and Recap included$/);
+  w(steps(4), /^STEPS has/, 0);
+  w(steps(10), /^STEPS has/, 0);
+  w(steps(11), /^STEPS has 11 steps; plan 4–10/);
+  // quizzes
+  w(page().replace(/, quiz: \{[^}]*\}/, ""), /^the page has 0 quizzes \(at least 1\): add one where a reader most likely gets confused$/);
 });
