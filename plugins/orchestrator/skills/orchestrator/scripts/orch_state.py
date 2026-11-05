@@ -739,8 +739,8 @@ ARGS.update({
     "register": [(["worker"], {})],
     "request": [(["worker"], {})],
     "status": [(["worker"], {}), (["goal"], {}),
-               (["state"], {"choices": ["needs-user", "blocked", "assigned"]}), (["--reason"], {})],
-    "done": [(["worker"], {}), (["goal"], {}), (["--pr"], {}), (["--notes"], {"required": True})],
+               (["state"], {"choices": ["needs-user", "blocked", "assigned"]})],
+    "done": [(["worker"], {}), (["goal"], {}), (["--pr"], {})],
     "pr": [(["worker"], {}), (["goal"], {}), (["--url"], {"required": True})],
 })
 
@@ -755,7 +755,7 @@ COMMANDS.update({
 
 ARGS.update({
     "approve": [(["goal"], {})],
-    "sendback": [(["goal"], {}), (["--reason"], {"required": True})],
+    "sendback": [(["goal"], {})],
     "release": [(["goal"], {})],
     "policy": [(["unblock_on"], {"choices": list(UNBLOCK)})],
     "start": [(["goal"], {})],
@@ -767,7 +767,6 @@ ARGS.update({
     "rename-worker": [(["old"], {}), (["new"], {})],
     "liveness": [(["--live"], {"default": "", "help": "comma-separated session names from ListAgents"})],
     "notify": [(["--kind"], {"required": True, "choices": list(NOTICE_KINDS)}),
-               (["--summary"], {"required": True}),
                (["--goal"], {"help": "goal the notice is about; omit for an epic-wide notice"}),
                (["--to"], {"default": "", "help": "comma-separated worker names; default: affected workers"}),
                (["--dry-run"], {"action": "store_true", "help": "show recipients and id without recording anything"})],
@@ -794,6 +793,30 @@ COMMANDS.update({
 })
 
 
+# Free text, often from worker messages: (option, required). Each gets --<option> for short
+# fixed text and --<option>-file PATH (or - for stdin) so untrusted text never goes through
+# shell quoting.
+TEXT = {
+    "status": [("reason", False)],
+    "done": [("notes", True)],
+    "sendback": [("reason", True)],
+    "notify": [("summary", True)],
+}
+
+
+def read_text(path):
+    """Text from a file or stdin ('-'), without the trailing newline a heredoc adds."""
+    raw = sys.stdin.read() if path == "-" else Path(path).read_text(encoding="utf-8")
+    return raw.rstrip("\n")
+
+
+def resolve_text(cmd, a):
+    for option, _ in TEXT.get(cmd, []):
+        path = getattr(a, f"{option}_file")
+        if path is not None:
+            setattr(a, option, read_text(path))
+
+
 def build_parser():
     p = argparse.ArgumentParser(prog="orch_state.py")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -802,6 +825,11 @@ def build_parser():
         sp.add_argument("slug")
         for flags, kwargs in args:
             sp.add_argument(*flags, **kwargs)
+        for option, required in TEXT.get(name, []):
+            group = sp.add_mutually_exclusive_group(required=required)
+            group.add_argument(f"--{option}", help="short fixed text")
+            group.add_argument(f"--{option}-file", metavar="PATH",
+                               help=f"read the {option} from PATH, or stdin for -; use for text from messages")
     sp = sub.add_parser("cleanup", help="tidy up an orchestration whose goals are all done")
     sp.add_argument("slug")
     sp.add_argument("--delete", action="store_true", help="delete the state directory")
@@ -838,6 +866,7 @@ def main(argv=None):
             sys.stdout.write(orch_view.render_md(view_model(load(a.slug), [])))
             return 0
         else:
+            resolve_text(a.cmd, a)
             state = load(a.slug)
             out, events = COMMANDS[a.cmd](state, a)
             if events:

@@ -1148,5 +1148,93 @@ class HtmlTests(Base):
         self.assertLess(page.index("REGISTER"), page.index("INIT"))
 
 
+# Text a worker could send: shell syntax that must stay literal, plus both quote kinds.
+HOSTILE = "uses $(touch pwned) and `touch pwned` and ${HOME}\nsays \"done\" and it's 'fine' \\ ok"
+SCRIPT = Path(__file__).resolve().parents[1] / "skills" / "orchestrator" / "scripts" / "orch_state.py"
+
+
+class TextFileTests(Base):
+    """--notes-file / --reason-file / --summary-file pass worker text without the shell."""
+
+    def setUp(self):
+        super().setUp()
+        self.init()
+        self.run_cli("register", "demo", "demo-w-a")
+        self.run_cli("request", "demo", "demo-w-a")
+
+    def text_file(self, text=HOSTILE + "\n"):
+        path = Path(self.tmp.name) / "text.txt"
+        path.write_text(text)
+        return str(path)
+
+    def run_stdin(self, text, *argv):
+        with mock.patch.object(sys, "stdin", io.StringIO(text)):
+            return self.run_cli(*argv)
+
+    def test_done_notes_file_is_stored_verbatim(self):
+        code, out = self.run_cli("done", "demo", "demo-w-a", "g1", "--notes-file", self.text_file())
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.state()["goals"]["g1"]["handoff"]["notes"], HOSTILE)
+
+    def test_done_notes_from_stdin(self):
+        code, out = self.run_stdin(HOSTILE + "\n", "done", "demo", "demo-w-a", "g1", "--notes-file", "-")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.state()["goals"]["g1"]["handoff"]["notes"], HOSTILE)
+
+    def test_done_empty_notes_file_is_rejected(self):
+        code, out = self.run_cli("done", "demo", "demo-w-a", "g1", "--notes-file", self.text_file("\n"))
+        self.assertEqual(code, 2)
+        self.assertIn("handoff notes are required", out["error"])
+
+    def test_status_reason_file(self):
+        code, out = self.run_cli("status", "demo", "demo-w-a", "g1", "needs-user", "--reason-file", self.text_file())
+        self.assertEqual((code, out["reason"]), (0, HOSTILE))
+
+    def test_sendback_reason_file(self):
+        self.run_cli("done", "demo", "demo-w-a", "g1", "--notes", "n")
+        code, out = self.run_stdin(HOSTILE, "sendback", "demo", "g1", "--reason-file", "-")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.state()["goals"]["g1"]["reason"], "sent back: " + HOSTILE)
+
+    def test_notify_summary_file(self):
+        path = self.text_file()
+        code, out = self.run_cli("notify", "demo", "--kind", "changed", "--summary-file", path, "--dry-run")
+        self.assertEqual(code, 0, out)
+        code, out = self.run_cli("notify", "demo", "--kind", "changed", "--summary-file", path, "--to", "demo-w-a")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.run_cli("pending-notices", "demo")[1][0]["summary"], HOSTILE)
+
+    def test_inline_and_file_together_are_rejected(self):
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as cm:
+            self.run_cli("done", "demo", "demo-w-a", "g1", "--notes", "n", "--notes-file", self.text_file())
+        self.assertEqual(cm.exception.code, 2)
+
+    def test_required_text_accepts_either_form(self):
+        for argv in (("done", "demo", "demo-w-a", "g1"), ("sendback", "demo", "g1"),
+                     ("notify", "demo", "--kind", "changed")):
+            with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as cm:
+                self.run_cli(*argv)
+            self.assertEqual(cm.exception.code, 2, argv)
+
+    def test_missing_file_is_a_json_error(self):
+        code, out = self.run_cli("done", "demo", "demo-w-a", "g1", "--notes-file", str(Path(self.tmp.name) / "nope"))
+        self.assertEqual(code, 2)
+        self.assertIn("nope", out["error"])
+        self.assertEqual(self.state()["goals"]["g1"]["status"], "assigned")
+
+    def test_quoted_heredoc_recipe_keeps_text_literal(self):
+        """The recipe SKILL.md gives: write with <<'EOF', then pass the file."""
+        import shlex
+        import subprocess
+        work = Path(self.tmp.name)
+        notes = work / "notes.txt"
+        cmd = (f"cat > {shlex.quote(str(notes))} <<'EOF'\n{HOSTILE}\nEOF\n"
+               f"python3 {shlex.quote(str(SCRIPT))} done demo demo-w-a g1 --notes-file {shlex.quote(str(notes))}\n")
+        res = subprocess.run(["bash", "-c", cmd], cwd=work, env=dict(os.environ), capture_output=True, text=True)
+        self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
+        self.assertFalse((work / "pwned").exists())
+        self.assertEqual(self.state()["goals"]["g1"]["handoff"]["notes"], HOSTILE)
+
+
 if __name__ == "__main__":
     unittest.main()
