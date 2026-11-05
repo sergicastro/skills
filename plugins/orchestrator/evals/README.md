@@ -134,6 +134,12 @@ To repeat: copy the plugin twice (old SKILL.md files in one), put the chosen cas
 `cmp/` dir in each, and run `claude plugin eval . --eval-dir cmp --runs 3 --ablation none` in both.
 `--case` takes one glob, not a `{a,b}` list.
 
+## Trigger evals (#41)
+
+Should/should-not-trigger query sets for the two skill descriptions, how they were scored, and
+before/after results: [`trigger/README.md`](trigger/README.md). `claude plugin eval` ignores that
+folder (it holds no `prompt.md` cases).
+
 ## Limits
 
 - Single-turn simulations: a case can't play a second user turn or a real incoming message, so
