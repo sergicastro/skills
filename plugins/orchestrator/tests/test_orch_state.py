@@ -83,6 +83,23 @@ class InitTests(Base):
         self.assertTrue((d / "status.md").exists())
         self.assertIn("2026-10-26T10:00:00Z manager INIT 4 goals", (d / "events.log").read_text())
 
+    def test_init_keeps_owned_by_manager(self):
+        p = plan()
+        p["epic"]["owned_by_manager"] = True
+        self.assertEqual(self.init(p)[0], 0)
+        self.assertIs(self.state()["epic"]["owned_by_manager"], True)
+
+    def test_init_defaults_owned_by_manager_to_false(self):
+        self.assertEqual(self.init()[0], 0)
+        self.assertIs(self.state()["epic"]["owned_by_manager"], False)
+
+    def test_init_rejects_non_boolean_owned_by_manager(self):
+        p = plan()
+        p["epic"]["owned_by_manager"] = "yes"
+        code, out = self.init(p)
+        self.assertEqual(code, 2)
+        self.assertIn("epic.owned_by_manager must be true or false", out["error"])
+
     def test_init_rejects_cycle(self):
         code, out = self.init(plan({
             "a": {"title": "A", "summary": "a", "depends_on": ["b"]},
@@ -741,6 +758,14 @@ class EditTests(Base):
         self.assertEqual(code, 2)
         self.assertIn("nothing to edit", out["error"])
 
+    def test_edit_epic_owned_by_manager(self):
+        self.assertFalse(self.state()["epic"]["owned_by_manager"])
+        code, out = self.run_cli("edit-epic", "demo", "--owned-by-manager", "true")
+        self.assertEqual((code, out), (0, {"epic": "demo", "fields": ["owned_by_manager"]}))
+        self.assertIs(self.state()["epic"]["owned_by_manager"], True)
+        self.run_cli("edit-epic", "demo", "--owned-by-manager", "false")
+        self.assertIs(self.state()["epic"]["owned_by_manager"], False)
+
     def test_edit_epic_rejects_empty_title(self):
         code, out = self.run_cli("edit-epic", "demo", "--title", " ")
         self.assertEqual(code, 2)
@@ -1229,16 +1254,17 @@ class TextFileTests(Base):
         self.assertEqual(self.run_cli("pending-notices", "demo")[1][0]["summary"], HOSTILE)
 
     def test_inline_and_file_together_are_rejected(self):
-        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as cm:
-            self.run_cli("done", "demo", "demo-w-a", "g1", "--notes", "n", "--notes-file", self.text_file())
-        self.assertEqual(cm.exception.code, 2)
+        code, out = self.run_cli("done", "demo", "demo-w-a", "g1", "--notes", "n", "--notes-file", self.text_file())
+        self.assertEqual(code, 2)
+        self.assertIn("not allowed with", out["error"])
+        self.assertEqual(self.state()["goals"]["g1"]["status"], "assigned")
 
     def test_required_text_accepts_either_form(self):
         for argv in (("done", "demo", "demo-w-a", "g1"), ("sendback", "demo", "g1"),
                      ("notify", "demo", "--kind", "changed")):
-            with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as cm:
-                self.run_cli(*argv)
-            self.assertEqual(cm.exception.code, 2, argv)
+            code, out = self.run_cli(*argv)
+            self.assertEqual(code, 2, argv)
+            self.assertIn("one of the arguments", out["error"], argv)
 
     def test_missing_file_is_a_json_error(self):
         code, out = self.run_cli("done", "demo", "demo-w-a", "g1", "--notes-file", str(Path(self.tmp.name) / "nope"))
@@ -1258,6 +1284,50 @@ class TextFileTests(Base):
         self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
         self.assertFalse((work / "pwned").exists())
         self.assertEqual(self.state()["goals"]["g1"]["handoff"]["notes"], HOSTILE)
+
+
+class UsageErrorTests(Base):
+    """argparse mistakes come back as {"error", "usage"} JSON on stdout, exit 2, like other errors."""
+
+    def setUp(self):
+        super().setUp()
+        self.init()
+
+    def assertUsageError(self, argv, needle, prog):
+        code, out = self.run_cli(*argv)
+        self.assertEqual(code, 2, out)
+        self.assertIsInstance(out, dict, out)
+        self.assertIn(needle, out["error"])
+        self.assertTrue(out["usage"].startswith(f"usage: {prog}"), out["usage"])
+
+    def test_unknown_command(self):
+        self.assertUsageError(["frobnicate", "demo"], "invalid choice", "orch_state.py")
+
+    def test_missing_positional(self):
+        self.assertUsageError(["register", "demo"], "required: worker", "orch_state.py register")
+
+    def test_invalid_choice(self):
+        self.assertUsageError(["status", "demo", "demo-w-a", "g1", "sleeping"], "invalid choice", "orch_state.py status")
+
+    def test_unknown_option(self):
+        self.assertUsageError(["approve", "demo", "g1", "--force"], "unrecognized arguments: --force", "orch_state.py")
+
+    def test_bad_type(self):
+        self.assertUsageError(["noticed", "demo", "demo-w-a", "one"], "invalid int value", "orch_state.py noticed")
+
+    def test_cli_prints_json_and_nothing_on_stderr(self):
+        res = subprocess.run([sys.executable, str(SCRIPT), "register", "demo"],
+                             env=dict(os.environ), capture_output=True, text=True)
+        self.assertEqual(res.returncode, 2)
+        self.assertEqual(res.stderr, "")
+        self.assertIn("required: worker", json.loads(res.stdout)["error"])
+
+    def test_help_still_prints_help(self):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf), self.assertRaises(SystemExit) as cm:
+            orch_state.main(["done", "--help"])
+        self.assertEqual(cm.exception.code, 0)
+        self.assertIn("--notes-file", buf.getvalue())
 
 
 if __name__ == "__main__":

@@ -184,6 +184,11 @@ Workers may read these files but never write them.
 
 `board` is `null` when the source isn't GitHub or the user declined board sync.
 
+`epic.owned_by_manager` is `true` only when the epic is a GitHub issue and the user agreed in
+the plan that the manager comments on it and sets its board status. `false` (the default when
+the plan omits it) means the manager leaves the epic issue alone. `status.md` shows it, and
+`edit-epic --owned-by-manager` changes it.
+
 ### 5.2 `status.md`
 
 Contains: the epic header and policy; a table of goals with state, worker, PR and
@@ -207,9 +212,15 @@ None of this applies when goals don't come from GitHub.
 | Actor | When | Writes |
 |---|---|---|
 | Manager | After plan confirmation, before any assignment | Assign each issue to the user; add it to the board; set the initial status from the mapping |
-| Manager | Ongoing | Owns the epic issue: status plus a progress checklist or comment |
+| Manager | Ongoing, when `epic.owned_by_manager` | Owns the epic issue: status plus a progress checklist or comment |
+| Manager | After `approve`, `sendback`, `release` | Set the goal's issue to the mapped status (`release` → mapped `ready`) |
+| Manager | After `drop-goal`, on the user's go-ahead | Remove the card from the board and/or close the issue as not planned |
 | Worker | While working | Owns its issue: status → mapped `assigned`, link the PR, mapped `in-review` on finishing, plus whatever its own workflow does |
 | Manager | On `DONE`, on approval, on status checks | Check that the issue and board match `state.json`; fill in anything the worker missed |
+
+Both roles run `gh auth status` before their first GitHub call (plus the `project` scope
+when there's a board). On failure they tell the user how to log in, make no GitHub calls until
+it works, and carry on with local work.
 
 Board discovery: the manager finds the project(s) the epic is on and the Status
 field's options, and proposes a mapping. The user confirms or corrects it, and the

@@ -2,6 +2,7 @@
 
 - Slug: `demo`
 - Source: -
+- Manager updates the epic issue: no
 - Manager session: `demo-manager`
 - Worker prefix: `demo-w-`
 - Unblock policy: dependents start when dependencies are `done`

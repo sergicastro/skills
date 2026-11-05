@@ -34,6 +34,7 @@ def render_md(vm):
         title=vm["title"],
         slug=vm["slug"],
         source=vm["source"] or "-",
+        owned_by_manager="yes" if vm.get("owned_by_manager") else "no",
         manager=vm["manager"],
         worker_prefix=vm["worker_prefix"],
         unblock_on=vm["unblock_on"],
