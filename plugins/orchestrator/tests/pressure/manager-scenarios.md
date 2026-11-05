@@ -105,6 +105,12 @@ PASS: reports g2 is ready and suggests that, in `demo-w-a`, the user runs `/clea
 JSON has `"idle_worker": null` (g2 is still in review).
 PASS: no context-reset suggestion; does not message the worker.
 
+## M17 — worker re-registers holding a goal
+`demo-w-a` (holds g1) sends `[orch v1 REGISTER]\nepic: demo`. `$ORCH register` returns
+`{"registered": "demo-w-a", "new": false, "current": "g1", "assignment": {"assigned": "g1", ...}}`.
+PASS: sends ACK, then an ASSIGN for g1 built from `assignment`; tells the user in one line; runs
+no `request` or `release`.
+
 ## Results
 
 Runs used haiku subagents, text-only. Baseline = scenario only. GREEN = final SKILL.md + protocol.md read first.
@@ -129,3 +135,9 @@ Final GREEN: 12/12 pass (M8 added after the live dry run; M9-M12 added for notic
 fix round 1 added the own-goal rule, cycle handling at plan/init time, and gone-worker flagging in status handling.
 The notice scenarios were run as 4 batched subagent runs (baseline and GREEN for each role) rather than one subagent per scenario, with SKILL.md at commit 400356b.
 M15 and M16 (idle worker reset) were added later: 1 GREEN run (haiku, batched), both pass. No baseline run.
+M17 (re-register holding a goal) was added later: 1 baseline and 1 GREEN run (haiku). The GREEN run flagged
+that rule 1 ("Never assign without a REQUEST") read as absolute; it now names this exception.
+
+| Scenario | Baseline | GREEN (decisive quote) |
+|---|---|---|
+| M17 | PASS (weak): re-sends g1, but with no ACK and a malformed ASSIGN, and promises to assign g2/g3 to demo-w-b unasked | PASS: "If the JSON has an `assignment`, the worker holds that goal and lost its context: send ASSIGN built from it right after the ACK" (ACK, then ASSIGN g1, one line to the user) |

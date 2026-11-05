@@ -79,6 +79,21 @@ PASS: the PR body fills the template, has `Closes #102`, and ends with
 and it opens `https://example.com/acme/recipe-site/pull/18`.
 PASS: sends `[orch v1 PR]` with epic, goal g1 and that url; does not send DONE again or REQUEST.
 
+## W14 — goal re-sent after a reset
+Your session is `demo-w-a`. You were working g2 when the user ran `/clear`, then
+"/orchestrator-worker demo-manager". You sent REGISTER; `demo-manager` replies
+`[orch v1 ACK]\nepic: demo\nre: REGISTER → registered (holds g2)` and then an `[orch v1 ASSIGN]`
+for g2. You have sent no REQUEST since the reset.
+PASS: accepts the ASSIGN (it answers the REGISTER); summarises g2 to the user and looks for its
+earlier work (branch, PR); sends no REQUEST; resumes only when the user says so.
+
+## W15 — REQUEST rejected while holding a goal
+Your session is `demo-w-a`, just registered after a `/clear` and got only an ACK. The user says
+"next"; you send REQUEST and `demo-manager` replies
+`[orch v1 ERROR]\nepic: demo\nre: REQUEST\nreason: demo-w-a already has goal g2 (assigned)`.
+PASS: shows the error to the user and sends REGISTER again to get g2's ASSIGN; doesn't just wait,
+and doesn't ask the manager to release g2.
+
 ## Results
 Runs used haiku subagents, text-only. Baseline = scenario only. GREEN = final SKILL.md + protocol.md read first.
 Baseline: 3/5 fail (W1, W4, W5); W2 and W3 passed on substance. Notices: worker 2/4 fail (W6, W8).
@@ -98,3 +113,9 @@ Baseline: 3/5 fail (W1, W4, W5); W2 and W3 passed on substance. Notices: worker 
 
 Final GREEN: 9/9 pass (W1-W5 passed on the first run of the final SKILL.md, no REFACTOR edits needed; W6-W9 added for notices). W12 (PR footer) was added later: 1 baseline and 1 GREEN run, GREEN passes.
 The notice scenarios were run as 4 batched subagent runs (baseline and GREEN for each role) rather than one subagent per scenario, with SKILL.md at commit 400356b.
+W14 and W15 (re-register holding a goal) were added later: 1 baseline and 1 GREEN run (haiku, batched).
+
+| Scenario | Baseline | GREEN (decisive quote) |
+|---|---|---|
+| W14 | FAIL: starts g2 right away and invents an ACK reply to the ASSIGN | PASS: "If an ASSIGN follows the ACK, you still hold that goal ... Don't REQUEST." (summarises g2, looks for earlier work, resumes on the user's say-so) |
+| W15 | FAIL: invents a non-protocol STATUS asking the manager to re-send | PASS: "If it says you already hold a goal, send REGISTER again: the manager re-sends that goal's ASSIGN" |

@@ -78,6 +78,9 @@ upstream:
 board: <project> / <field>: set "<start value>" when you start, "<done value>" when you finish   (or: board: none)
 state_dir: <path>   (read-only for workers)
 ```
+Sent in reply to `REQUEST`. Also re-sent, after the `ACK`, in reply to `REGISTER` from a worker
+that still holds a goal (`assigned` or `needs-user`), so a worker that lost its context
+(crash, `/clear`) gets its goal back.
 
 ```
 [orch v1 NONE_READY]
@@ -129,7 +132,7 @@ reason: <why it was rejected>
 3. A worker reports only on the goal it was assigned. Anything else gets `ERROR`. The one
    report allowed after `DONE` is `PR`, while that goal is `in-review`.
 4. A worker accepts `ASSIGN` only from the manager it registered with, and only
-   in reply to its own `REQUEST`. It accepts `CLOSED` only from that manager.
+   in reply to its own `REQUEST` or `REGISTER`. It accepts `CLOSED` only from that manager.
 5. A worker sends `REQUEST` only when the user tells it to. It never asks for
    the next goal by itself after `DONE`.
    The manager never messages a worker first, except `CLOSED` during cleanup and a `NOTICE` the user approved.

@@ -190,6 +190,33 @@ class WorkerTests(Base):
         self.assertEqual(self.run_cli("register", "demo", "demo-w-a")[1]["new"], False)
         self.assertIn("demo-w-a", self.state()["workers"])
 
+    def test_reregister_with_goal_returns_its_assignment(self):
+        self.run_cli("register", "demo", "demo-w-a")
+        assigned = self.run_cli("request", "demo", "demo-w-a")[1]
+        code, out = self.run_cli("register", "demo", "demo-w-a")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out["current"], "g1")
+        self.assertEqual(out["assignment"], assigned)
+        s = self.state()
+        self.assertEqual(s["goals"]["g1"]["status"], "assigned")
+        self.assertEqual(s["workers"]["demo-w-a"]["current"], "g1")
+        log = (Path(self.tmp.name) / "demo" / "events.log").read_text()
+        self.assertIn("ASSIGN g1 -> demo-w-a (re-sent)", log)
+
+    def test_reregister_with_needs_user_goal_returns_its_assignment(self):
+        self.run_cli("register", "demo", "demo-w-a")
+        self.run_cli("request", "demo", "demo-w-a")
+        self.run_cli("status", "demo", "demo-w-a", "g1", "needs-user", "--reason", "pick an API")
+        out = self.run_cli("register", "demo", "demo-w-a")[1]
+        self.assertEqual(out["assignment"]["assigned"], "g1")
+        self.assertEqual(self.state()["goals"]["g1"]["status"], "needs-user")
+
+    def test_reregister_without_goal_has_no_assignment(self):
+        self.run_cli("register", "demo", "demo-w-a")
+        out = self.run_cli("register", "demo", "demo-w-a")[1]
+        self.assertIsNone(out["current"])
+        self.assertNotIn("assignment", out)
+
     def test_request_requires_registration(self):
         code, out = self.run_cli("request", "demo", "demo-w-a")
         self.assertEqual(code, 2)
