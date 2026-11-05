@@ -1,0 +1,56 @@
+name: Plugin tests
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "plugins/**"
+      - ".github/workflows/plugin-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: plugin-tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  orchestrator:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: plugins/orchestrator
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Run unit tests
+        run: python3 -m unittest discover -s tests -v
+
+  explain-interactive:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: plugins/explain-interactive
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # build.test.mjs and page.test.mjs read the old template.html from commit 7de652b
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Chrome
+        id: chrome
+        uses: browser-actions/setup-chrome@v1
+        with:
+          install-dependencies: true
+      - name: Allow the Chrome sandbox
+        # Ubuntu 24.04 blocks the unprivileged user namespaces Chrome's sandbox needs
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Run tests
+        env:
+          CHROME: ${{ steps.chrome.outputs.chrome-path }}
+        run: node --test test/*.test.mjs
