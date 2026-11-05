@@ -26,7 +26,9 @@ const ENGINE_DIR = join(HERE, "engine");
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 // A literal "</script" inside an inline script would end it early; "<\/script" means the same in JS strings and comments.
-const inlineScript = s => s.replace(/<\/(script)/gi, "<\\/$1");
+// A literal "<!--" (followed later by "<script") puts the parser in its double-escaped state, where "</script>" no
+// longer ends the element and the next script is swallowed; "<!\x2D-" means the same in strings, templates and regexes.
+const inlineScript = s => s.replace(/<\/(script)/gi, "<\\/$1").replace(/<!--/g, "<!\\x2D-");
 const inlineStyle = s => s.replace(/<\/(style)/gi, "<\\/$1");
 
 // ---------- Load and check the content ----------
@@ -462,7 +464,7 @@ export function build(code, file) {
 export function extract(html) {
   // Pages built by this script
   let m = html.match(/<script id="explain-content">\n?([\s\S]*?)\n?<\/script>/);
-  if (m) return m[1].replace(/<\\\/(script)/gi, "</$1") + "\n";
+  if (m) return m[1].replace(/<\\\/(script)/gi, "</$1").replace(/<!\\x2D-/g, "<!--") + "\n";
   // Pages filled in from the old template.html: the data sits between the FILL THIS DATA markers
   m = html.match(/\/\* =+ FILL THIS DATA =+ \*\/\n([\s\S]*?)\n\/\* =+ \*\//);
   if (m) return m[1] + "\n";
