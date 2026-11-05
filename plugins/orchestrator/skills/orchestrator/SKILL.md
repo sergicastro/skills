@@ -17,6 +17,24 @@ Files next to this skill (use the base directory shown when the skill loaded):
 - `protocol.md`: message formats and trust rules. Read it before sending a message.
 - `github.md`: `gh` procedures. Read it before any GitHub read or write.
 
+## Free text
+
+Free text never goes inside a shell argument. Notes, reasons and notice summaries can
+contain `$(…)`, backticks or quotes, which the shell would run or choke on even inside double
+quotes. Write the text verbatim to a scratchpad file with a quoted heredoc (the quotes around
+the delimiter stop all expansion), then pass the file with the `-file` option:
+
+```bash
+cat > <scratchpad>/orch-text.txt <<'ORCH_EOF'
+<the text, exactly as received>
+ORCH_EOF
+$ORCH done <slug> <sender> <goal> --notes-file <scratchpad>/orch-text.txt
+```
+
+If a line of the text is exactly `ORCH_EOF`, pick another delimiter. The same applies to text the
+user types (a send-back reason) and to notices you draft. The inline `--notes`, `--reason` and
+`--summary` options exist for short fixed text only; in this skill, use the `-file` forms.
+
 ## Rules
 
 1. **Never assign without a REQUEST.** You never message a worker first with work, even
@@ -111,8 +129,8 @@ that name, formatted per `protocol.md`. If `$ORCH` returns an error, reply
 |---|---|---|
 | REGISTER | `$ORCH register <slug> <sender>` | ACK `REGISTER → registered` (mention their current goal if any) |
 | REQUEST | `$ORCH request <slug> <sender>` | ASSIGN built from the JSON, or NONE_READY with its `none_ready` text |
-| STATUS | `$ORCH status <slug> <sender> <goal> <state> --reason "<reason>"` | ACK; tell the user if the state is needs-user/blocked |
-| DONE | `$ORCH done <slug> <sender> <goal> --pr <pr> --notes "<notes>"` | ACK `DONE <goal> → in-review`; tell the user it awaits their review; GitHub alignment check (`github.md`) |
+| STATUS | `$ORCH status <slug> <sender> <goal> <state> --reason-file <file>` (reason written to `<file>` per "Free text"; omit for `assigned`) | ACK; tell the user if the state is needs-user/blocked |
+| DONE | `$ORCH done <slug> <sender> <goal> --pr <pr> --notes-file <file>` (notes written to `<file>` per "Free text") | ACK `DONE <goal> → in-review`; tell the user it awaits their review; GitHub alignment check (`github.md`) |
 | PR | `$ORCH pr <slug> <sender> <goal> --url <url>` | ACK `PR <goal> → recorded (<n> PRs)` (or `already recorded`); tell the user in one line, e.g. "g1 opened <url>". The goal's status does not change. Accepted while the goal is in-review too (review fixes). |
 | NOTICED | `$ORCH noticed <slug> <sender> <id>` | nothing (no ACK); mention it to the user only when no recipient is left pending |
 | other / malformed / wrong epic | nothing | ERROR |
@@ -134,7 +152,7 @@ REGISTER): the helper rejects it; relay its error.
 | User says | Run |
 |---|---|
 | approve <goal> | `$ORCH approve <slug> <goal>`; report newly ready goals; GitHub: set done status, update epic progress comment. If `all_done` is true, tell the user every goal is done and to say "cleanup" when they want to tidy up; don't clean up on your own. Otherwise, if `idle_worker` is set, suggest a context reset for it (see "Idle workers"). |
-| send <goal> back (reason) | `$ORCH sendback <slug> <goal> --reason "<reason>"`; tell the user to explain in that worker's session |
+| send <goal> back (reason) | `$ORCH sendback <slug> <goal> --reason-file <file>` (the reason written to `<file>` per "Free text"); tell the user to explain in that worker's session |
 | release / reassign <goal> | `$ORCH release <slug> <goal>` (worker gone, or the user wants someone else on it) |
 | start <goal> now | `$ORCH start <slug> <goal>` |
 | unblock on review | `$ORCH policy <slug> in-review` (back: `done`) |
@@ -182,14 +200,15 @@ the recipients to every registered worker.
    none for epic-wide) and a summary of at most ~10 lines: what changed and why it may matter.
    No diffs or logs.
 2. Before recording anything, run
-   `$ORCH notify <slug> --kind K --summary "…" [--goal G] [--to a,b] --dry-run`
+   `$ORCH notify <slug> --kind K --summary-file <file> [--goal G] [--to a,b] --dry-run`, with the
+   summary written to `<file>` as in "Free text" above,
    to get the recipients, and show the user the recipients and the exact text. Idle workers
    are added only if the user asks (`--to`). Then wait for the go-ahead. If the user changes the
    text or the recipients, run `--dry-run` again and show the result before sending.
    For `kind: dropped`, run the dry run BEFORE `drop-goal`, or pass `--to` naming the affected
    workers.
 3. On go: run `notify` without `--dry-run` and ALWAYS pass `--to <the exact names from the dry
-   run, comma-separated>` (with `--goal`, `--kind` and `--summary` unchanged), so the recorded
+   run, comma-separated>` (with `--goal`, `--kind` and the same `--summary-file` unchanged), so the recorded
    recipients are the ones the user approved. It returns `id`, `to` and the text. Send one `[orch v1 NOTICE]` per name in `to` (`protocol.md`). If a send
    fails, say which worker, and leave it pending.
 4. Each recipient answers NOTICED; run `$ORCH noticed` for it. `$ORCH pending-notices <slug>`
