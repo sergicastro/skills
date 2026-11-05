@@ -7,6 +7,8 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync, spawnSync } from "node:child_process";
 import { build, check, extract, loadContent, readPage, writeIndex, TYPES } from "../skills/explain-interactive/build.mjs";
+import { launch } from "../skills/explain-interactive/cdp.mjs";
+import { skip } from "./chrome.mjs";
 
 const SKILL = join(dirname(fileURLToPath(import.meta.url)), "../skills/explain-interactive");
 const SAMPLE = join(SKILL, "examples/token-401.content.js");
@@ -35,6 +37,40 @@ test("content may contain </script> and $& without breaking the page", () => {
   assert.deepEqual(errors, []);
   assert.match(html, /<\\\/script> \$& \$1/);
   assert.equal(html.match(/<\/script>/g).length, 3);
+});
+
+// "<!--" then "<script" in an inline script puts the HTML parser in its double-escaped state, where "</script>"
+// no longer ends the element: the engine script was swallowed and the page showed no steps, with no error.
+const commentOpen = `// a log line: <!--<script>
+const META = { title: "T", bigPicture: "B <!--<script>" };
+const QUOTED = /<!--<script/.test("<!--<script>") && \`<!--<script>\`;
+const STEPS = [
+  { title: "One", summary: "s", body: "<p>x</p>", code: "<!--<script>alert(1)</script>-->" },
+  { title: "Two", summary: "t", body: "<p>z</p>", code: "\\<!--<script>" },
+  { title: "Recap", body: "<p>y</p>" },
+];`;
+
+test("content may contain <!--<script> without hiding the engine", () => {
+  const { html, errors } = build(commentOpen);
+  assert.deepEqual(errors, []);
+  assert.doesNotMatch(html.slice(html.indexOf('<script id="explain-content">')), /<!--/);
+  assert.equal(extract(html), commentOpen + "\n");
+  // the escaped content still means the same to JS
+  const c = loadContent(extract(html)), e = loadContent(html.match(/<script id="explain-content">\n?([\s\S]*?)\n?<\/script>/)[1]);
+  assert.equal(JSON.stringify(e), JSON.stringify(c));
+});
+
+test("content with <!--<script> renders every step in a browser", { skip }, async () => {
+  const page = join(tmp, "comment-open.html");
+  writeFileSync(page, build(commentOpen).html);
+  const browser = await launch();
+  try {
+    await browser.open(page);
+    assert.equal(await browser.js(`document.querySelectorAll(".step").length`), 3);
+    assert.equal(await browser.js(`document.querySelector("#step-1 pre").textContent.includes("<!--<script>alert(1)</script>-->")`), true);
+    assert.equal(await browser.js(`QUOTED`), "<!--<script>");
+    assert.deepEqual(browser.problems, [], "console errors/warnings");
+  } finally { browser.close(); }
 });
 
 test("check reports broken content", () => {
