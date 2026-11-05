@@ -49,6 +49,7 @@ On Claude Code older than 2.1.275, add the marketplace first:
 - `skills/explain-interactive/shots.mjs`: renders every step of a page in headless Chrome to `step-NN.png` for review (plus `step-NN-<option>.png` per what-if option and `-phone` variants, never two with the same name), and reports what it can measure (a step taller than the screen, overflow, tiny diagram text, console errors, dialogs). With `-o` it only clears images it wrote there and refuses a folder holding other `step-*.png` files
 - `skills/explain-interactive/cdp.mjs`: the small DevTools-protocol driver `shots.mjs` and the tests use (finds Chrome, Chromium or Edge on macOS, Linux and Windows or on `PATH`; times out stuck calls and answers page dialogs)
 - `skills/explain-interactive/examples/`: one sample content file per page type (walkthrough, decision, before/after, debugging story, concept), and walkthroughs for each diagram layout, for what-if controls and for a wide diagram with quizzes (`dns-lookup`)
+- `evals/`: skill-behaviour eval cases for `claude plugin eval`, one per page type, with a recorded baseline (see `evals/README.md`)
 - `test/`: `node --test plugins/explain-interactive/test/*.test.mjs` (the browser tests need Chrome or Chromium; set `CHROME=` to pick one)
 
 Claude writes only `~/explanations/<topic>.content.js`; the build turns it into the page. To change a page, edit its content file and rebuild:
