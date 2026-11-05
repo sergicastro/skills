@@ -362,7 +362,13 @@ def register(state, name):
     w = state["workers"].get(name)
     if w:
         w["last_seen"] = now()
-        return {"registered": name, "new": False, "current": w["current"]}, [(name, "REGISTER", "again")]
+        out = {"registered": name, "new": False, "current": w["current"]}
+        events = [(name, "REGISTER", "again")]
+        if w["current"]:
+            # a worker that lost its context (crash, /clear) gets its goal's ASSIGN again
+            out["assignment"] = assignment(state, w["current"])
+            events.append(("manager", "ASSIGN", f"{w['current']} -> {name} (re-sent)"))
+        return out, events
     state["workers"][name] = {"registered": now(), "current": None, "history": [], "last_seen": now(), "live": None}
     return {"registered": name, "new": True, "current": None}, [(name, "REGISTER", "")]
 
