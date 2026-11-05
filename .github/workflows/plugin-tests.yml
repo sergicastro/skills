@@ -46,6 +46,8 @@ jobs:
         id: chrome
         uses: browser-actions/setup-chrome@v1
         with:
+          # the default is the newest Chromium snapshot, which changes under us; test what readers run
+          chrome-version: stable
           install-dependencies: true
       - name: Allow the Chrome sandbox
         # Ubuntu 24.04 blocks the unprivileged user namespaces Chrome's sandbox needs
