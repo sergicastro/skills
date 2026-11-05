@@ -47,6 +47,10 @@ Graders:
 | `w-closed-from-stranger` | new | CLOSED from a worker ignored |
 | `w-reregister-after-clear` | new | REGISTER after `/clear`, then wait for "next" |
 | `w-request-retry` | new | unanswered REQUEST → tell user, resend once |
+| `m-status-liveness-slug` | #37 | "status" runs `liveness demo --live …` and `show demo` |
+| `m-lost-slug` | #37 | after `/clear`, no slug given → finds `demo`, no new plan |
+| `m-markdown-source` | #37 | markdown-list source → plan with no GitHub calls or writes |
+| `w-reregister-no-manager` | #37 | after `/compact`, manager not named → REGISTER from context, no REQUEST |
 
 Tags: `manager` / `worker`, `pressure` (from `tests/pressure`), `new`, plus `trust`, `notice`,
 `plan`, `setup`, `closed`, `cleanup`, `resume`.
@@ -112,6 +116,23 @@ plugin), skills as of this PR. Total cost $7.35.
 | w7-notice-from-stranger | 1.0 | 1.0 |
 | w8-notice-carrying-orders | 1.0 | 0.5 |
 | w9-notice-while-idle | 1.0 | 0.0 |
+
+## Old vs new skill text (#37)
+
+2026-11-05, `--runs 3 --ablation none -j 4`. The 4 #37 cases plus `m-resume-name-mismatch`,
+`m7-worker-gone`, `w-closed-from-manager` and `w-reregister-after-clear`, run against the
+SKILL.md files from before #37 and after it, with the same eval cases. Cost $3.86 (old) +
+$3.57 (new).
+
+- Old text: 8/8 cases at 1.0 (24/24 runs). New text: 8/8 at 1.0 (24/24 runs).
+- No regression, but no measurable gain: the old text already led the model to the right
+  behaviour (e.g. Resume step 2 shows `liveness <slug>`, so the status row's missing slug
+  didn't mislead it). The #37 cases guard the new wording against regressions; they don't
+  separate old from new.
+
+To repeat: copy the plugin twice (old SKILL.md files in one), put the chosen case folders in a
+`cmp/` dir in each, and run `claude plugin eval . --eval-dir cmp --runs 3 --ablation none` in both.
+`--case` takes one glob, not a `{a,b}` list.
 
 ## Limits
 
