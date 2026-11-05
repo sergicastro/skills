@@ -186,8 +186,9 @@ function checkStructure(STEPS, hasDiagram, warnings) {
     if (hasDiagram && !last.diagram) warnings.push(`${at(last, n - 1)}: no diagram; set diagram: {} so the Recap shows the whole DIAGRAM`);
   }
   const quizzes = STEPS.filter(s => s && s.quiz).length;
-  if (quizzes < LIMITS.minQuizzes)
-    warnings.push(`the page has ${quizzes} quiz${quizzes === 1 ? "" : "zes"} (at least ${LIMITS.minQuizzes}): add one where a reader most likely gets confused`);
+  const [qlo, qhi] = LIMITS.quizzes, has = `the page has ${quizzes} quiz${quizzes === 1 ? "" : "zes"} (plan ${qlo}–${qhi})`;
+  if (quizzes < qlo) warnings.push(`${has}: add one where a reader most likely gets confused`);
+  if (quizzes > qhi) warnings.push(`${has}: keep the ones on the steps readers most likely get wrong`);
 }
 
 // ---------- What-if control: options that switch the step's outcome text and diagram state ----------
@@ -283,7 +284,7 @@ function checkTerms(spec, svg, hasTerm, warnings) {
 // The limits SKILL.md gives; over them is a warning, since a page can still be built.
 export const LIMITS = { titleWords: 6, summaryWords: 8, bodySentences: 5, bodyWords: 120, hlParts: 3,
   codeLines: 15, codeWidth: 60, prereqs: 3, contextSentences: 2, quizOptions: 4, whatifOptions: 4, outcomeSentences: 2,
-  steps: [4, 10], minQuizzes: 1 };
+  steps: [5, 10], quizzes: [2, 3] };
 const text = s => String(s).replace(/<[^>]*>/g, " ").replace(/&[a-z#0-9]+;/gi, " ").replace(/\s+/g, " ").trim();
 const words = s => (text(s).match(/\S+/g) || []).length;
 // A sentence ends at . ! ? (or …) followed by the end or by a space and a capital, digit or quote; "e.g. this" stays one sentence

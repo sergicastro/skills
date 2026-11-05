@@ -73,10 +73,6 @@ const STEPS = [
     summary: "a referral, not an answer",
     body: `<p>With an empty cache, the resolver starts at the top and asks a <dfn>Root server</dfn> <mark>www.example.org A?</mark>. The root doesn't hold the record. <strong>It returns a <dfn>referral</dfn></strong>: the names and addresses of the servers for <code>.org</code>.</p>`,
     diagram: { hl: ["root", "q-root", "r-root"] },
-    quiz: { q: "What does the root server know about www.example.org?",
-      options: ["Only which servers handle .org", { t: "Its address", why: "The root holds no records for names under .org; it only points to the .org servers." },
-        { t: "Which server holds example.org", why: "That is what the .org servers know, one level down." }],
-      answer: 0, why: "Each level knows only the next one down: the root knows the top-level domains, and nothing below them." },
   },
   {
     title: ".org points to example.org's server",

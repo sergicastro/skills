@@ -19,10 +19,10 @@ const minimal = extra => `const META = { title: "T", bigPicture: "B" };
 const DIAGRAM = \`<svg viewBox="0 0 10 10"><g data-id="a"></g></svg>\`;
 const STEPS = [{ title: "One", summary: "s", body: "<p>x</p>", diagram: { hl: ["a"] } }, { title: "Recap", body: "<p>y</p>" }];
 ${extra || ""}`;
-// The short fixtures above skip the page's structure (Context step, 4+ steps, a quiz); tests about other rules drop those warnings
+// The short fixtures above skip the page's structure (Context step, 5+ steps, 2 quizzes); tests about other rules drop those warnings
 const PAGE_RULES = /^STEPS has \d+ steps|: no context card|^the page has \d+ quizz?e?s?|the last step is the Recap|so the Recap shows the whole DIAGRAM/;
 const own = ws => ws.filter(w => !PAGE_RULES.test(w));
-// A page that follows every structure rule: Context step, 4 steps, a quiz, a Recap showing the whole DIAGRAM
+// A page that follows every structure rule: Context step, 5 steps, 2 quizzes, a Recap showing the whole DIAGRAM
 const page = ({ meta = 'title: "T", bigPicture: "B"', first = "", mid = "", last = "", extra = "" } = {}) => `const META = { ${meta} };
 const DIAGRAM = \`<svg viewBox="0 0 10 10"><g data-id="a"></g></svg>\`;
 ${extra}
@@ -30,6 +30,7 @@ const STEPS = [
   { title: "Context", summary: "s", body: "<p>c</p>", context: { question: "Why?" }, diagram: {}${first} },
   { title: "One", summary: "s", body: "<p><mark>a</mark></p>", diagram: { hl: ["a"] }${mid} },
   { title: "Two", summary: "s", body: "<p>t</p>", quiz: { q: "Q?", options: ["a", "b", "c"], answer: 0, why: "w" } },
+  { title: "Three", summary: "s", body: "<p>u</p>", quiz: { q: "Q?", options: ["a", "b", "c"], answer: 0, why: "w" } },
   { title: "Recap", body: "<p>r</p>", diagram: {}${last} },
 ];`;
 
@@ -543,16 +544,20 @@ test("check: the structure rules SKILL.md gives are warnings", () => {
   // step 1 is the Context step
   w(page().replace(', context: { question: "Why?" }', ""), /^step 1 \("Context"\): no context card; step 1 is the Context step/);
   // the last step is the Recap, and shows the whole DIAGRAM
-  w(page().replace('title: "Recap"', 'title: "Done"'), /^step 4 \("Done"\): the last step is the Recap; title it "Recap"/);
-  w(page().replace('body: "<p>r</p>", diagram: {}', 'body: "<p>r</p>"'), /^step 4 \("Recap"\): no diagram; set diagram: \{\} so the Recap shows the whole DIAGRAM/);
+  w(page().replace('title: "Recap"', 'title: "Done"'), /^step 5 \("Done"\): the last step is the Recap; title it "Recap"/);
+  w(page().replace('body: "<p>r</p>", diagram: {}', 'body: "<p>r</p>"'), /^step 5 \("Recap"\): no diagram; set diagram: \{\} so the Recap shows the whole DIAGRAM/);
   w(page().replace('body: "<p>r</p>", diagram: {}', 'body: "<p>r</p>", visual: "<svg></svg>"'), /Recap shows the whole DIAGRAM/);   // a visual is for pages without a DIAGRAM
   w(page().replace(/const DIAGRAM.*\n/, "").replace(/diagram: \{[^}]*\}/g, "").replace("<mark>a</mark>", "a"), /Recap/, 0);
-  // step count, Context and Recap included
-  const steps = n => page().replace(/\{ title: "Two".*\n/, Array.from({ length: n - 3 }, (_, k) => `{ title: "S${k}", summary: "s", body: "<p>s</p>", quiz: { q: "Q?", options: ["a", "b", "c"], answer: 0, why: "w" } },\n`).join(""));
-  w(steps(3), /^STEPS has 3 steps; plan 4–10, Context and Recap included$/);
-  w(steps(4), /^STEPS has/, 0);
+  // step count, Context and Recap included (the filler steps replace "Three" and carry no quiz)
+  const steps = n => page().replace(/\{ title: "Three".*\n/, Array.from({ length: n - 4 }, (_, k) => `{ title: "S${k}", summary: "s", body: "<p>s</p>" },\n`).join(""));
+  w(steps(4), /^STEPS has 4 steps; plan 5–10, Context and Recap included$/);
+  w(steps(5), /^STEPS has/, 0);
   w(steps(10), /^STEPS has/, 0);
-  w(steps(11), /^STEPS has 11 steps; plan 4–10/);
-  // quizzes
-  w(page().replace(/, quiz: \{[^}]*\}/, ""), /^the page has 0 quizzes \(at least 1\): add one where a reader most likely gets confused$/);
+  w(steps(11), /^STEPS has 11 steps; plan 5–10/);
+  // quizzes: 2–3 per page
+  const quiz = ', quiz: { q: "Q?", options: ["a", "b", "c"], answer: 0, why: "w" }';
+  w(page().replace(quiz, ""), /^the page has 1 quiz \(plan 2–3\): add one where a reader most likely gets confused$/);
+  w(page().replaceAll(quiz, ""), /^the page has 0 quizzes \(plan 2–3\)/);
+  w(page({ mid: quiz }), /^the page has/, 0);
+  w(page({ mid: quiz, first: quiz }), /^the page has 4 quizzes \(plan 2–3\): keep the ones on the steps readers most likely get wrong$/);
 });

@@ -72,6 +72,10 @@ const STEPS = [
     summary: "a bad token ends at a 401",
     body: "<p>Next the <mark>JWT check</mark> verifies the token. An expired one would stop here with a 401; ours is valid, so it moves on.</p>",
     diagram: { hl: ["jwt", "deny", "r401"], build: [["deny", "r401"]] },
+    quiz: { q: "The JWT check rejects a call with an expired token. Does that call count against the client's quota?",
+      options: ["No: the rate limit never sees it", { t: "Yes: every call is counted", why: "Only calls that reach the Rate limit are counted, and this one ended at the JWT check." },
+        { t: "Only if the client is near its quota", why: "The rate limit doesn't run for this call at all, so it can't count it either way." }],
+      answer: 0, why: "A filter that refuses ends the chain; the filters after it, the rate limit included, never run." },
   },
   {
     title: "The rate limit counts calls",

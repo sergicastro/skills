@@ -91,6 +91,10 @@ const STEPS = [
     summary: "valid tokens are forwarded",
     body: `<p>With a valid token the gateway forwards the request on to <mark>orders-svc</mark>.</p>`,
     diagram: { hl: ["fwd", "svc"] },
+    quiz: { q: "The client retries GET /orders with a fresh token. Where does the request go after the gateway?",
+      options: ["On to orders-svc", { t: "Back to the client with a 401", why: "A 401 is only for a token that fails the check; a fresh one passes." },
+        { t: "Nowhere: the gateway answers it itself", why: "The gateway only checks and forwards; the orders come from orders-svc." }],
+      answer: 0, why: "A valid token passes the gateway's check, so the request is forwarded to orders-svc." },
   },
   // ... more steps; the LAST one is always the Recap (its numbered step list is generated automatically)
   {
