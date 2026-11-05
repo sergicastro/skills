@@ -134,7 +134,7 @@ test("built sample: features work in a browser", { skip }, async () => {
   // Recap: generated list, finish panel with score, Start over
   await js(`document.querySelectorAll("#outline button")[5].click()`);
   assert.equal(await js(`document.querySelectorAll("#step-6 .recap-list li").length`), 5);
-  assert.match(await js(`document.querySelector("#score").textContent`), /0 of 1/);
+  assert.match(await js(`document.querySelector("#score").textContent`), /0 of 2/);
   assert.equal(await js(`document.querySelector("#next .lbl").textContent`), "Finish ✓");
   await js(`document.querySelector('[data-finish="restart"]').click()`);
   assert.equal(await step(), 0);
@@ -421,7 +421,7 @@ test("a wide, tall diagram with a quiz: the quiz sits beside it and the step fit
   const fit = `(st => st.scrollHeight - st.clientHeight)(document.querySelector("#stage"))`;
   const rects = `(a => [a.querySelector(".visual"), a.querySelector(".quiz")].map(e => e.getBoundingClientRect()))(document.querySelector(".step.active"))`;
   const px = `(s => (r => Math.min(r.width / s.viewBox.baseVal.width, r.height / s.viewBox.baseVal.height))(s.getBoundingClientRect()) * 14)(document.querySelector(".step.active .visual svg"))`;
-  for (const n of [2, 3, 4, 5]) {
+  for (const n of [2, 4, 5]) {
     await goTo(n);
     assert.ok(await js(`document.querySelector(".step.active").classList.contains("wide")`), `step ${n}`);
     const [v, q] = await js(`${rects}.map(r => ({ left: r.left, right: r.right, top: r.top }))`);
@@ -430,11 +430,11 @@ test("a wide, tall diagram with a quiz: the quiz sits beside it and the step fit
     assert.ok(await js(px) >= 10, `step ${n}: label text renders at ${(await js(px)).toFixed(1)}px`);
   }
   // a step with no quiz keeps the diagram on its own
-  await goTo(6);
+  await goTo(3);
   assert.ok(!(await js(`!!document.querySelector(".step.active .beside")`)));
   // too narrow for both side by side: the quiz goes under the diagram
   await send("Emulation.setDeviceMetricsOverride", { width: 1000, height: 800, deviceScaleFactor: 1, mobile: false });
-  await goTo(3);
+  await goTo(4);
   const [v, q] = await js(`${rects}.map(r => ({ bottom: r.bottom, top: r.top }))`);
   assert.ok(q.top >= v.bottom, "the quiz wraps under the diagram");
   await send("Emulation.clearDeviceMetricsOverride");

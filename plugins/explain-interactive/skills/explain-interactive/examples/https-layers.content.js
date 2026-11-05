@@ -63,6 +63,16 @@ const STEPS = [
     summary: "encrypted, and the server is checked",
     layer: "tls",
     body: `<p>Before any request is sent, <mark>TLS</mark> runs a <dfn>handshake</dfn> over the TCP stream: the server shows a <dfn>certificate</dfn> for <code>shop.example</code>, and both sides agree on a key. <strong>From then on everything in the stream is encrypted.</strong> A certificate warning comes from this layer.</p>`,
+    quiz: {
+      q: "The browser warns that the certificate for shop.example is not valid. Has GET /cart been sent?",
+      options: [
+        "No: the request is only sent after the handshake",
+        { t: "Yes, but the reply is hidden", why: "The certificate is checked during the handshake, and the request waits until the handshake is done." },
+        { t: "Yes, without encryption", why: "HTTPS doesn't fall back to sending the request in the clear; it stops at the handshake." },
+      ],
+      answer: 0,
+      why: "The certificate is checked in the TLS handshake, and the browser sends GET /cart only once the handshake succeeds.",
+    },
   },
   {
     title: "HTTP is the request itself",

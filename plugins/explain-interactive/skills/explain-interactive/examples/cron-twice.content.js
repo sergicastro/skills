@@ -110,6 +110,16 @@ worker-5b1c-p8wn  Terminating   3d` },
 if err != nil || !ok {
 	return err   // another pod has it
 }`,
+    quiz: {
+      q: "With the lock in place, the next deploy overlaps 02:00 and three pods are running. How many reports go out?",
+      options: [
+        "One",
+        { t: "Three, one per pod", why: "All three try the same lock, report:<day>; only one gets it, and the others skip." },
+        { t: "None: the pods block each other", why: "TryAcquire doesn't wait: the pod that gets the lock sends, and the others return at once." },
+      ],
+      answer: 0,
+      why: "The lock is named after the job and the day, so the first pod to take it sends the report and every other copy skips.",
+    },
   },
   {
     title: "Recap",

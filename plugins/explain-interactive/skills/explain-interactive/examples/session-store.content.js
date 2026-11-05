@@ -86,6 +86,16 @@ const STEPS = [
     summary: "Redis expires keys by itself",
     body: `<p>Ana closes the tab and never signs out. Her session should disappear after a while. <mark>Redis</mark> can store each key with a <dfn>TTL</dfn> and deletes it on time; the other two need code or a job that cleans up.</p>`,
     matrix: { criteria: ["expiry"], options: ["redis"] },
+    quiz: {
+      q: "Sessions are kept in Postgres, with no cleanup job. Ana closes her tab without signing out. What happens to her session?",
+      options: [
+        "It stays in the table until something deletes it",
+        { t: "Postgres deletes it after a TTL", why: "Postgres has no per-row TTL; expiring rows takes code or a cleanup job." },
+        { t: "It is deleted when her cookie expires", why: "The cookie lives in her browser; the server never hears that it expired." },
+      ],
+      answer: 0,
+      why: "Only Redis deletes keys on time by itself; with the other options an abandoned session stays until something removes it.",
+    },
   },
   {
     title: "What each option costs",
