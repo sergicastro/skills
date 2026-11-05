@@ -26,11 +26,23 @@ Each PR a worker opens ends with a small footer naming the worker, epic and goal
 
 ## Layout
 
-- `skills/orchestrator/`: manager skill, plus `scripts/orch_state.py` (state helper)
+- `skills/orchestrator/`: manager skill, plus:
+  - `scripts/orch_state.py`: state helper; every change to `state.json` goes through it
+  - `scripts/orch_view.py`: renders `status.md`, `status.html` and the live pages
+  - `scripts/orch_serve.py`: the live status server (run through `orch_state.py serve`)
+  - `scripts/orch_prs.py`: PR health bullets for the live page, read with `gh`
+  - `templates/`: `status.md.tmpl` and `status.html.tmpl`, used by `orch_view.py`
 - `skills/orchestrator-worker/`: worker skill
 - `shared/`: `protocol.md` and `github.md`, symlinked into both skills
 - `tests/`: helper unit tests, skill pressure scenarios, a dry-run demo epic
 - `evals/`: skill-behaviour eval cases for `claude plugin eval` (see `evals/README.md`)
+
+## Requirements
+
+- Python 3.9 or later; the helper scripts use only the standard library.
+- macOS or Linux. The helpers lock files with `fcntl`, so they don't run on Windows
+  (WSL works).
+- The `gh` CLI, only for epics from GitHub and for the PR health bullets.
 
 ## Install
 
@@ -60,7 +72,12 @@ To work on the skills, run Claude Code with the local copy instead:
    (title, summary, acceptance criteria, dependencies…) or to rename the epic, and the
    status page follows. State lives in `~/.claude-orchestrator/<slug>/`
    (`status.md` is the readable view; the manager also gives you a live page).
-5. Once every goal is approved, the manager suggests a cleanup. Say "cleanup" and pick
+5. If a worker loses its context mid-goal (`/clear`, `/compact`, a restart), run
+   `/orchestrator-worker <manager name>` in it again. The manager sees that the worker still
+   holds a goal and re-sends that goal's ASSIGN after the ACK; the worker resumes when you say
+   so, without a new "next". The same goes for a manager that lost its context: rename the
+   session back to its recorded name if needed, then `/orchestrator <slug>`.
+6. Once every goal is approved, the manager suggests a cleanup. Say "cleanup" and pick
    what to do: delete the state directory, stop the status server (if no other
    orchestration is left), and tell the workers they can end their sessions.
 
@@ -126,7 +143,42 @@ For an epic from GitHub, the manager and the workers use the `gh` CLI. Each sess
 local work until you have. On the board, a goal's issue follows its status, including after
 `send back` and `release`; after `drop` the manager offers to remove the card or close the issue.
 The manager comments on the epic issue and sets its status only if you agree to it in the plan
-("Epic issue" line); ask it to stop or start at any time.
+("Epic issue" line); ask it to stop or start at any time. That choice is stored as
+`owned_by_manager` in the epic and can be changed with
+`orch_state.py edit-epic <slug> --owned-by-manager true|false`.
+
+## State helper
+
+`orch_state.py` is the only thing that writes the state directory, and only the manager
+runs it. Every command prints JSON on stdout. A rejected operation prints `{"error": ...}`
+and exits 2; a malformed call (unknown command, missing or conflicting options) prints
+`{"error": ..., "usage": ...}` and exits 2 too, and changes nothing.
+
+- **Locking.** Each command that loads, changes and saves `state.json` holds an exclusive
+  lock on `<slug>/.lock` for the whole time, so two calls can't, say, hand the same goal to
+  two workers. The manager still runs its calls one at a time.
+- **Free text from files.** Text that comes from a worker or the user can hold `$(…)`,
+  backticks or quotes, so it never goes into a shell argument. Each text option has a
+  `-file` form that takes a path, or `-` for stdin; trailing newlines are dropped:
+
+  | Inline (short fixed text) | From a file | Commands |
+  | --- | --- | --- |
+  | `--notes` | `--notes-file` | `done` |
+  | `--reason` | `--reason-file` | `status`, `sendback` |
+  | `--summary` | `--summary-file` | `notify` |
+
+  The manager writes the text verbatim with a quoted heredoc, then passes the file:
+
+  ```bash
+  cat > <scratchpad>/orch-text.txt <<'ORCH_EOF'
+  <the text, exactly as received>
+  ORCH_EOF
+  orch_state.py done <slug> <worker> <goal> --notes-file <scratchpad>/orch-text.txt
+  ```
+
+  `add-goal`/`edit-goal --goal-json` and `edit-epic --title` still take their value inline.
+- **Re-register.** `register` for a worker that holds an `assigned` or `needs-user` goal
+  returns an `assignment` (the same JSON as `request`), which the manager re-sends as ASSIGN.
 
 ## Live status page
 
