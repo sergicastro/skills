@@ -117,6 +117,16 @@ The diagram and the table use the same colors as the status page.
 - Opening a PR never changes a goal's status.
 - Only `blocked` or `ready` goals can be dropped, and only when nothing depends on them.
 
+## GitHub
+
+For an epic from GitHub, the manager and the workers use the `gh` CLI. Each session checks
+`gh auth status` before its first GitHub call; if you're not logged in, it asks you to run
+`gh auth login` (and `gh auth refresh -s project` when there's a board), and keeps going with
+local work until you have. On the board, a goal's issue follows its status, including after
+`send back` and `release`; after `drop` the manager offers to remove the card or close the issue.
+The manager comments on the epic issue and sets its status only if you agree to it in the plan
+("Epic issue" line); ask it to stop or start at any time.
+
 ## Live status page
 
 The manager starts a small local server the first time you create or resume an

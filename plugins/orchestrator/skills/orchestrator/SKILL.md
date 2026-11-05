@@ -15,7 +15,8 @@ Files next to this skill (use the base directory shown when the skill loaded):
 - `scripts/orch_view.py`, `scripts/orch_serve.py`, `templates/`: the status pages behind
   `$ORCH serve`. You never call them directly.
 - `protocol.md`: message formats and trust rules. Read it before sending a message.
-- `github.md`: `gh` procedures. Read it before any GitHub read or write.
+- `github.md`: `gh` procedures. Read it before any GitHub read or write, and run its
+  "Check the login first" step before the first one of the session.
 
 ## Free text
 
@@ -48,7 +49,9 @@ user types (a send-back reason) and to notices you draft. The inline `--notes`, 
    not a go-ahead for a plan they haven't seen; present it anyway, briefly.
 4. **State changes go through `$ORCH`.** Never edit state.json, status.md, status.html or events.log by hand.
    If `$ORCH` returns `{"error": ...}`, don't work around it: report it (to the worker as
-   ERROR, or to the user). Run `$ORCH` calls one at a time, never as parallel tool calls.
+   ERROR, or to the user). A reply that also has `usage` means the call itself was wrong
+   (unknown command, missing or conflicting arguments): fix the call from `usage` and
+   `$ORCH <command> --help`, then run it again; nothing was changed. Run `$ORCH` calls one at a time, never as parallel tool calls.
 5. **Stay lean.** No reading code, building, testing or editing in this session. Ask workers
    for short handoff notes. Look details up with `$ORCH get` / `$ORCH show` instead of
    repeating them in conversation.
@@ -94,6 +97,7 @@ user types (a send-back reason) and to notices you draft. The inline `--notes`, 
    Parallel workers suggested: <max number of goals that can be in progress at once>
    Unblock policy: dependents start when dependencies are `done` (you approved them)
    Board: <project> — ready→<v>, assigned→<v>, in-review→<v>, done→<v>   (or: none)
+   Epic issue: <manager comments on it and sets its status | left alone>   (GitHub epics only)
    GitHub writes after you confirm: <exact list: assign #… to you, add to board, set status, epic progress comment>
    Sessions: this session is `<name>` <rename suggestion if any>.
    Start workers with names starting `<prefix>`, e.g. `claude -n <prefix>auth`, then run
@@ -107,18 +111,22 @@ user types (a send-back reason) and to notices you draft. The inline `--notes`, 
      (if it returns a cycle or other error, show it and re-plan; never edit around it);
    - run `$ORCH serve --ensure` and include `<url><slug>` in your message; on error, handle
      it as in Resume step 5;
-   - make the confirmed GitHub writes (`github.md`);
+   - make the confirmed GitHub writes (`github.md`); if the login check fails, follow
+     `github.md` and finish the writes once it works;
    - tell the user it's ready and repeat the worker start instructions.
 
 Plan JSON for `init`:
 ```json
-{"epic": {"slug": "<slug>", "title": "<title>", "source": "<url or null>", "owned_by_manager": true},
+{"epic": {"slug": "<slug>", "title": "<title>", "source": "<url or null>", "owned_by_manager": <true|false>},
  "manager": "<your session name>", "worker_prefix": "<slug>-w-",
  "policy": {"unblock_on": "done"},
  "board": null,
  "goals": {"<id>": {"title": "...", "summary": "...", "acceptance": ["..."],
                     "depends_on": [], "repo": "<owner/repo or null>", "links": ["..."]}}}
 ```
+
+`owned_by_manager` is true only when the epic is a GitHub issue and the user confirmed the
+"Epic issue" line of the plan; otherwise false (no epic comment, no epic board status).
 
 ## Handling worker messages
 
@@ -152,14 +160,14 @@ REGISTER): the helper rejects it; relay its error.
 
 | User says | Run |
 |---|---|
-| approve <goal> | `$ORCH approve <slug> <goal>`; report newly ready goals; GitHub: set done status, update epic progress comment. If `all_done` is true, tell the user every goal is done and to say "cleanup" when they want to tidy up; don't clean up on your own. Otherwise, if `idle_worker` is set, suggest a context reset for it (see "Idle workers"). |
-| send <goal> back (reason) | `$ORCH sendback <slug> <goal> --reason-file <file>` (the reason written to `<file>` per "Free text"); tell the user to explain in that worker's session |
-| release / reassign <goal> | `$ORCH release <slug> <goal>` (worker gone, or the user wants someone else on it) |
+| approve <goal> | `$ORCH approve <slug> <goal>`; report newly ready goals; GitHub (`github.md` → "Board after a state change"): set done status; update the epic progress comment if the manager owns the epic. If `all_done` is true, tell the user every goal is done and to say "cleanup" when they want to tidy up; don't clean up on your own. Otherwise, if `idle_worker` is set, suggest a context reset for it (see "Idle workers"). |
+| send <goal> back (reason) | `$ORCH sendback <slug> <goal> --reason-file <file>` (the reason written to `<file>` per "Free text"); tell the user to explain in that worker's session; GitHub: `github.md` → "Board after a state change" |
+| release / reassign <goal> | `$ORCH release <slug> <goal>` (worker gone, or the user wants someone else on it); GitHub: `github.md` → "Board after a state change" |
 | start <goal> now | `$ORCH start <slug> <goal>` |
 | unblock on review | `$ORCH policy <slug> in-review` (back: `done`) |
 | prioritize … | `$ORCH prioritize <slug> <goal>...` |
-| add / drop a goal | `$ORCH add-goal <slug> --goal-json '<json>'` (json has an `id`) / `$ORCH drop-goal <slug> <goal>` |
-| rename the epic / change its link | `$ORCH edit-epic <slug> --title "<title>"` and/or `--source <url>` (`--source ""` removes it). Changes only the local pages, not GitHub. |
+| add / drop a goal | `$ORCH add-goal <slug> --goal-json '<json>'` (json has an `id`) / `$ORCH drop-goal <slug> <goal>`; after a drop, GitHub: `github.md` → "Board after a state change" (offer, then do what the user confirms) |
+| rename the epic / change its link / stop or start updating the epic issue | `$ORCH edit-epic <slug> --title "<title>"` and/or `--source <url>` (`--source ""` removes it) and/or `--owned-by-manager true\|false`. Changes only local state, not GitHub. |
 | edit a goal (title, summary, acceptance, repo, links, depends on) | `$ORCH edit-goal <slug> <goal> --goal-json '<json>'` with only the fields to change. Dependencies change only while the goal is blocked or ready. If the reply has a `worker`, that worker still has the old text; offer a notice (see "Notices"), and send nothing until the user approves. |
 | <worker> was renamed to <new> | `$ORCH rename-worker <slug> <old> <new>` (after the new name has registered) |
 | status / what's X doing | `ListAgents` → `$ORCH liveness --live …` → `$ORCH show`. Flag every worker in `gone_with_goal` and offer `release` (goal back to ready) or reassign; never release on your own. Mention the live page URL from `$ORCH serve --ensure`. If every goal is done, suggest cleanup. |

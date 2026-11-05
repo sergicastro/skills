@@ -57,7 +57,9 @@ in the manager session (`rename-worker`).
 3. ASSIGN (from your manager) → summarise the goal, acceptance criteria and upstream notes to
    the user, then start working it with your normal workflow. Read upstream PRs/notes as needed.
 4. Board (when `board` isn't `none`): set your issue to the `start` value now, link your PR to
-   the issue, and set the `done` value when you finish (`github.md`). `board:` gives
+   the issue, and set the `done` value when you finish (`github.md`). Before your first GitHub
+   call, run `github.md` → "Check the login first"; if it fails, keep working and tell the user
+   which board steps are pending. `board:` gives
    `<project>` as `owner/number`: split it for `<owner>` and `<number>`; the issue URL is in `links`.
 5. When you end a turn waiting on a user decision that blocks progress: send STATUS
    `needs-user` with a one-line reason. External blocker: STATUS `blocked`. When work resumes:

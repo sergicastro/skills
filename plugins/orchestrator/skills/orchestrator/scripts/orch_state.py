@@ -6,7 +6,9 @@ Usage: orch_state.py <command> <slug> [args]
        orch_state.py serve [--port N] [--ensure | --stop]
 
 Every command prints one JSON object to stdout and exits 0, except `show`, which
-prints status.md. A rejected operation prints {"error": "..."} and exits 2.
+prints status.md. A rejected operation prints {"error": "..."} and exits 2; a usage mistake
+(unknown command, missing or conflicting arguments) prints {"error": "...", "usage": "..."}
+and exits 2 too.
 """
 import argparse
 import contextlib
@@ -34,6 +36,19 @@ EVENTS_SHOWN = 30
 
 class OrchError(Exception):
     pass
+
+
+class UsageError(Exception):
+    def __init__(self, message, usage):
+        super().__init__(message)
+        self.usage = usage
+
+
+class Parser(argparse.ArgumentParser):
+    """Raises UsageError instead of printing usage to stderr, so callers always get JSON."""
+
+    def error(self, message):
+        raise UsageError(f"{self.prog}: {message}", self.format_usage().strip())
 
 
 def now():
@@ -111,6 +126,8 @@ def validate(state):
         return problems
     if not state["epic"].get("slug"):
         problems.append("missing epic.slug")
+    if not isinstance(state["epic"].get("owned_by_manager", False), bool):
+        problems.append("epic.owned_by_manager must be true or false")
     if state["policy"].get("unblock_on") not in UNBLOCK:
         problems.append(f"invalid policy.unblock_on {state['policy'].get('unblock_on')!r}")
     if not isinstance(state["goals"], dict) or not isinstance(state["workers"], dict):
@@ -285,6 +302,7 @@ def view_model(state, events, problems=()):
         "slug": e["slug"],
         "title": e.get("title") or e["slug"],
         "source": e.get("source"),
+        "owned_by_manager": e.get("owned_by_manager") is True,
         "manager": state["manager"],
         "worker_prefix": state["worker_prefix"],
         "unblock_on": state["policy"].get("unblock_on"),
@@ -316,7 +334,7 @@ def goal(state, gid):
 def init(slug, plan):
     if (state_dir(slug) / "state.json").exists():
         raise OrchError(f"orchestration {slug!r} already exists")
-    epic = plan.get("epic") or {}
+    epic = dict({"owned_by_manager": False}, **(plan.get("epic") or {}))
     if epic.get("slug") != slug:
         raise OrchError(f"plan epic.slug {epic.get('slug')!r} does not match {slug!r}")
     raw_goals = plan.get("goals") or {}
@@ -646,7 +664,7 @@ def drop_goal(state, gid):
 EDITABLE = ("title", "summary", "acceptance", "repo", "links", "depends_on")
 
 
-def edit_epic(state, title, source):
+def edit_epic(state, title, source, owned_by_manager=None):
     fields = {}
     if title is not None:
         if not title.strip():
@@ -654,8 +672,10 @@ def edit_epic(state, title, source):
         fields["title"] = title
     if source is not None:
         fields["source"] = source or None
+    if owned_by_manager is not None:
+        fields["owned_by_manager"] = owned_by_manager == "true"
     if not fields:
-        raise OrchError("nothing to edit: pass --title and/or --source")
+        raise OrchError("nothing to edit: pass --title, --source and/or --owned-by-manager")
     state["epic"].update(fields)
     return {"epic": state["epic"]["slug"], "fields": list(fields)}, [("user", "EDIT", "epic " + ",".join(fields))]
 
@@ -782,7 +802,9 @@ ARGS.update({
     "prioritize": [(["goals"], {"nargs": "+"})],
     "add-goal": [(["--goal-json"], {"required": True})],
     "drop-goal": [(["goal"], {})],
-    "edit-epic": [(["--title"], {}), (["--source"], {"help": "an empty string removes the link"})],
+    "edit-epic": [(["--title"], {}), (["--source"], {"help": "an empty string removes the link"}),
+                  (["--owned-by-manager"], {"choices": ["true", "false"],
+                                            "help": "whether the manager comments on the epic issue and sets its board status"})],
     "edit-goal": [(["goal"], {}), (["--goal-json"], {"required": True, "help": "only the fields to change"})],
     "rename-worker": [(["old"], {}), (["new"], {})],
     "liveness": [(["--live"], {"default": "", "help": "comma-separated session names from ListAgents"})],
@@ -803,7 +825,7 @@ COMMANDS.update({
     "prioritize": lambda s, a: prioritize(s, a.goals),
     "add-goal": lambda s, a: add_goal(s, json.loads(a.goal_json)),
     "drop-goal": lambda s, a: drop_goal(s, a.goal),
-    "edit-epic": lambda s, a: edit_epic(s, a.title, a.source),
+    "edit-epic": lambda s, a: edit_epic(s, a.title, a.source, a.owned_by_manager),
     "edit-goal": lambda s, a: edit_goal(s, a.goal, json.loads(a.goal_json)),
     "rename-worker": lambda s, a: rename_worker(s, a.old, a.new),
     "liveness": lambda s, a: liveness(s, a.live),
@@ -838,7 +860,7 @@ def resolve_text(cmd, a):
 
 
 def build_parser():
-    p = argparse.ArgumentParser(prog="orch_state.py")
+    p = Parser(prog="orch_state.py")
     sub = p.add_subparsers(dest="cmd", required=True)
     for name, args in ARGS.items():
         sp = sub.add_parser(name)
@@ -863,7 +885,11 @@ def build_parser():
 
 
 def main(argv=None):
-    a = build_parser().parse_args(argv)
+    try:
+        a = build_parser().parse_args(argv)
+    except UsageError as e:
+        print(json.dumps({"error": str(e), "usage": e.usage}))
+        return 2
     try:
         if a.cmd == "serve":
             import orch_serve  # only serve needs the http and process machinery

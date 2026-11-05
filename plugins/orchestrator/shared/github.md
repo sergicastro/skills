@@ -3,6 +3,23 @@
 Use these only when the orchestration has a `board` (state.json) or the goal has
 GitHub links. Every command uses the `gh` CLI. `@me` is the user.
 
+## Check the login first (manager and worker)
+
+Before the first GitHub read or write of a session, and again after any `gh` call fails
+with an authentication error:
+```bash
+gh auth status
+```
+- Exit code not 0 (not logged in, or the token expired): tell the user to run
+  `! gh auth login` in this session, then wait for them to say it's done.
+- The orchestration has a `board`, and `gh auth status` doesn't list `project` among the
+  token scopes: tell the user to run `! gh auth refresh -s project`, then wait.
+
+Until the login works, make no GitHub calls; don't retry in a loop. Local state doesn't depend
+on GitHub: the manager keeps handling messages, and a worker keeps working its goal. Tell the
+user which GitHub steps you skipped (board status, comments, links), and do them once the login
+works.
+
 ## Read an epic (manager)
 
 ```bash
@@ -36,6 +53,8 @@ gh project item-add <number> --owner <owner> --url <issue url> --format json --j
 
 ## Set an item's status (manager or worker)
 
+`<value>` is the mapping's value for the goal's new status (`board.mapping` in state.json).
+
 ```bash
 PROJECT_ID=$(gh project view <number> --owner <owner> --format json --jq .id)
 FIELD_JSON=$(gh project field-list <number> --owner <owner> --format json --jq '.fields[] | select(.name=="<field>")')
@@ -45,6 +64,20 @@ ITEM_ID=$(gh project item-list <number> --owner <owner> --format json --limit 50
   --jq '.items[] | select(.content.url=="<issue url>") | .id')
 gh project item-edit --id "$ITEM_ID" --project-id "$PROJECT_ID" --field-id "$FIELD_ID" --single-select-option-id "$OPTION_ID"
 ```
+
+## Board after a state change (manager)
+
+When the board exists and the goal has an issue in `links`, run "Set an item's status" after:
+
+| Command | Set the issue to |
+|---|---|
+| `approve` | the `done` value |
+| `sendback` | the `assigned` value |
+| `release` | the `ready` value, whether the reply says `ready` or `blocked` (the mapping has no `blocked` value) |
+| `drop-goal` | nothing to set: offer to remove the card (`gh project item-delete <number> --owner <owner> --id <ITEM_ID>`) and to close the issue as not planned (`gh issue close <n> --repo <owner/repo> --reason "not planned"`); do what the user confirms |
+
+Then, if the manager owns the epic, update the epic progress comment (a dropped goal leaves the
+checklist).
 
 ## Open a PR (worker)
 
@@ -70,6 +103,12 @@ the issue is assigned to the user, and the handoff PR is linked. Fix what's miss
 with the commands above, then tell the user what you fixed.
 
 ## Epic progress comment (manager owns the epic)
+
+Only when `epic.owned_by_manager` is true (state.json; `$ORCH show` prints it as "Manager updates
+the epic issue"). It's set in the plan: true only when the epic is a GitHub issue and the user
+agreed that the manager comments on it and sets its board status. When it's false, skip both:
+no epic comment, no epic status. Goal issues still follow the board. If the user changes their
+mind, `$ORCH edit-epic <slug> --owned-by-manager true|false`.
 
 Start the body with the marker `<!-- orch:<slug> -->` so the comment can always be found again.
 Create it once; before creating or updating, look it up (take the first match):
