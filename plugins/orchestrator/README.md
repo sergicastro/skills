@@ -30,6 +30,7 @@ Each PR a worker opens ends with a small footer naming the worker, epic and goal
 - `skills/orchestrator-worker/`: worker skill
 - `shared/`: `protocol.md` and `github.md`, symlinked into both skills
 - `tests/`: helper unit tests, skill pressure scenarios, a dry-run demo epic
+- `evals/`: skill-behaviour eval cases for `claude plugin eval` (see `evals/README.md`)
 
 ## Install
 
@@ -173,6 +174,12 @@ From `plugins/orchestrator/`:
 
 ```bash
 python3 -m unittest discover -s tests -v
+```
+
+Skill-behaviour evals (these call the model and cost money; see `evals/README.md`):
+
+```bash
+claude plugin eval . --runs 1 -j 4 --no-publish
 ```
 
 See `docs/specs/` for the design.
