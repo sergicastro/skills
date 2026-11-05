@@ -6,11 +6,10 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import { findChrome } from "../skills/explain-interactive/cdp.mjs";
+import { skip } from "./chrome.mjs";
 import { optionNames, shotFile, SHOT_FILE } from "../skills/explain-interactive/shots.mjs";
 
 const SKILL = join(dirname(fileURLToPath(import.meta.url)), "../skills/explain-interactive");
-const skip = findChrome() ? false : "no Chrome/Chromium found (set CHROME=…)";
 const run = (...a) => spawnSync(process.execPath, [join(SKILL, "shots.mjs"), ...a], { encoding: "utf8", timeout: 120000 });
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
 const pngSize = f => { const b = readFileSync(f); assert.ok(b.subarray(0, 4).equals(PNG), `${f} is a PNG`); return [b.readUInt32BE(16), b.readUInt32BE(20)]; };
