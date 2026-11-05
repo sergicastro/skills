@@ -552,6 +552,36 @@ class UserTests(Base):
         self.assertIsNone(s["workers"]["demo-w-a"]["current"])
         self.assertIsNone(s["goals"]["g1"]["worker"])
 
+    def test_release_from_needs_user(self):
+        self.run_cli("request", "demo", "demo-w-a")
+        self.run_cli("status", "demo", "demo-w-a", "g1", "needs-user", "--reason", "which db?")
+        self.assertEqual(self.run_cli("release", "demo", "g1"), (0, {"goal": "g1", "status": "ready"}))
+        s = self.state()
+        self.assertIsNone(s["workers"]["demo-w-a"]["current"])
+        self.assertEqual((s["goals"]["g1"]["worker"], s["goals"]["g1"]["reason"]), (None, None))
+
+    def test_release_from_in_review_reblocks_dependents(self):
+        self.run_cli("policy", "demo", "in-review")
+        self.finish_g1()
+        self.assertEqual(self.statuses()["g2"], "ready")
+        self.assertEqual(self.run_cli("release", "demo", "g1"), (0, {"goal": "g1", "status": "ready"}))
+        s = self.state()
+        self.assertIsNone(s["goals"]["g1"]["worker"])
+        self.assertEqual(s["workers"]["demo-w-a"]["history"], ["g1"])
+        self.assertEqual(self.statuses(), {"g1": "ready", "g2": "blocked", "g3": "blocked", "g4": "blocked"})
+
+    def test_release_in_review_keeps_worker_current_goal(self):
+        self.run_cli("policy", "demo", "in-review")
+        self.finish_g1()
+        self.run_cli("request", "demo", "demo-w-a")  # a: g2
+        self.run_cli("release", "demo", "g1")
+        self.assertEqual(self.state()["workers"]["demo-w-a"]["current"], "g2")
+
+    def test_release_rejects_unowned_goal(self):
+        code, out = self.run_cli("release", "demo", "g1")
+        self.assertEqual(code, 2)
+        self.assertIn("g1 is ready, nothing to release", out["error"])
+
     def test_policy_in_review_unblocks_early(self):
         self.finish_g1()
         self.assertEqual(self.run_cli("policy", "demo", "in-review"),
@@ -591,6 +621,25 @@ class UserTests(Base):
         self.assertEqual(code, 2)
         self.assertIn("only blocked or ready goals can be dropped", out["error"])
 
+    def test_drop_goal_still_in_history_and_notices(self):
+        self.finish_g1()
+        self.run_cli("release", "demo", "g1")  # back to ready, still in demo-w-a's history
+        self.run_cli("notify", "demo", "--kind", "changed", "--summary", "g1 rethought", "--goal", "g1",
+                     "--to", "demo-w-a")
+        self.assertEqual(self.run_cli("edit-goal", "demo", "g2", "--goal-json", '{"depends_on": []}')[0], 0)
+        self.assertEqual(self.run_cli("edit-goal", "demo", "g3", "--goal-json", '{"depends_on": []}')[0], 0)
+        self.assertEqual(self.run_cli("drop-goal", "demo", "g1"), (0, {"dropped": "g1"}))
+        s = self.state()
+        self.assertNotIn("g1", s["goals"])
+        self.assertEqual(s["workers"]["demo-w-a"]["history"], ["g1"])
+        self.assertEqual(s["notices"][0]["goal"], "g1")
+        self.assertEqual(s["dropped"], ["g1"])
+        self.assertEqual(self.run_cli("validate", "demo"), (0, {"valid": True, "goals": 3}))
+        self.assertIn("demo-w-a", self.run_cli("show", "demo")[1])
+        self.assertEqual(self.run_cli("pending-notices", "demo")[1][0]["goal"], "g1")
+        # a later request still works, and history pointing at the dropped goal is harmless
+        self.assertEqual(self.run_cli("request", "demo", "demo-w-a")[1]["assigned"], "g2")
+
     def test_rename_worker_moves_goal(self):
         self.run_cli("request", "demo", "demo-w-a")
         self.run_cli("register", "demo", "demo-w-auth")
@@ -612,6 +661,27 @@ class UserTests(Base):
         code, out = self.run_cli("liveness", "demo", "--live", "demo-w-b,demo-manager")
         self.assertEqual((code, out), (0, {"live": ["demo-w-b"], "gone": ["demo-w-a"], "gone_with_goal": ["demo-w-a"]}))
         self.assertIn("| demo-w-a | g1 |  | gone |", self.run_cli("show", "demo")[1])
+
+    def liveness_events(self):
+        log = (Path(self.tmp.name) / "demo" / "events.log").read_text()
+        return [line for line in log.splitlines() if " LIVENESS " in line]
+
+    def test_liveness_logs_only_when_something_changed(self):
+        self.run_cli("liveness", "demo", "--live", "demo-w-a,demo-w-b")
+        self.assertEqual(len(self.liveness_events()), 1)
+        os.environ["ORCH_NOW"] = "2026-10-26T11:00:00Z"
+        code, out = self.run_cli("liveness", "demo", "--live", "demo-w-b,demo-w-a,demo-manager")
+        self.assertEqual((code, out), (0, {"live": ["demo-w-a", "demo-w-b"], "gone": [], "gone_with_goal": []}))
+        self.assertEqual(len(self.liveness_events()), 1)
+        self.assertEqual(self.state()["live_checked"], "2026-10-26T11:00:00Z")
+        self.run_cli("liveness", "demo", "--live", "demo-w-b")
+        events = self.liveness_events()
+        self.assertEqual(len(events), 2)
+        self.assertTrue(events[-1].endswith("manager LIVENESS demo-w-a"))
+
+    def test_first_liveness_check_is_logged(self):
+        self.run_cli("liveness", "demo", "--live", "")
+        self.assertEqual(len(self.liveness_events()), 1)
 
 
 class NoticeTests(Base):
@@ -702,10 +772,28 @@ class NoticeTests(Base):
         self.assertEqual(code, 2)
         self.assertIn("unknown goal nope; for a dropped goal pass --to", out["error"])
 
-    def test_unknown_goal_with_to_is_allowed_for_dropped_goals(self):
+    def test_unknown_goal_with_to_is_rejected(self):
+        code, out = self.run_cli("notify", "demo", "--kind", "changed", "--summary", "typo",
+                                 "--goal", "g9", "--to", "demo-w-a")
+        self.assertEqual(code, 2)
+        self.assertIn("unknown goal g9", out["error"])
+        self.assertNotIn("notices", self.state())
+
+    def test_dropped_goal_with_to_is_allowed(self):
+        self.run_cli("add-goal", "demo", "--goal-json", json.dumps({"id": "g9", "title": "t", "summary": "s"}))
+        self.run_cli("drop-goal", "demo", "g9")
         code, out = self.run_cli("notify", "demo", "--kind", "dropped", "--summary", "g9 removed",
                                  "--goal", "g9", "--to", "demo-w-a")
         self.assertEqual(code, 0, out)
+        self.assertEqual(out["to"], ["demo-w-a"])
+        # without --to there is nobody to derive recipients from
+        code, out = self.notify("--goal", "g9")
+        self.assertIn("for a dropped goal pass --to", out["error"])
+
+    def test_validate_rejects_malformed_dropped(self):
+        state = self.state()
+        state["dropped"] = "g9"
+        self.assertIn("dropped must be a list of goal ids", orch_state.validate(state))
 
     def test_bad_summary_is_rejected(self):
         code, out = self.run_cli("notify", "demo", "--kind", "changed", "--summary", " ")
@@ -820,6 +908,33 @@ class EditTests(Base):
 
     def test_edit_goal_unknown_goal(self):
         self.assertIn("unknown goal zz", self.edit_goal("zz", title="t")[1]["error"])
+
+    def test_edit_goal_rejects_wrongly_typed_lists(self):
+        for key in ("acceptance", "links"):
+            for bad in ("one string", [1, 2], {"a": 1}, None):
+                code, out = self.edit_goal("g1", **{key: bad})
+                self.assertEqual(code, 2, (key, bad))
+                self.assertIn(f"g1: {key} must be a list of strings", out["error"])
+        self.assertEqual(self.state()["goals"]["g1"]["acceptance"], [])
+
+    def test_edit_goal_accepts_lists_of_strings(self):
+        code, out = self.edit_goal("g1", acceptance=["a", "b"], links=["https://example.com/1"])
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.state()["goals"]["g1"]["links"], ["https://example.com/1"])
+
+    def test_add_goal_rejects_wrongly_typed_lists(self):
+        code, out = self.run_cli("add-goal", "demo", "--goal-json",
+                                 json.dumps({"id": "g5", "title": "t", "summary": "s", "links": "https://example.com"}))
+        self.assertEqual(code, 2)
+        self.assertIn("g5: links must be a list of strings", out["error"])
+
+    def test_validate_rejects_wrongly_typed_lists(self):
+        state = self.state()
+        state["goals"]["g1"]["acceptance"] = "done when done"
+        state["goals"]["g2"]["links"] = [7]
+        problems = orch_state.validate(state)
+        self.assertIn("g1: acceptance must be a list of strings", problems)
+        self.assertIn("g2: links must be a list of strings", problems)
 
     def test_edit_goal_dependencies_recompute(self):
         self.assertEqual(self.edit_goal("g2", depends_on=[])[1]["status"], "ready")
@@ -1341,6 +1456,23 @@ class UsageErrorTests(Base):
 
     def test_bad_type(self):
         self.assertUsageError(["noticed", "demo", "demo-w-a", "one"], "invalid int value", "orch_state.py noticed")
+
+    def test_no_command(self):
+        self.assertUsageError([], "required: cmd", "orch_state.py")
+
+    def test_missing_required_option(self):
+        self.assertUsageError(["add-goal", "demo"], "required: --goal-json", "orch_state.py add-goal")
+
+    def test_missing_required_text(self):
+        self.assertUsageError(["done", "demo", "demo-w-a", "g1"], "one of the arguments --notes --notes-file is required",
+                              "orch_state.py done")
+
+    def test_usage_error_changes_nothing(self):
+        d = Path(self.tmp.name) / "demo"
+        before = {f: (d / f).read_text() for f in ("state.json", "events.log")}
+        self.run_cli("register", "demo", "demo-w-a", "extra")
+        self.run_cli("policy", "demo", "sometimes")
+        self.assertEqual({f: (d / f).read_text() for f in before}, before)
 
     def test_cli_prints_json_and_nothing_on_stderr(self):
         res = subprocess.run([sys.executable, str(SCRIPT), "register", "demo"],

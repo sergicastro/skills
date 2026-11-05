@@ -5,8 +5,9 @@ Usage: orch_state.py <command> <slug> [args]
        orch_state.py cleanup <slug> [--delete] [--stop-server]
        orch_state.py serve [--port N] [--ensure | --stop]
 
-Every command prints one JSON object to stdout and exits 0, except `show`, which
-prints status.md. A rejected operation prints {"error": "..."} and exits 2; a usage mistake
+Every command prints JSON to stdout and exits 0: one object, except `pending-notices`,
+which prints a list, and `show`, which renders status.md afresh from state.json (it does
+not read the saved file) and prints that. A rejected operation prints {"error": "..."} and exits 2; a usage mistake
 (unknown command, missing or conflicting arguments) prints {"error": "...", "usage": "..."}
 and exits 2 too.
 """
@@ -65,13 +66,27 @@ def state_dir(slug):
     return root() / slug
 
 
+STRING_LISTS = ("acceptance", "links")
+
+
+def is_str_list(value):
+    return isinstance(value, list) and all(isinstance(v, str) for v in value)
+
+
+def check_str_lists(gid, raw):
+    for key in STRING_LISTS:
+        if key in raw and not is_str_list(raw[key]):
+            raise OrchError(f"{gid}: {key} must be a list of strings")
+
+
 def new_goal(gid, raw):
     missing = [k for k in ("title", "summary") if not raw.get(k)]
     if missing:
         raise OrchError(f"{gid}: missing {', '.join(missing)}")
     deps = raw.get("depends_on", [])
-    if not isinstance(deps, list) or not all(isinstance(d, str) for d in deps):
+    if not is_str_list(deps):
         raise OrchError(f"{gid}: depends_on must be a list of goal ids")
+    check_str_lists(gid, raw)
     return {
         "title": raw["title"],
         "summary": raw["summary"],
@@ -152,6 +167,9 @@ def validate(state):
             continue
         if g.get("status") not in STATES:
             problems.append(f"{gid}: invalid status {g.get('status')}")
+        for key in STRING_LISTS:
+            if not is_str_list(g.get(key, [])):
+                problems.append(f"{gid}: {key} must be a list of strings")
         for dep in g.get("depends_on", []):
             if dep not in goals:
                 problems.append(f"{gid}: unknown dependency {dep}")
@@ -180,6 +198,8 @@ def validate(state):
             if not (isinstance(n, dict) and isinstance(n.get("id"), int) and n.get("kind") in NOTICE_KINDS
                     and n.get("summary") and isinstance(n.get("to"), dict)):
                 problems.append(f"malformed notice {n!r}")
+    if not is_str_list(state.get("dropped", [])):
+        problems.append("dropped must be a list of goal ids")
     return problems
 
 
@@ -564,6 +584,9 @@ def notify(state, kind, summary, gid, to, dry_run=False):
     if len(summary.strip().splitlines()) > NOTICE_MAX_LINES:
         raise OrchError(f"summary must be at most {NOTICE_MAX_LINES} lines")
     if to:
+        # a dropped goal is gone from goals but still worth a notice to the names given
+        if gid is not None and gid not in state["goals"] and gid not in state.get("dropped", []):
+            raise OrchError(f"unknown goal {gid}")
         for name in to:
             if name not in state["workers"]:
                 raise OrchError(f"{name} is not registered")
@@ -601,6 +624,7 @@ def noticed(state, name, nid):
 
 
 def pending_notices(state):
+    """A list with one entry per notice that some recipient hasn't acknowledged yet."""
     out = []
     for n in state.get("notices", []):
         pending = [k for k, v in n["to"].items() if not v["acked"]]
@@ -658,6 +682,10 @@ def drop_goal(state, gid):
     if dependents:
         raise OrchError(f"{', '.join(dependents)} depends on {gid}; change those first")
     del state["goals"][gid]
+    # worker history and notices may still name it; remember it so notify --goal still accepts it
+    dropped = state.setdefault("dropped", [])
+    if gid not in dropped:
+        dropped.append(gid)
     return {"dropped": gid}, [("user", "DROP", gid)]
 
 
@@ -692,6 +720,7 @@ def edit_goal(state, gid, raw):
     for key in ("title", "summary"):
         if key in raw and not str(raw[key] or "").strip():
             raise OrchError(f"{gid}: {key} cannot be empty")
+    check_str_lists(gid, raw)
     if "depends_on" in raw:
         deps = raw["depends_on"]
         if not isinstance(deps, list) or not all(isinstance(d, str) for d in deps):
@@ -729,14 +758,21 @@ def rename_worker(state, old, new):
 
 
 def liveness(state, live_csv):
+    """Mark each worker live or gone. Logs a LIVENESS event only when some worker's state
+    changed, so repeated checks don't push real events out of the status feed; main() still
+    saves live_checked either way (see QUIET_SAVE)."""
     alive = {n.strip() for n in live_csv.split(",") if n.strip()}
+    changed = False
     for name, w in state["workers"].items():
-        w["live"] = name in alive
+        live = name in alive
+        changed = changed or w.get("live") != live
+        w["live"] = live
     state["live_checked"] = now()
     live = [n for n, w in state["workers"].items() if w["live"]]
     gone = [n for n, w in state["workers"].items() if not w["live"]]
     with_goal = [n for n in gone if state["workers"][n]["current"]]
-    return {"live": live, "gone": gone, "gone_with_goal": with_goal}, [("manager", "LIVENESS", ",".join(gone) or "all-live")]
+    events = [("manager", "LIVENESS", ",".join(gone) or "all-live")] if changed else []
+    return {"live": live, "gone": gone, "gone_with_goal": with_goal}, events
 
 
 def cleanup(slug, delete, stop_server):
@@ -835,6 +871,10 @@ COMMANDS.update({
 })
 
 
+# Commands that save state even when they log no event.
+QUIET_SAVE = {"liveness"}
+
+
 # Free text, often from worker messages: (option, required). Each gets --<option> for short
 # fixed text and --<option>-file PATH (or - for stdin) so untrusted text never goes through
 # shell quoting.
@@ -916,7 +956,7 @@ def main(argv=None):
             with locked(a.slug):
                 state = load(a.slug)
                 out, events = COMMANDS[a.cmd](state, a)
-                if events:
+                if events or a.cmd in QUIET_SAVE:
                     problems = validate(state)
                     if problems:
                         raise OrchError("refusing to save invalid state: " + "; ".join(problems))
