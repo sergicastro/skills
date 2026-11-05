@@ -46,8 +46,8 @@ On Claude Code older than 2.1.275, add the marketplace first:
 - `skills/explain-interactive/diagram-recipes.md`: how to declare the shared diagram and pick its layout
 - `skills/explain-interactive/engine/`: the page shell, styles and script shared by every page (`page.html`, `engine.css`, `engine.js`), and the diagram layouts the build runs (`layout.mjs`)
 - `skills/explain-interactive/build.mjs`: checks a content file, inlines it into the engine and writes one offline HTML file, plus the `index.html` next to it (Node 22+, no dependencies)
-- `skills/explain-interactive/shots.mjs`: renders every step of a page in headless Chrome to `step-NN.png` for review (plus `step-NN-<option>.png` per what-if option and `-phone` variants, never two with the same name), and reports what it can measure (a step taller than the screen, overflow, tiny diagram text, console errors)
-- `skills/explain-interactive/cdp.mjs`: the small DevTools-protocol driver `shots.mjs` and the tests use
+- `skills/explain-interactive/shots.mjs`: renders every step of a page in headless Chrome to `step-NN.png` for review (plus `step-NN-<option>.png` per what-if option and `-phone` variants, never two with the same name), and reports what it can measure (a step taller than the screen, overflow, tiny diagram text, console errors, dialogs). With `-o` it only clears images it wrote there and refuses a folder holding other `step-*.png` files
+- `skills/explain-interactive/cdp.mjs`: the small DevTools-protocol driver `shots.mjs` and the tests use (finds Chrome, Chromium or Edge on macOS, Linux and Windows or on `PATH`; times out stuck calls and answers page dialogs)
 - `skills/explain-interactive/examples/`: one sample content file per page type (walkthrough, decision, before/after, debugging story, concept), and walkthroughs for each diagram layout, for what-if controls and for a wide diagram with quizzes (`dns-lookup`)
 - `test/`: `node --test plugins/explain-interactive/test/*.test.mjs` (the browser tests need Chrome or Chromium; set `CHROME=` to pick one)
 
