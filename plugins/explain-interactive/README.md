@@ -29,6 +29,48 @@ by step", or run `/explain-interactive <topic>`. The page is written to
 `~/explanations/<topic>.html` (with its source, `<topic>.content.js`, next to it) and opened in your browser. Nothing is published.
 `~/explanations/index.html` lists every page you have, newest first, with how far you read each one.
 
+## What a page does
+
+Every page gets these from the engine, whatever its content:
+
+- **Fits the viewport**: fixed top bar, sidebar and footer; only the step area scrolls. On wide
+  screens each step is two columns (text left, visual and code right); code wraps instead of being
+  clipped.
+- **Orientation**: every step shows "Step n of N" and slides in from the direction of travel; the
+  sidebar lists every step title (current, visited, and ✓ / ? quiz marks) under the big picture,
+  which also opens step 1. On phones the top bar shows the title and `n / N`, and the ☰ drawer holds
+  the steps, Glossary, Show all and the theme switch.
+- **Navigation**: Back / Next with a "Next: <title>" preview, ← / → keys, swipe on phones; each step
+  is a browser-history entry, and `#step-N` links to a step. On the last step Next becomes
+  "Finish ✓" and jumps to the finish panel (score, Start over, Review all steps, Open glossary).
+- **Page-type panels**: the decision matrix, line diff, hypothesis board and layer stack, each with
+  the same new / introduced / coming-later ghosting as the diagram.
+- **Shared diagram**: one `DIAGRAM`, laid out from a spec or written as SVG; per-step lighting,
+  ghosting of parts not yet introduced, a legend, staged reveals, arrowheads that follow the theme.
+  Parts named in the glossary show their entry on click or Tab + Enter.
+- **What-if controls**: a native radio group or range input, so Tab, the arrow keys and screen
+  readers work as on any form; the picked outcome is announced and remembered.
+- **Quizzes**: options shuffled in an order that is stable across reloads, one retry with
+  option-specific hints before the answer is revealed; results show in the sidebar and the Recap.
+- **Still confused here**: a box under every step that builds a prompt to paste back into Claude
+  (page title, step, its text and terms, a missed check, and what the reader typed). Nothing is
+  sent anywhere, and the prompt holds no file path. Hidden when printing.
+- **Progress** per page (localStorage): visited steps, quiz answers, what-if picks, last step.
+- **Short / full**: a Short switch skips the background steps and the Context card's setting, why
+  and prereqs, renumbers what is left, and is remembered across pages. Shown only when a page has
+  something to skip.
+- **Glossary**: `<dfn>` tooltips (kept on-screen) that look up both the Who's who (`CAST`) and the
+  glossary, plus a Glossary drawer that lists the Who's who first.
+- **Index page**: every build rewrites `index.html` next to the page, listing every explainer in
+  that folder with its big picture, type, step count, date and reading progress, with a filter box.
+- "Show all" for skimming or printing; the sidebar and counter follow the scroll position.
+- **Accessibility**: step changes, reveals and quiz explanations are announced to screen readers;
+  `aria-current` marks the current step; drawers are dialogs that take focus, return it on close,
+  close on Esc and block ← / → while open; ← / → scroll a wide diagram instead of changing step;
+  reduced motion is respected.
+- **Light and dark**: follows the system setting; the ☀ / ☾ button switches and is remembered.
+  Diagrams scroll sideways on phones rather than shrinking to unreadable text.
+
 ## Install
 
 In Claude Code:
@@ -42,7 +84,8 @@ On Claude Code older than 2.1.275, add the marketplace first:
 
 ## Layout
 
-- `skills/explain-interactive/SKILL.md`: the workflow and the data format for each step
+- `skills/explain-interactive/SKILL.md`: the workflow, the page types and the rules every page follows
+- `skills/explain-interactive/references/`: what Claude reads only when a page needs it: the content-file format and `--check` messages (`content-file.md`), what-if controls (`whatif.md`), and one file per page type (`decision.md`, `before-after.md`, `debugging.md`, `concept.md`)
 - `skills/explain-interactive/diagram-recipes.md`: how to declare the shared diagram and pick its layout
 - `skills/explain-interactive/engine/`: the page shell, styles and script shared by every page (`page.html`, `engine.css`, `engine.js`), and the diagram layouts the build runs (`layout.mjs`)
 - `skills/explain-interactive/build.mjs`: checks a content file, inlines it into the engine and writes one offline HTML file, plus the `index.html` next to it (Node 22+, no dependencies)

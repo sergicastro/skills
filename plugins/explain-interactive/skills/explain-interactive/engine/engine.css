@@ -83,7 +83,7 @@ mark { color: inherit; background: var(--hl-soft); box-shadow: inset 0 -2px var(
 
 .visual { padding: 18px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); overflow-x: auto; }
 .visual svg { display: block; width: 100%; height: auto; max-height: 52vh; margin: 0 auto; }
-/* ---- Diagram kit (documented in SKILL.md / diagram-recipes.md) ----
+/* ---- Diagram kit (documented in references/content-file.md / diagram-recipes.md) ----
    shapes: .box .arrow .zone .lifeline   text: .label (edge/arrow labels, 14px) on an optional .label-bg
    state:  .hl new this step · .dim not introduced yet / de-emphasised · .hidden gone · .bad / .ok rejected / accepted
    motion: .flow animates direction of travel · [data-b="n"] appears on the n-th "Reveal" click (see `build`) */
