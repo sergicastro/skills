@@ -47,7 +47,7 @@ user types (a send-back reason) and to notices you draft. The inline `--notes`, 
    not a go-ahead for a plan they haven't seen; present it anyway, briefly.
 4. **State changes go through `$ORCH`.** Never edit state.json, status.md, status.html or events.log by hand.
    If `$ORCH` returns `{"error": ...}`, don't work around it: report it (to the worker as
-   ERROR, or to the user).
+   ERROR, or to the user). Run `$ORCH` calls one at a time, never as parallel tool calls.
 5. **Stay lean.** No reading code, building, testing or editing in this session. Ask workers
    for short handoff notes. Look details up with `$ORCH get` / `$ORCH show` instead of
    repeating them in conversation.
@@ -137,7 +137,7 @@ that name, formatted per `protocol.md`. If `$ORCH` returns an error, reply
 
 Several messages can arrive in one turn: one as the prompt, others as "sent a message
 while you were working". Handle every `[orch v1` message of the turn, oldest first, each with
-its own `$ORCH` call and reply. Before ending the turn, check that each REQUEST got exactly one
+its own `$ORCH` call and reply, one message after another. Before ending the turn, check that each REQUEST got exactly one
 ASSIGN or NONE_READY. If a worker says a message went unanswered, check `events.log`, answer it
 now, and don't guess at a cause.
 

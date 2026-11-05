@@ -9,10 +9,10 @@ import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
 import { build, extract } from "../skills/explain-interactive/build.mjs";
-import { findChrome, launch } from "../skills/explain-interactive/cdp.mjs";
+import { launch } from "../skills/explain-interactive/cdp.mjs";
+import { skip } from "./chrome.mjs";
 
 const SKILL = join(dirname(fileURLToPath(import.meta.url)), "../skills/explain-interactive");
-const skip = findChrome() ? false : "no Chrome/Chromium found (set CHROME=…)";
 
 const tmp = mkdtempSync(join(tmpdir(), "explain-page-"));
 let browser, send, js, open, problems = [], requests = [];

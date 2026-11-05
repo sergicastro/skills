@@ -9,7 +9,9 @@ Every command prints one JSON object to stdout and exits 0, except `show`, which
 prints status.md. A rejected operation prints {"error": "..."} and exits 2.
 """
 import argparse
+import contextlib
 import datetime
+import fcntl
 import json
 import os
 import re
@@ -193,6 +195,18 @@ def load(slug):
     if problems:
         raise OrchError("state.json failed validation: " + "; ".join(problems))
     return state
+
+
+@contextlib.contextmanager
+def locked(slug):
+    """Hold <slug>/.lock exclusively, so concurrent calls run load-change-save one at a time."""
+    d = state_dir(slug)
+    if not d.is_dir():
+        yield  # nothing to lock; load() reports the missing orchestration
+        return
+    with open(d / ".lock", "a") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)  # released when the file closes
+        yield
 
 
 def write_atomic(path, text):
@@ -866,14 +880,15 @@ def main(argv=None):
             sys.stdout.write(orch_view.render_md(view_model(load(a.slug), [])))
             return 0
         else:
-            resolve_text(a.cmd, a)
-            state = load(a.slug)
-            out, events = COMMANDS[a.cmd](state, a)
-            if events:
-                problems = validate(state)
-                if problems:
-                    raise OrchError("refusing to save invalid state: " + "; ".join(problems))
-                save(a.slug, state, events)
+            resolve_text(a.cmd, a)  # read files/stdin before taking the lock
+            with locked(a.slug):
+                state = load(a.slug)
+                out, events = COMMANDS[a.cmd](state, a)
+                if events:
+                    problems = validate(state)
+                    if problems:
+                        raise OrchError("refusing to save invalid state: " + "; ".join(problems))
+                    save(a.slug, state, events)
     except (OrchError, json.JSONDecodeError, KeyError, TypeError, AttributeError, OSError) as e:
         print(json.dumps({"error": str(e)}))
         return 2

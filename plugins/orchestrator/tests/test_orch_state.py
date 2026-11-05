@@ -3,6 +3,7 @@ import io
 import json
 from unittest import mock
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -392,6 +393,29 @@ class WorkerTests(Base):
         self.assertIn("g1: prs must be a list of strings", orch_state.validate(state))
         state["goals"]["g1"]["prs"] = ["https://example.com/pull/1"]
         self.assertEqual(orch_state.validate(state), [])
+
+
+class ConcurrencyTests(Base):
+    SCRIPT = Path(__file__).resolve().parents[1] / "skills" / "orchestrator" / "scripts" / "orch_state.py"
+
+    def test_concurrent_requests_assign_each_goal_at_most_once(self):
+        goals = {f"g{i}": {"title": f"Goal {i}", "summary": "work", "depends_on": []} for i in range(6)}
+        self.init(plan(goals))
+        workers = [f"demo-w-{i}" for i in range(16)]
+        for w in workers:
+            self.run_cli("register", "demo", w)
+        procs = [subprocess.Popen([sys.executable, str(self.SCRIPT), "request", "demo", w],
+                                  stdout=subprocess.PIPE, text=True) for w in workers]
+        outs = {w: json.loads(p.communicate()[0]) for w, p in zip(workers, procs)}
+        assigned = {w: o["assigned"] for w, o in outs.items() if "assigned" in o}
+        self.assertEqual(sorted(assigned.values()), sorted(goals), outs)
+        self.assertEqual(sum("none_ready" in o for o in outs.values()), len(workers) - len(goals), outs)
+        state = self.state()
+        for w, gid in assigned.items():
+            self.assertEqual(state["goals"][gid]["worker"], w)
+            self.assertEqual(state["workers"][w]["current"], gid)
+        log = (Path(self.tmp.name) / "demo" / "events.log").read_text()
+        self.assertEqual(log.count(" ASSIGN "), len(goals))
 
 
 class UserTests(Base):
