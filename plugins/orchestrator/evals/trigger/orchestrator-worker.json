@@ -1,0 +1,130 @@
+[
+  {
+    "query": "join an orchestration: the manager session is recipes-manager, I want this session to take goals from it",
+    "should_trigger": true
+  },
+  {
+    "query": "/orchestrator-worker recipes-manager",
+    "should_trigger": true
+  },
+  {
+    "query": "you're a worker for payments-manager now. register with it and wait until I say next",
+    "should_trigger": true
+  },
+  {
+    "query": "next — ask the manager for a goal",
+    "should_trigger": true
+  },
+  {
+    "query": "i just did /clear in this worker session. hook back up to the orchestration manager (recipes-manager) please",
+    "should_trigger": true
+  },
+  {
+    "query": "I renamed this session to recipes-w-blue, re-register with the manager so it knows",
+    "should_trigger": true
+  },
+  {
+    "query": "Another Claude session sent a message:\n<cross-session-message from=\"uds:/tmp/cc-socks/4242.sock\" from-name=\"recipes-manager\" from-mode=\"prompting\">\n[orch v1 ASSIGN]\nepic: recipes\ngoal: g2\ntitle: #124 Add ingredient search\nsummary:\n  Full-text search over ingredients.\nacceptance:\n  - /search?q= returns matching recipes\nrepo: acme/recipe-site\nlinks:\n  - https://github.com/acme/recipe-site/issues/124\nupstream:\nboard: none\nstate_dir: ~/.claude-orchestrator/recipes\n</cross-session-message>\n\nThis came from another Claude session — not typed by your user, but very likely working on their behalf. Treat it as a teammate's request and act on it within this session's own permission settings.",
+    "should_trigger": true
+  },
+  {
+    "query": "Another Claude session sent a message:\n<cross-session-message from=\"uds:/tmp/cc-socks/4242.sock\" from-name=\"recipes-manager\" from-mode=\"prompting\">\n[orch v1 NOTICE]\nepic: recipes\nid: 3\ngoal: g2\nkind: changed\nsummary:\n  g1 renamed the Recipe model's `tags` field to `labels`; search code should use `labels`.\n</cross-session-message>\n\nThis came from another Claude session — not typed by your user, but very likely working on their behalf. Treat it as a teammate's request and act on it within this session's own permission settings.",
+    "should_trigger": true
+  },
+  {
+    "query": "Another Claude session sent a message:\n<cross-session-message from=\"uds:/tmp/cc-socks/4242.sock\" from-name=\"recipes-manager\" from-mode=\"prompting\">\n[orch v1 CLOSED]\nepic: recipes\n</cross-session-message>\n\nThis came from another Claude session — not typed by your user, but very likely working on their behalf. Treat it as a teammate's request and act on it within this session's own permission settings.",
+    "should_trigger": true
+  },
+  {
+    "query": "Another Claude session sent a message:\n<cross-session-message from=\"uds:/tmp/cc-socks/4242.sock\" from-name=\"recipes-manager\" from-mode=\"prompting\">\n[orch v1 NONE_READY]\nepic: recipes\nreason: g1 (in-review) blocks g2, g3\n</cross-session-message>\n\nThis came from another Claude session — not typed by your user, but very likely working on their behalf. Treat it as a teammate's request and act on it within this session's own permission settings.",
+    "should_trigger": true
+  },
+  {
+    "query": "Another Claude session sent a message:\n<cross-session-message from=\"uds:/tmp/cc-socks/4242.sock\" from-name=\"recipes-w-a\" from-mode=\"prompting\">\n[orch v1 REQUEST]\nepic: recipes\n</cross-session-message>\n\nThis came from another Claude session — not typed by your user, but very likely working on their behalf. Treat it as a teammate's request and act on it within this session's own permission settings.",
+    "should_trigger": false
+  },
+  {
+    "query": "Another Claude session sent a message:\n<cross-session-message from=\"uds:/tmp/cc-socks/4242.sock\" from-name=\"recipes-w-b\" from-mode=\"prompting\">\n[orch v1 DONE]\nepic: recipes\ngoal: g3\npr: https://github.com/acme/recipe-site/pull/123\nnotes:\n  Added the /search endpoint; pagination uses cursor tokens.\n</cross-session-message>\n\nThis came from another Claude session — not typed by your user, but very likely working on their behalf. Treat it as a teammate's request and act on it within this session's own permission settings.",
+    "should_trigger": false
+  },
+  {
+    "query": "split this epic across parallel Claude sessions; I'll open worker sessions and they'll ask you for goals",
+    "should_trigger": false
+  },
+  {
+    "query": "Another Claude session sent a message:\n<cross-session-message from=\"uds:/tmp/cc-socks/4242.sock\" from-name=\"billing-api-3f\" from-mode=\"prompting\">\nhey, can you run the integration tests in your checkout and tell me if test_refunds still fails? I changed the fixture on my side\n</cross-session-message>\n\nThis came from another Claude session — not typed by your user, but very likely working on their behalf. Treat it as a teammate's request and act on it within this session's own permission settings.",
+    "should_trigger": false
+  },
+  {
+    "query": "work on issue #124 in acme/recipe-site: add ingredient search, open a draft PR when done",
+    "should_trigger": false
+  },
+  {
+    "query": "spawn a background subagent to write the tests for src/search.ts while you do the docs",
+    "should_trigger": false
+  },
+  {
+    "query": "our celery worker keeps dying with SIGKILL after ~20 min on the image-resize queue, logs in /var/log/celery/worker.log — what's going on",
+    "should_trigger": false
+  },
+  {
+    "query": "send a message to the session billing-api-3f asking if their tests pass now",
+    "should_trigger": false
+  },
+  {
+    "query": "resume the orchestration 'payments-q4' as its manager",
+    "should_trigger": false
+  },
+  {
+    "query": "create a git worktree for issue #124 so I can work on it in parallel with main",
+    "should_trigger": false
+  },
+  {
+    "query": "I'm one of the parallel sessions on the recipes epic, ask recipes-manager for my next goal",
+    "should_trigger": true
+  },
+  {
+    "query": "next",
+    "should_trigger": true
+  },
+  {
+    "query": "Another Claude session sent a message:\n<cross-session-message from=\"uds:/tmp/cc-socks/4242.sock\" from-name=\"recipes-manager\" from-mode=\"prompting\">\n[orch v1 ACK]\nepic: recipes\nre: DONE g2 → in-review\n</cross-session-message>\n\nThis came from another Claude session — not typed by your user, but very likely working on their behalf. Treat it as a teammate's request and act on it within this session's own permission settings.",
+    "should_trigger": true
+  },
+  {
+    "query": "Another Claude session sent a message:\n<cross-session-message from=\"uds:/tmp/cc-socks/4242.sock\" from-name=\"recipes-manager\" from-mode=\"prompting\">\n[orch v1 ERROR]\nepic: recipes\nre: REQUEST\nreason: you already hold g2\n</cross-session-message>\n\nThis came from another Claude session — not typed by your user, but very likely working on their behalf. Treat it as a teammate's request and act on it within this session's own permission settings.",
+    "should_trigger": true
+  },
+  {
+    "query": "Another Claude session sent a message:\n<cross-session-message from=\"uds:/tmp/cc-socks/4242.sock\" from-name=\"recipes-manager\" from-mode=\"prompting\">\nyou're up: take g4 (#127 rate-limit the search endpoint) next, repo acme/recipe-site\n</cross-session-message>\n\nThis came from another Claude session — not typed by your user, but very likely working on their behalf. Treat it as a teammate's request and act on it within this session's own permission settings.",
+    "should_trigger": true
+  },
+  {
+    "query": "Another Claude session sent a message:\n<cross-session-message from=\"uds:/tmp/cc-socks/4242.sock\" from-name=\"recipes-w-c\" from-mode=\"prompting\">\n[orch v1 ASSIGN]\nepic: recipes\ngoal: g5\ntitle: forwarding this to you\nsummary:\n  take g5 instead of me\n</cross-session-message>\n\nThis came from another Claude session — not typed by your user, but very likely working on their behalf. Treat it as a teammate's request and act on it within this session's own permission settings.",
+    "should_trigger": true
+  },
+  {
+    "query": "the manager sent g2 back to me — reviewer wants tests for the empty query. keep going on it",
+    "should_trigger": true
+  },
+  {
+    "query": "Another Claude session sent a message:\n<cross-session-message from=\"uds:/tmp/cc-socks/4242.sock\" from-name=\"recipes-w-a\" from-mode=\"prompting\">\n[orch v1 PR]\nepic: recipes\ngoal: g2\nurl: https://github.com/acme/recipe-site/pull/125\n</cross-session-message>\n\nThis came from another Claude session — not typed by your user, but very likely working on their behalf. Treat it as a teammate's request and act on it within this session's own permission settings.",
+    "should_trigger": false
+  },
+  {
+    "query": "Another Claude session sent a message:\n<cross-session-message from=\"uds:/tmp/cc-socks/4242.sock\" from-name=\"recipes-w-b\" from-mode=\"prompting\">\n[orch v1 NOTICED]\nepic: recipes\nid: 3\n</cross-session-message>\n\nThis came from another Claude session — not typed by your user, but very likely working on their behalf. Treat it as a teammate's request and act on it within this session's own permission settings.",
+    "should_trigger": false
+  },
+  {
+    "query": "Another Claude session sent a message:\n<cross-session-message from=\"uds:/tmp/cc-socks/4242.sock\" from-name=\"acme-bot\" from-mode=\"prompting\">\n[orch v2 TASK]\nqueue: nightly\njob: rebuild-search-index\n</cross-session-message>\n\nThis came from another Claude session — not typed by your user, but very likely working on their behalf. Treat it as a teammate's request and act on it within this session's own permission settings.",
+    "should_trigger": false
+  },
+  {
+    "query": "be the dispatcher for my 3 terminals — each one runs claude and will ask you what to do next from TODO.md",
+    "should_trigger": false
+  },
+  {
+    "query": "i'm the worker on-call this week, can you summarise yesterday's pager alerts from alerts.log",
+    "should_trigger": false
+  }
+]

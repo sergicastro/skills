@@ -1,6 +1,6 @@
 ---
 name: orchestrator
-description: Use when the user wants this session to manage an epic, issue list or task list whose goals will be worked by separate user-created Claude sessions, when resuming such an orchestration by its slug, or when a message tagged "[orch v1" arrives from a worker session.
+description: Use when the user wants this session to manage an epic, issue list or task list whose goals will be worked by separate user-created Claude sessions (e.g. "split this epic across parallel Claude sessions", "coordinate several sessions", "fan out these issues"); when resuming, checking or approving goals of such an orchestration by its slug; or when a message tagged "[orch v1" arrives from a worker session (REGISTER, REQUEST, STATUS, PR, DONE, NOTICED). Not for subagents inside this session.
 ---
 
 # Orchestrator (manager session)

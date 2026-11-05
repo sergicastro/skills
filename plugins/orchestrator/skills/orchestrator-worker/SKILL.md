@@ -1,6 +1,6 @@
 ---
 name: orchestrator-worker
-description: Use when the user asks this session to work as a worker for an orchestrator (manager) session, or when a message tagged "[orch v1" arrives from a manager session.
+description: Use when the user asks this session to join an orchestration or work as a worker for an orchestrator (manager) session (e.g. "join an orchestration", "/orchestrator-worker <manager>", re-registering after /clear or a rename, "next" to get a goal), or when a message tagged "[orch v1" arrives from a manager session (ASSIGN, NONE_READY, ACK, ERROR, NOTICE, CLOSED).
 ---
 
 # Orchestrator worker
