@@ -190,7 +190,7 @@ def graph_svg(vm):
         x1, y1, y2 = x1 + NODE_W, y1 + NODE_H / 2, y2 + NODE_H / 2
         mid = (x1 + x2) / 2
         cls = "edge met" if e["met"] else "edge waiting"
-        edges.append(f'<path class="{cls}" d="M{x1:g},{y1:g} C{mid:g},{y1:g} {mid:g},{y2:g} {x2 - 2:g},{y2:g}" marker-end="url(#arrow)"/>')
+        edges.append(f'<path class="{cls}" data-from="{esc(e["from"])}" data-to="{esc(e["to"])}" d="M{x1:g},{y1:g} C{mid:g},{y1:g} {mid:g},{y2:g} {x2 - 2:g},{y2:g}" marker-end="url(#arrow)"/>')
     nodes = []
     for g in goals:
         x, y = pos[g["id"]]

@@ -1326,6 +1326,26 @@ class HtmlTests(Base):
         self.assertEqual(main.count('class="edge waiting"'), 4)
         self.assertIn('<a href="#goal-g4" class="node s-blocked" data-goal="g4" data-status="blocked">', main)
 
+    def test_edges_name_their_ends_for_hover_highlight(self):
+        main = self.main()
+        for dep, gid in (("g1", "g2"), ("g1", "g3"), ("g2", "g4"), ("g3", "g4")):
+            self.assertIn(f'data-from="{dep}" data-to="{gid}"', main)
+
+    def test_edge_ends_are_escaped(self):
+        main = self.main(plan({"a&b": {"title": "x", "summary": "x", "depends_on": []},
+                               "c": {"title": "y", "summary": "y", "depends_on": ["a&b"]}}))
+        self.assertIn('data-from="a&amp;b" data-to="c"', main)
+
+    def test_page_highlights_relations_on_hover(self):
+        page = self.page()
+        self.assertIn(".graph.hovering .node", page)
+        self.assertIn(".graph.hovering .related", page)
+        self.assertIn('addEventListener("mouseover"', page)
+        self.assertIn('addEventListener("focusin"', page)
+        # the highlight is re-applied after a live refresh replaces <main>
+        start = page.index("function swap")
+        self.assertIn("highlight()", page[start:page.index("}\n", start)])
+
     def test_problems_banner(self):
         main = self.main(problems=["g1: invalid status weird"])
         self.assertIn('class="banner"', main)

@@ -203,6 +203,12 @@ restart it (`orch_state.py serve --stop`, then `--ensure`). `status.md` and the 
 
 ![Epic page: dependency graph, goals, workers and recent events, with PRs gaining health bullets](docs/images/status-pr-bullets.gif)
 
+Hover or tab to a goal in the dependency graph to see what it depends on and what depends
+on it, all the way up and down the chain; the rest of the graph is dimmed. The highlight
+stays through live updates.
+
+![Dependency graph with the api goal hovered: its upstream and downstream goals stay lit, the rest is dimmed](docs/images/status-graph-hover.png)
+
 <details>
 <summary>Dark mode and the index page</summary>
 
