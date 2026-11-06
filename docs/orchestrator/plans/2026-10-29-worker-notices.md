@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3 stdlib + `unittest` (helper and tests), Markdown (skills, protocol, pressure scenarios).
 
-**Spec:** `plugins/orchestrator/docs/specs/2026-10-29-worker-notices-design.md`
+**Spec:** `docs/orchestrator/specs/2026-10-29-worker-notices-design.md`
 
 ## Global Constraints
 

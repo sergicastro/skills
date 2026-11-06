@@ -32,7 +32,8 @@ the [Releases](https://github.com/sergicastro/skills/releases) page.
 ## Layout
 
 - `.claude-plugin/marketplace.json`: the list of plugins
-- `plugins/<name>/`: one plugin, with its own `.claude-plugin/plugin.json`, `skills/`, tests and docs
+- `plugins/<name>/`: one plugin, with its own `.claude-plugin/plugin.json`, `skills/` and tests
+- `docs/<name>/`: maintainer docs for a plugin (design specs, plans, README images); not installed with the plugin
 
 To add a plugin, create `plugins/<name>/` with its manifest and skills, list it in
 `marketplace.json`, and run `claude plugin validate .`. Keep each plugin self-contained:

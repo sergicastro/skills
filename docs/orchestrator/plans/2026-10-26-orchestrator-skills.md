@@ -8,7 +8,7 @@
 
 **Tech Stack:** Markdown skills (Claude Code `SKILL.md` format), Python 3 stdlib (`argparse`, `json`, `unittest`), `gh` CLI for the optional GitHub parts.
 
-**Spec:** `docs/specs/2026-10-26-orchestrator-design.md`. Read it before any task.
+**Spec:** `docs/orchestrator/specs/2026-10-26-orchestrator-design.md`. Read it before any task.
 
 ## Global Constraints
 
