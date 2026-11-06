@@ -30,9 +30,36 @@ Every case has:
 - `page-type` (regex on the content file): `META.type` is the type the request calls for; for the
   walkthrough, no other type is set.
 - `context-first-recap-last` (`llm`): step 1 has a `context` card, the last step is the Recap.
-- `names-covered` (`llm`): every project-specific name used on the page is in `CAST`/`GLOSSARY`,
-  and every `<dfn>` has an entry.
+- `name-*` (regex on the content file, one per name): each project-specific name the case's
+  `prompt.md` quotes has a `CAST` or `GLOSSARY` entry if the page uses it. See below.
 - `reply-gives-path` (regex on the final reply): it names an `explanations/<topic>.html` path.
+
+### Name graders
+
+These replace `names-covered`, an `llm` grader whose votes split on near-identical pages (4 of 15
+runs failed on each side of the #46 comparison). Each case has a hand-written list of the names its
+prompt quotes, one `name-<slug>.md` per name. A grader passes when the name never appears in the
+content file, or appears as a key inside the `CAST` or `GLOSSARY` object: so a name the page uses
+without an entry fails. A mention in a body, or a key in another object (`DECISION`, a diagram)
+doesn't count.
+
+- Patterns allow optional quotes around the key, an optional `()`, and any case (`flags: i`;
+  the regex grader's `flags` field takes JS RegExp flags, checked on Claude Code 2.1.319). `PATH` and `TZ` leave out `i`, since `path` is an
+  ordinary word.
+- Each name grader has `weight` 1/N, so a case's names together weigh 1, as the one judge did. A
+  run's score is the passed weight over the total weight, and every other grader weighs 1; at the
+  default weight, ten names would outweigh the rest of the case.
+- A few names accept a broader key where the page explains the name through it: `acme/` may be
+  dropped from a repo, `request.state` covers `request.state.user`, a table may be `jobs` or
+  `jobs table`.
+- Known limits: names a page brings in beyond the prompt aren't checked, and a key spelled outside
+  the allowed variants fails a fine page. A name explained only in a `LAYERS` item or a step body
+  still fails: the rule is a `CAST`/`GLOSSARY` entry, which is what the page's tooltips read. The `<dfn>` half of the old rule is left to `--check`,
+  which warns about a `<dfn>` with no entry; the skill has the session fix every warning.
+- **Upkeep: when a case's `prompt.md` changes, change its `name-*` list to match.**
+  `test/eval-graders.test.mjs` runs every name grader on a saved good content file per case
+  (`test/fixtures/evals/`) and checks it fails once its entry is removed; refresh the fixture when
+  the prompt changes.
 
 ### Why the prompts end with a harness note
 
@@ -99,6 +126,25 @@ the skill before #46 (plugin 0.2.1) and after it.
   a rerun of `decision`: the judge's votes split on near-identical pages, so read it as noise.
 - The one other fail: a `decision` run whose final reply named no path. A rerun of `decision`
   (3 runs, $3.38) had the path in every reply.
+
+## Name graders (first run)
+
+2026-11-06, Claude Code 2.1.319, default model, `--runs 1 -j 5 --ablation none`, plugin 0.3.0 with
+the `name-*` graders in place of `names-covered`. Total cost $4.81.
+
+| Case | Score | Names without an entry |
+|---|---|---|
+| before-after | 1.00 | none (`request.state.user` covered by a `request.state` entry) |
+| concept | 0.96 | `bin/python`; `requirements.txt` (a `LAYERS` item only) |
+| debugging | 1.00 | none |
+| decision | 1.00 | none |
+| walkthrough-whatif | 0.98 | `POST /payments` (named inside other entries only) |
+
+- The harness accepted `flags` and `weight`. A missed name costs 1/N of the names' weight of 1:
+  concept missed 2 of its 7 names, so (6 + 5/7) / 7 = 0.96.
+- Scores are from the final patterns re-run on the saved pages; before-after first scored 0.99,
+  until `request.state` was accepted as a variant. The saved pages, with the three missing entries
+  added, are the fixtures in `test/fixtures/evals/`.
 
 ## Triggering (#49)
 

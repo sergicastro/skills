@@ -1,0 +1,9 @@
+---
+type: regex
+pattern: '^(?![\s\S]*(?:/payments))|(?:CAST|GLOSSARY)\s*=\s*\{(?:(?!\n\})[\s\S])*?(?<=[{,\n][\t ]*)["''`]?(?:(?:POST\s+)?/payments)(?:\(\))?["''`]?\s*:'
+flags: i
+weight: 0.2
+target:
+  source: file
+  path: out/page.content.js
+---

@@ -1,0 +1,9 @@
+---
+type: regex
+pattern: '^(?![\s\S]*(?:require_user))|(?:CAST|GLOSSARY)\s*=\s*\{(?:(?!\n\})[\s\S])*?(?<=[{,\n][\t ]*)["''`]?(?:require_user)(?:\(\))?["''`]?\s*:'
+flags: i
+weight: 0.1
+target:
+  source: file
+  path: out/page.content.js
+---
