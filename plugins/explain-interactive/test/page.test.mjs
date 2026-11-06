@@ -2,7 +2,7 @@
 // Skipped when no Chrome/Chromium is found; set CHROME=/path/to/chrome to choose one.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, readFileSync, rmSync, realpathSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, readdirSync, rmSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname, extname, relative, resolve, sep } from "node:path";
 import { createServer } from "node:http";
@@ -642,6 +642,84 @@ test("palettes: the computed colours follow the OS scheme, the forced mode and t
   } finally {
     await send("Emulation.setEmulatedMedia", { features: [] });
   }
+});
+
+// Today's look, read from the page built before palettes set fonts, corners and borders (1.5px borders show as 1px)
+const DEFAULT_LOOK = {
+  "body": `system-ui, -apple-system, "Segoe UI", sans-serif | 16px | 25.6px`, "h2": `system-ui, -apple-system, "Segoe UI", sans-serif`,
+  "tbtn": "8px | 1px", "top": "1px", "side": "1px", "bigpic": "8px | 3px", "outline-btn": "8px", "outline-n": "1px | 50%",
+  "visual": "12px | 1px", "quiz": "12px | 1px", "quiz-btn": "8px | 1px", "ctx": "12px | 1px", "analogy": "10px",
+  "nav": "10px | 1px", "foot": "1px", "kbd": "4px | 1px | ui-monospace, monospace", "legend-i": "3px | 1px",
+  "code": "4px | ui-monospace, SFMono-Regular, Menlo, monospace", "x": "8px | 1px",
+  "svg-text": "16px", "svg-label": "14px", "svg-box": "8px | 2.5px", "svg-label-bg": "3px", "svg-arrow": "2.5px",
+};
+const LOOK = `(() => {
+  const out = {};
+  const pick = (name, sel, props) => { const el = document.querySelector(sel); if (!el) return; const s = getComputedStyle(el); out[name] = props.map(p => s[p]).join(" | "); };
+  pick("body", "body", ["fontFamily", "fontSize", "lineHeight"]); pick("h2", ".step.active h2", ["fontFamily"]);
+  pick("tbtn", ".top .tbtn", ["borderTopLeftRadius", "borderTopWidth"]); pick("top", ".top", ["borderBottomWidth"]);
+  pick("side", ".side", ["borderRightWidth"]); pick("bigpic", ".bigpic", ["borderTopRightRadius", "borderLeftWidth"]);
+  pick("outline-btn", ".outline button", ["borderTopLeftRadius"]); pick("outline-n", ".outline .n", ["borderTopWidth", "borderTopLeftRadius"]);
+  pick("visual", ".step.active .visual", ["borderTopLeftRadius", "borderTopWidth"]); pick("quiz", ".quiz", ["borderTopLeftRadius", "borderTopWidth"]);
+  pick("quiz-btn", ".quiz button", ["borderTopLeftRadius", "borderTopWidth"]); pick("ctx", ".ctx", ["borderTopLeftRadius", "borderTopWidth"]);
+  pick("analogy", ".analogy", ["borderTopLeftRadius"]); pick("nav", ".foot .nav", ["borderTopLeftRadius", "borderTopWidth"]);
+  pick("foot", ".foot", ["borderTopWidth"]); pick("kbd", ".foot kbd", ["borderTopLeftRadius", "borderTopWidth", "fontFamily"]);
+  pick("legend-i", ".legend i", ["borderTopLeftRadius", "borderTopWidth"]); pick("code", ":not(pre) > code", ["borderTopLeftRadius", "fontFamily"]);
+  pick("x", ".x", ["borderTopLeftRadius", "borderTopWidth"]);
+  pick("svg-text", ".step.active .visual svg text", ["fontSize"]); pick("svg-label", ".step.active .visual svg text.label", ["fontSize"]);
+  pick("svg-box", ".step.active .visual svg .box", ["rx", "strokeWidth"]); pick("svg-label-bg", ".step.active .visual svg .label-bg", ["rx"]);
+  pick("svg-arrow", ".step.active .visual svg .arrow", ["strokeWidth"]);
+  return out;
+})()`;
+
+test("palette styles: Default keeps today's fonts, corners and borders; the others change them", { skip }, async () => {
+  const page = join(tmp, "styles.html");
+  writeFileSync(page, build(readFileSync(join(SKILL, "examples/token-401.content.js"), "utf8")).html);
+  await open(page);
+  await js(`localStorage.clear()`); await open(page);
+  await js(`document.querySelector("#next").click()`);   // step 2: a diagram with a highlighted part and an edge label
+  assert.deepEqual(await js(LOOK), DEFAULT_LOOK);
+  const pick = id => js(`(s => { s.value = "${id}"; s.dispatchEvent(new Event("change", { bubbles: true })); })(document.querySelector("#palette"))`);
+  const style = id => PALETTES.find(p => p.id === id).style;
+  for (const id of ["paper", "terminal", "soft"]) {
+    await pick(id);
+    const look = await js(LOOK);
+    const family = { sans: /system-ui/, serif: /ui-serif/, mono: /ui-monospace/ }[style(id).font];
+    assert.match(look.body, family, `${id}: body font`);
+    assert.equal(look.visual, `${12 * style(id).radius}px | ${Math.floor(style(id).border)}px`, `${id}: card corner and border`);
+    assert.equal(look["svg-box"].split(" | ")[0], `${8 * style(id).radius}px`, `${id}: diagram box corners`);
+  }
+  await pick("default");
+  assert.deepEqual(await js(LOOK), DEFAULT_LOOK, "back to default");
+  await js(`localStorage.clear()`);
+});
+
+test("palette styles: diagram labels fit their boxes in every palette and mode", { skip }, async () => {
+  // Every example with a spec diagram (laid out by build.mjs for a system sans), in every palette's font
+  const examples = readdirSync(join(SKILL, "examples")).filter(f => /layout:/.test(readFileSync(join(SKILL, "examples", f), "utf8")));
+  assert.ok(examples.length >= 4, examples.join());
+  const overflow = `[...document.querySelectorAll(".visual svg text")].flatMap(t => {
+    const r = t.previousElementSibling;
+    if (!r || !r.matches("rect.box, rect.label-bg")) return [];
+    const w = t.getComputedTextLength(), room = r.width.baseVal.value;
+    return w > room - 2 ? [\`"\${t.textContent}" is \${w.toFixed(1)}px in a \${room}px \${r.getAttribute("class")}\`] : [];
+  })`;
+  const fails = [];
+  try {
+    for (const f of examples) {
+      const page = join(tmp, "fit-" + f.replace(/\.content\.js$/, ".html"));
+      writeFileSync(page, build(readFileSync(join(SKILL, "examples", f), "utf8")).html);
+      for (const p of PALETTES) for (const theme of ["light", "dark"]) {
+        await open(page);
+        await js(`localStorage.clear(); localStorage.setItem("explain-theme", "${theme}"); ${p.id === "default" ? "" : `localStorage.setItem("explain-palette", "${p.id}");`}`);
+        await open(page);
+        await js(`document.querySelector('[data-act="all"]').click()`);   // every step's diagram on screen, so it can be measured
+        assert.equal(await js(`document.documentElement.dataset.palette || "default"`), p.id);
+        (await js(overflow)).forEach(m => fails.push(`${f} ${p.id} ${theme}: ${m}`));
+      }
+    }
+  } finally { await js(`localStorage.clear()`); }
+  assert.deepEqual(fails, [], "\n" + fails.join("\n"));
 });
 
 test("palette picker: the top-bar select sets the palette in every state, syncs the menu and is remembered; the index follows", { skip }, async () => {

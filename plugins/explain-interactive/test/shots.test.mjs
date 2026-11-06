@@ -184,6 +184,6 @@ test("shots --palette: the page is shot in that palette; one the page doesn't of
       assert.deepEqual(r.findings, []);
     }
     assert.ok(!readFileSync(join(dirs.default, "step-01.png")).equals(readFileSync(join(dirs.alt, "step-01.png"))), "the palettes look different");
-    await assert.rejects(shoot(page, { out: dirs.alt, palette: "sepia" }), /has no palette "sepia" \(it has default, alt\)/);
+    await assert.rejects(shoot(page, { out: dirs.alt, palette: "paper" }), /has no palette "paper" \(it has default, alt\)/);
   } finally { rmSync(out, { recursive: true, force: true }); }
 });

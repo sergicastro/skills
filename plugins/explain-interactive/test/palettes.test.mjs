@@ -2,7 +2,7 @@
 // A failure names the palette, mode, pair and the measured value, so a palette can be tuned from the output.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { VARS, PALETTES, paletteCss } from "../skills/explain-interactive/engine/palettes.mjs";
+import { VARS, PALETTES, paletteCss, FONTS, STYLE } from "../skills/explain-interactive/engine/palettes.mjs";
 
 const MODES = ["light", "dark"];
 const rgb = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
@@ -46,8 +46,52 @@ const DISTINCT_PAIRS = [["hl", "accent"], ["hl", "ok"], ["hl", "bad"], ["ok", "b
 const each = fn => PALETTES.flatMap(p => MODES.flatMap(m => fn(p, m, p[m] || {})));
 const report = fails => assert.deepEqual(fails, [], "\n" + fails.join("\n"));
 
-test("PALETTES lists default, high-contrast, colour-blind, sepia and slate, in that order", () => {
-  assert.deepEqual(PALETTES.map(p => p.id), ["default", "high-contrast", "colour-blind", "sepia", "slate"]);
+test("PALETTES lists default, high-contrast, colour-blind, paper, terminal and soft, in that order", () => {
+  assert.deepEqual(PALETTES.map(p => p.id), ["default", "high-contrast", "colour-blind", "paper", "terminal", "soft"]);
+});
+
+test("every palette has a style: font, radius and border from the allowed values, no other keys", () => {
+  report(PALETTES.flatMap(p => {
+    const st = p.style || {};
+    return [
+      ...Object.keys(STYLE).filter(k => !STYLE[k].includes(st[k])).map(k => `${p.id}: style.${k} is ${st[k]}, not one of ${STYLE[k].join(", ")}`),
+      ...Object.keys(st).filter(k => !(k in STYLE)).map(k => `${p.id}: extra style key ${k}`),
+    ];
+  }));
+  // System stacks only: no url() or @font-face, each ends in a generic family
+  for (const [k, stack] of Object.entries(FONTS)) {
+    assert.doesNotMatch(stack, /url\(|@font-face|[;{}]/, k);
+    assert.match(stack, /, (sans-serif|serif|monospace)$/, k);
+  }
+});
+
+test("style: Default keeps today's look; the accessibility palettes keep the font; each look has its own shape", () => {
+  const style = Object.fromEntries(PALETTES.map(p => [p.id, p.style]));
+  assert.deepEqual(style.default, { font: "sans", radius: 1, border: 1 });
+  assert.equal(FONTS.sans, `system-ui, -apple-system, "Segoe UI", sans-serif`, "today's body font");
+  for (const id of ["high-contrast", "colour-blind"]) {
+    assert.equal(style[id].font, "sans", `${id} keeps the font`);
+    assert.equal(style[id].radius, 1, `${id} keeps the corners`);
+    assert.ok(style[id].border >= 1, `${id} border`);
+  }
+  assert.deepEqual(style.paper, { font: "serif", radius: 0, border: 1 }, "paper: serif, sharp corners, thin rules");
+  assert.deepEqual(style.terminal, { font: "mono", radius: 0, border: 1 }, "terminal: monospace, square corners");
+  assert.ok(style.soft.radius >= 2 && style.soft.border >= 2 && style.soft.font === "sans", "soft: large corners, thicker borders");
+});
+
+test("paletteCss() sets --font, --radius and --border once per palette, in its first rule", () => {
+  const css = paletteCss(), n = PALETTES.length;
+  for (const k of ["font", "radius", "border"]) assert.equal(css.split(`--${k}: `).length - 1, n, `--${k}`);
+  for (const p of PALETTES) {
+    const S = p.id === "default" ? ":root" : `:root[data-palette="${p.id}"]`;
+    const first = css.split("\n").find(l => l.startsWith(`${S} {`));
+    assert.ok(first.includes(`--font: ${FONTS[p.style.font]};`), `${p.id} font`);
+    assert.ok(first.includes(`--radius: ${p.style.radius};`), `${p.id} radius`);
+    assert.ok(first.includes(`--border: ${p.style.border}px;`), `${p.id} border`);
+  }
+  // a palette without a style (a test fixture) adds no style variables; default's apply to it
+  const bare = paletteCss([{ id: "x", label: "X", light: PALETTES[0].light, dark: PALETTES[0].dark }]);
+  assert.doesNotMatch(bare, /--font|--radius|--border/);
 });
 
 test("palette ids are safe for attribute selectors, unique, and default comes first", () => {
