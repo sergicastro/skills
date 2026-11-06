@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3 stdlib, `unittest`, the `gh` CLI at runtime (optional).
 
-**Spec:** `plugins/orchestrator/docs/specs/2026-10-29-pr-status-bullet-design.md`
+**Spec:** `docs/orchestrator/specs/2026-10-29-pr-status-bullet-design.md`
 
 ## Global Constraints
 

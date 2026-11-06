@@ -205,16 +205,16 @@ Hover or tab to a goal in the dependency graph to see what it depends on and wha
 on it, all the way up and down the chain; the rest of the graph is dimmed. The highlight
 stays through live updates.
 
-![Epic page: dependency graph, goals, workers and recent events, with PRs gaining health bullets, then a goal hovered in the graph](docs/images/status-pr-bullets.gif)
+![Epic page: dependency graph, goals, workers and recent events, with PRs gaining health bullets, then a goal hovered in the graph](../../docs/orchestrator/images/status-pr-bullets.gif)
 
 <details>
 <summary>Dark mode and the index page</summary>
 
-![Epic page in dark mode](docs/images/status-epic-dark.png)
+![Epic page in dark mode](../../docs/orchestrator/images/status-epic-dark.png)
 
 </details>
 
-![Index of all orchestrations](docs/images/status-index.png)
+![Index of all orchestrations](../../docs/orchestrator/images/status-index.png)
 
 The screenshots use made-up data.
 
@@ -238,7 +238,7 @@ Skill-behaviour evals (these call the model and cost money; see `evals/README.md
 claude plugin eval . --runs 1 -j 4 --no-publish
 ```
 
-See `docs/specs/` for the design.
+See [`docs/orchestrator/specs/`](../../docs/orchestrator/specs/) for the design.
 
 ## License
 

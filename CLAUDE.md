@@ -22,6 +22,15 @@ screenshots, commit messages) can be read by anyone.
   (titles, paths, tabs, avatars) before committing one.
 - Don't paste real logs, transcripts, or command output without scrubbing them first.
 
+## Where maintainer docs go
+
+- Design specs, implementation plans and README images go in `docs/<plugin>/` (e.g.
+  `docs/<plugin>/specs/`, `docs/<plugin>/plans/`, `docs/<plugin>/images/`), never under
+  `plugins/<plugin>/`.
+- Why: everything under `plugins/<plugin>/` is copied to every user who installs the plugin.
+  Only maintainers need specs and plans, and the images are only shown in the README on GitHub.
+- Plugin READMEs link to them with relative paths (`../../docs/<plugin>/...`).
+
 ## Before committing
 
 Scan the diff for anything above (e.g. `git diff --cached | grep -nE '/Users/|@[a-z0-9.-]+\.[a-z]+'`).

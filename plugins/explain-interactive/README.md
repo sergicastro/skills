@@ -20,7 +20,7 @@ Diagrams are declared as nodes and edges and laid out by the build (sequence, ch
 layers or states), so every step shows them in the same place. Before showing you a page,
 Claude checks its content and reads a screenshot of every step.
 
-![A generated page about a cached read: a sequence diagram lit part by part, a what-if toggle between a cache hit and a miss, a diagram part showing its glossary entry, and a slider moving the entry past its TTL](docs/demo.gif)
+![A generated page about a cached read: a sequence diagram lit part by part, a what-if toggle between a cache hit and a miss, a diagram part showing its glossary entry, and a slider moving the entry past its TTL](../../docs/explain-interactive/demo.gif)
 
 ## Use
 

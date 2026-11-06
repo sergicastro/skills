@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.9+ stdlib (`string`, `html`, `http.server`, `threading`, `subprocess`, `fcntl`, `unittest`), inline CSS/JS, inline SVG.
 
-**Spec:** `docs/specs/2026-10-26-status-html-design.md`. Read it before any task.
+**Spec:** `docs/orchestrator/specs/2026-10-26-status-html-design.md`. Read it before any task.
 
 ## Global Constraints
 
