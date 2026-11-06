@@ -9,7 +9,8 @@ import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
-import { build, extract } from "../skills/explain-interactive/build.mjs";
+import { build, extract, indexHtml } from "../skills/explain-interactive/build.mjs";
+import { PALETTES } from "../skills/explain-interactive/engine/palettes.mjs";
 import { launch } from "../skills/explain-interactive/cdp.mjs";
 import { skip } from "./chrome.mjs";
 
@@ -602,4 +603,43 @@ const STEPS = [{ title: "One", summary: "s", body: \`<p>A <dfn>rate
   await open(page);
   assert.equal(await js(`[...document.querySelectorAll("#step-1 dfn")].filter(d => d.tabIndex === 0).length`), 2);
   assert.deepEqual(problems.filter(p => /glossary/i.test(p)), []);
+});
+
+test("palettes: the computed colours follow the OS scheme, the forced mode and the chosen palette", { skip }, async () => {
+  const def = PALETTES[0];
+  // A second palette with its own --bg, to check the selector scheme beyond default (spec section 2's table)
+  const alt = { id: "alt", label: "Alt", light: { ...def.light, bg: "#fafaff" }, dark: { ...def.dark, bg: "#101020" } };
+  const palettes = [def, alt];
+  const page = join(tmp, "palettes.html"), index = join(tmp, "palettes-index.html");
+  writeFileSync(page, build(readFileSync(join(SKILL, "examples/token-401.content.js"), "utf8"), undefined, { palettes }).html);
+  writeFileSync(index, indexHtml([], { palettes }));
+  const state = async (file, os, { theme, palette } = {}) => {
+    await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: os }] });
+    await open(file);
+    return js(`(r => { ${theme ? `r.dataset.theme = "${theme}";` : "delete r.dataset.theme;"} ${palette ? `r.dataset.palette = "${palette}";` : "delete r.dataset.palette;"}
+      const s = getComputedStyle(r); return [s.getPropertyValue("--bg").trim(), s.colorScheme]; })(document.documentElement)`);
+  };
+  const rows = [
+    ["no palette, OS light", "light", {}, def.light.bg, "light"],
+    ["no palette, OS dark", "dark", {}, def.dark.bg, "dark"],
+    ["no palette, forced light, OS dark", "dark", { theme: "light" }, def.light.bg, "light"],
+    ["no palette, forced dark, OS light", "light", { theme: "dark" }, def.dark.bg, "dark"],
+    ["palette, OS light", "light", { palette: "alt" }, alt.light.bg, "light"],
+    ["palette, OS dark", "dark", { palette: "alt" }, alt.dark.bg, "dark"],
+    ["palette, forced light, OS dark", "dark", { palette: "alt", theme: "light" }, alt.light.bg, "light"],
+    ["palette, forced dark, OS light", "light", { palette: "alt", theme: "dark" }, alt.dark.bg, "dark"],
+    ["unknown palette id", "light", { palette: "nope" }, def.light.bg, "light"],
+  ];
+  try {
+    for (const file of [page, index])
+      for (const [name, os, attrs, bg, scheme] of rows)
+        assert.deepEqual(await state(file, os, attrs), [bg, scheme], `${file === page ? "page" : "index"}: ${name}`);
+    // The skill's own pages use the default palette: same checks against a page built with no options
+    const plain = join(tmp, "palettes-plain.html");
+    writeFileSync(plain, build(readFileSync(join(SKILL, "examples/token-401.content.js"), "utf8")).html);
+    for (const [name, os, attrs, bg, scheme] of rows.slice(0, 4))
+      assert.deepEqual(await state(plain, os, attrs), [bg, scheme], `default build: ${name}`);
+  } finally {
+    await send("Emulation.setEmulatedMedia", { features: [] });
+  }
 });
