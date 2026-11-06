@@ -6,7 +6,8 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync, spawnSync } from "node:child_process";
-import { build, check, extract, loadContent, readPage, writeIndex, TYPES } from "../skills/explain-interactive/build.mjs";
+import { build, check, extract, indexHtml, loadContent, readPage, writeIndex, TYPES } from "../skills/explain-interactive/build.mjs";
+import { PALETTES } from "../skills/explain-interactive/engine/palettes.mjs";
 import { launch } from "../skills/explain-interactive/cdp.mjs";
 import { skip } from "./chrome.mjs";
 
@@ -43,6 +44,42 @@ test("the sample builds into one self-contained page", () => {
   assert.doesNotMatch(html, /\{\{(TITLE|CSS|CONTENT|ENGINE)\}\}/);
   assert.doesNotMatch(html, /<script[^>]+src=|<link[^>]+href=|@import|url\(\s*["']?https?:/i);
   assert.equal(html.match(/<script/g).length, 3);   // theme bootstrap, content, engine
+});
+
+test("palette picker: one <option> per palette in each select, none with a single palette", () => {
+  const def = PALETTES.find(p => p.id === "default");
+  const alt = { id: "alt", label: "Alt & co", light: { ...def.light, bg: "#fafaff" }, dark: { ...def.dark, bg: "#101020" } };
+  const selects = html => [...html.matchAll(/<select\b([^>]*)>([\s\S]*?)<\/select>/g)].map(m => [m[1], m[2]]);
+  const options = inner => [...inner.matchAll(/<option value="([^"]*)">([^<]*)<\/option>/g)].map(m => [m[1], m[2]]);
+
+  const two = build(sample, SAMPLE, { palettes: [def, alt] }).html;
+  assert.doesNotMatch(two, /\{\{PALETTE_OPTIONS\}\}/);
+  assert.equal(two.match(/<script/g).length, 3, "the bootstrap script is extended, not added");
+  const s = selects(two);
+  assert.equal(s.length, 2, "top bar and menu");
+  for (const [attrs, inner] of s) {
+    assert.match(attrs, /aria-label="Colour palette"/);
+    assert.deepEqual(options(inner), [["default", "Default"], ["alt", "Alt &amp; co"]]);
+  }
+  assert.match(s[0][0], /\bid="palette"/); assert.match(s[0][0], /class="[^"]*\btool\b/);
+  // The top-bar select sits just before the ☀/☾ button, the menu one before the long theme button
+  assert.match(two, /<\/select>\s*<button class="tbtn tool theme" data-act="theme">/);
+  assert.match(two, /<\/select>\s*<button class="tbtn" data-act="theme" data-long>/);
+  // The skill's own build lists every palette in PALETTES
+  const own = build(sample, SAMPLE).html;
+  if (PALETTES.length > 1) for (const [, inner] of selects(own)) assert.deepEqual(options(inner).map(o => o[0]), PALETTES.map(p => p.id));
+  else assert.equal(selects(own).length, 0);
+
+  const one = build(sample, SAMPLE, { palettes: [def] }).html;
+  assert.equal(selects(one).length, 0);
+  assert.doesNotMatch(one, /PALETTE_OPTIONS|Colour palette/);
+  assert.equal(one.match(/<script/g).length, 3);
+});
+
+test("palette: both pages apply the saved palette before first paint", () => {
+  const boot = /<script>try \{[^<]*getItem\("explain-palette"\)[^<]*dataset\.palette = [^<]*<\/script>/;
+  assert.match(build(sample, SAMPLE).html.split("<style>")[0], boot, "page: in <head>, before the CSS");
+  assert.match(indexHtml([]).split("<style>")[0], boot, "index: in <head>, before the CSS");
 });
 
 test("content may contain </script> and $& without breaking the page", () => {

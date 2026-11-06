@@ -6,7 +6,8 @@
 <meta name="generator" content="explain-interactive">
 {{META}}
 <title>{{TITLE}}</title>
-<script>try { const t = localStorage.getItem("explain-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+<script>try { const s = localStorage, t = s.getItem("explain-theme"), p = s.getItem("explain-palette");
+  if (t) document.documentElement.dataset.theme = t; if (p) document.documentElement.dataset.palette = p; } catch (e) {}</script>
 <style>
 {{CSS}}
 </style>
@@ -20,6 +21,7 @@
     <button class="tbtn tool" data-act="depth" aria-pressed="false" hidden>Short</button>
     <button class="tbtn tool" data-act="gloss" aria-pressed="false">Glossary</button>
     <button class="tbtn tool" data-act="all" aria-pressed="false">Show all</button>
+    <select class="tbtn tool palette" id="palette" aria-label="Colour palette">{{PALETTE_OPTIONS}}</select>
     <button class="tbtn tool theme" data-act="theme"></button>
     <div class="bar" id="bar"></div>
   </header>
@@ -31,6 +33,7 @@
       <button class="tbtn" data-act="depth" aria-pressed="false" hidden>Short version</button>
       <button class="tbtn" data-act="gloss" aria-pressed="false">Glossary</button>
       <button class="tbtn" data-act="all" aria-pressed="false">Show all</button>
+      <select class="tbtn palette" aria-label="Colour palette">{{PALETTE_OPTIONS}}</select>
       <button class="tbtn" data-act="theme" data-long></button>
     </div>
   </aside>

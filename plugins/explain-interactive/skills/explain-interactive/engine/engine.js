@@ -360,6 +360,19 @@ function paintTheme() {
 osDark.addEventListener("change", paintTheme);
 paintTheme();
 
+// Palette: picked in the top bar or the menu (build.mjs fills both with the same options, or leaves them out);
+// the choice is remembered, like the theme. The <head> script applies a saved one before first paint.
+const pickers = $$("select.palette");
+function setPalette(id, save) {
+  if (!pickers.length) return;
+  const known = [...pickers[0].options].some(o => o.value === id) ? id : "default";
+  if (known === "default") delete root.dataset.palette; else root.dataset.palette = known;   // an unknown saved id shows default
+  pickers.forEach(s => { s.value = known; });
+  if (save) try { if (known === "default") localStorage.removeItem("explain-palette"); else localStorage.setItem("explain-palette", known); } catch (e) {}
+}
+pickers.forEach(s => s.addEventListener("change", () => setPalette(s.value, true)));
+setPalette(root.dataset.palette || "default", false);
+
 $$("[data-act]").forEach(b => b.onclick = () => {
   const act = b.dataset.act;
   if (act === "theme") {
@@ -591,7 +604,7 @@ stage.addEventListener("touchend", e => {
 
 document.addEventListener("keydown", e => {
   if (e.key === "Escape") { if (tipFor) { const t = tipFor; hideTip(); if (t.matches("[data-def]")) t.blur(); } return closePanels(); }
-  if (e.target.matches("input, textarea") || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.target.matches("input, textarea, select") || e.metaKey || e.ctrlKey || e.altKey) return;
   if (document.body.classList.contains("gloss") || document.body.classList.contains("menu")) return;   // a drawer is open: don't navigate behind it
   const sc = e.target.closest && e.target.closest(".visual, pre");
   if (sc && sc.scrollWidth > sc.clientWidth) return;   // let ←/→ scroll a wide diagram or code block

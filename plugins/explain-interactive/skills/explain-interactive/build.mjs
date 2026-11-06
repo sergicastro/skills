@@ -440,11 +440,19 @@ function checkTypeCoverage(type, c, warnings) {
 }
 
 // ---------- Build ----------
+// The pickers' options, in paletteCss()'s order: default first
+const paletteOptions = palettes => [...palettes].sort((a, b) => (b.id === "default") - (a.id === "default"))
+  .map(p => `<option value="${esc(p.id)}">${esc(p.label)}</option>`).join("");
+// Run in <head> before the CSS, so a page never shows the default colours or mode first
+const BOOTSTRAP = `<script>try { const s = localStorage, t = s.getItem("explain-theme"), p = s.getItem("explain-palette");
+  if (t) document.documentElement.dataset.theme = t; if (p) document.documentElement.dataset.palette = p; } catch (e) {}</script>`;
 export function build(code, file, { palettes = PALETTES } = {}) {
   const content = loadContent(code, file);
   const result = check(content);
   if (result.errors.length) { const { svg, ...rest } = result; return { ...rest, html: null }; }
-  const shell = readFileSync(join(ENGINE_DIR, "page.html"), "utf8");
+  let shell = readFileSync(join(ENGINE_DIR, "page.html"), "utf8");
+  // The palette pickers list every palette; with nothing to choose from they are left out
+  if (palettes.length < 2) shell = shell.replace(/\n[ \t]*<select\b[^>]*>\{\{PALETTE_OPTIONS\}\}<\/select>/g, "");
   const parts = {
     TITLE: esc(content.META.title),
     // Read by the index page (build.mjs --index), so it needn't run the content
@@ -455,9 +463,10 @@ export function build(code, file, { palettes = PALETTES } = {}) {
     ENGINE: inlineScript(readFileSync(join(ENGINE_DIR, "engine.js"), "utf8").trimEnd()),
     // A laid-out spec goes in an inert <template> the engine reads, so the content script stays exactly as written
     DIAGRAM: result.svg ? `<template id="explain-diagram">\n${result.svg}\n</template>` : "",
+    PALETTE_OPTIONS: paletteOptions(palettes),
   };
   // Function replacer: content may contain "$&" and friends, which a string replacement would expand
-  const html = shell.replace(/\{\{(TITLE|META|CSS|CONTENT|ENGINE|DIAGRAM)\}\}/g, (_, k) => parts[k]);
+  const html = shell.replace(/\{\{(TITLE|META|CSS|CONTENT|ENGINE|DIAGRAM|PALETTE_OPTIONS)\}\}/g, (_, k) => parts[k]);
   const { svg, ...rest } = result;
   return { ...rest, html };
 }
@@ -506,7 +515,7 @@ export function indexHtml(pages, { palettes = PALETTES } = {}) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="generator" content="${INDEX_GENERATOR}">
 <title>Explanations</title>
-<script>try { const t = localStorage.getItem("explain-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+${BOOTSTRAP}
 <style>
 ${paletteCss(palettes)}
 body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
