@@ -41,6 +41,9 @@ To add a plugin, create `plugins/<name>/` with its manifest and skills, list it 
 `marketplace.json`, and run `claude plugin validate .`. Keep each plugin self-contained:
 an installed plugin can't reach files outside its own folder.
 
+A plugin's description lives in three places: its `plugin.json`, its `marketplace.json` entry and
+the plugin table above. Keep them identical; the **Plugin version check** fails if they differ.
+
 ## Releasing
 
 Every PR that changes `plugins/<name>/` must bump `version` in
