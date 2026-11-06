@@ -703,6 +703,17 @@ test("palette picker: the top-bar select sets the palette in every state, syncs 
     const before = await at();
     await js(`document.querySelector("#palette").focus(); document.querySelector("#palette").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }))`);
     assert.equal(await at(), before);
+    // Phone menu: the palette and light/dark sit in their own section, below the other tools, after a horizontal line
+    await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 800, deviceScaleFactor: 1, mobile: true });
+    await js(`document.querySelector("#menu").click()`);
+    assert.deepEqual(await js(`(() => {
+      const look = document.querySelector(".side .side-look"), tools = document.querySelector(".side .side-tools:not(.side-look)");
+      const s = getComputedStyle(look);
+      return [[...look.children].map(e => e.matches("select.palette") ? "palette" : e.dataset.act),
+        [...tools.children].map(e => e.dataset.act), s.display, s.borderTopStyle, parseFloat(s.borderTopWidth) > 0,
+        look.getBoundingClientRect().top >= tools.getBoundingClientRect().bottom];
+    })()`), [["palette", "theme"], ["depth", "gloss", "all"], "flex", "solid", true, true]);
+    await send("Emulation.clearDeviceMetricsOverride");
     assert.deepEqual(problems, [], "console errors/warnings");
     assert.deepEqual(external(), [], "external requests");
   } finally {

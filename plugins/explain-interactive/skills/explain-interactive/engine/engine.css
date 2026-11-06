@@ -340,6 +340,7 @@ body.gloss #gloss { transform: none; visibility: visible; transition: transform 
   body.menu .scrim { display: block; }
   .side > .side-head { display: flex; padding: 0 6px; }
   .side > .side-tools { display: flex; flex-wrap: wrap; gap: 6px; margin: 18px 6px 0; padding-top: 14px; border-top: 1px solid var(--line); }
+  .side > .side-look { margin-top: 14px; }   /* palette and light/dark: their own section under the other tools */
   .stage { padding: 20px 16px; }
   .foot { padding: 0 12px; }
   .foot .upnext, .foot .keys { display: none; }
