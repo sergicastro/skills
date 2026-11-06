@@ -20,6 +20,7 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { homedir } from "node:os";
 import { render as renderDiagram } from "./engine/layout.mjs";
+import { PALETTES, paletteCss } from "./engine/palettes.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ENGINE_DIR = join(HERE, "engine");
@@ -439,7 +440,7 @@ function checkTypeCoverage(type, c, warnings) {
 }
 
 // ---------- Build ----------
-export function build(code, file) {
+export function build(code, file, { palettes = PALETTES } = {}) {
   const content = loadContent(code, file);
   const result = check(content);
   if (result.errors.length) { const { svg, ...rest } = result; return { ...rest, html: null }; }
@@ -449,7 +450,7 @@ export function build(code, file) {
     // Read by the index page (build.mjs --index), so it needn't run the content
     META: `<meta name="description" content="${esc(content.META.bigPicture || "")}">\n` +
       `<meta name="explain-type" content="${esc(content.META.type || "walkthrough")}">\n<meta name="explain-steps" content="${content.STEPS.length}">`,
-    CSS: inlineStyle(readFileSync(join(ENGINE_DIR, "engine.css"), "utf8").trimEnd()),
+    CSS: inlineStyle(paletteCss(palettes) + "\n" + readFileSync(join(ENGINE_DIR, "engine.css"), "utf8").trimEnd()),
     CONTENT: inlineScript(code.trim()),
     ENGINE: inlineScript(readFileSync(join(ENGINE_DIR, "engine.js"), "utf8").trimEnd()),
     // A laid-out spec goes in an inert <template> the engine reads, so the content script stays exactly as written
@@ -492,7 +493,7 @@ export function readPage(html) {
   } else bigPicture = unesc(bigPicture);
   return { title, bigPicture, type: type || "walkthrough", steps };
 }
-export function indexHtml(pages) {
+export function indexHtml(pages, { palettes = PALETTES } = {}) {
   const item = p => `<li data-title="${esc(p.title)}" data-steps="${p.steps}" data-text="${esc((p.title + " " + p.bigPicture).toLowerCase())}">
   <a href="${esc(encodeURIComponent(p.file))}">${esc(p.title || p.file)}</a>
   <p>${esc(p.bigPicture)}</p>
@@ -507,9 +508,7 @@ export function indexHtml(pages) {
 <title>Explanations</title>
 <script>try { const t = localStorage.getItem("explain-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
 <style>
-:root { --bg: #f6f5f1; --card: #fff; --fg: #1f2328; --muted: #5d656e; --line: #dcdfe3; --accent: #2f6fd6; --ok: #1a7f37; color-scheme: light; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #0d0f12; --card: #1d2127; --fg: #e6e8eb; --muted: #b4bcc6; --line: #48515c; --accent: #6ea8ff; --ok: #4ac26b; color-scheme: dark; } }
-:root[data-theme="dark"] { --bg: #0d0f12; --card: #1d2127; --fg: #e6e8eb; --muted: #b4bcc6; --line: #48515c; --accent: #6ea8ff; --ok: #4ac26b; color-scheme: dark; }
+${paletteCss(palettes)}
 body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
 main { max-width: 760px; margin: 0 auto; padding: 32px 20px 48px; }
 h1 { margin: 0 0 4px; font-size: 1.5rem; } .sub { margin: 0 0 20px; color: var(--muted); }
