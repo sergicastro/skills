@@ -183,7 +183,7 @@ How to choose:
 - **One diagram, same positions in every step** (the `DIAGRAM` + `diagram.hl` mechanism):
   consistency beats novelty. Follow the rules in `diagram-recipes.md` (labelled edges, 1–3 parts
   per step, ≤ ~7 nodes, no sentences in boxes).
-- Colour carries one meaning: `<mark>` and `.hl` (orange) = the thing this step is about; key ideas
+- Colour carries one meaning: `<mark>` and `.hl` (the highlight colour) = the thing this step is about; key ideas
   are just **bold**.
 - Use the user's actual names (files, services, functions) from the conversation, not generic
   placeholders.
@@ -193,7 +193,7 @@ How to choose:
   builds it from each step's `title` + `summary` and adds the finish panel.
 - Keep each step to roughly one screen: body 2–5 sentences (≤ ~120 words), code ≤ 15 lines of ≤ 60
   characters, quiz 3–4 options. Edge cases go in `deeper`.
-- No external network resources (fonts, CDNs, images). Must work offline and in light/dark mode.
+- No external network resources (fonts, CDNs, images). Must work offline and in every palette, light and dark.
 - Accuracy over flourish: **add background context freely when it is verified** (from code you
   read, docs, or the conversation itself) because missing context is the most common reason an
   explanation can't be followed. Never invent it: if a fact the reader needs can't be verified,
