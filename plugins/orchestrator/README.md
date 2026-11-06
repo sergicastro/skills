@@ -157,7 +157,7 @@ and exits 2; a malformed call (unknown command, missing or conflicting options) 
 - **Locking.** Each command that loads, changes and saves `state.json` holds an exclusive
   lock on `<slug>/.lock` for the whole time, so two calls can't, say, hand the same goal to
   two workers. The manager still runs its calls one at a time.
-- **Free text from files.** Text that comes from a worker or the user can hold `$(…)`,
+- **Free text from files.** Text that comes from a worker, the plan or the user can hold `$(…)`,
   backticks or quotes, so it never goes into a shell argument. Each text option has a
   `-file` form that takes a path, or `-` for stdin; trailing newlines are dropped:
 
@@ -166,6 +166,8 @@ and exits 2; a malformed call (unknown command, missing or conflicting options) 
   | `--notes` | `--notes-file` | `done` |
   | `--reason` | `--reason-file` | `status`, `sendback` |
   | `--summary` | `--summary-file` | `notify` |
+  | `--goal-json` | `--goal-json-file` | `add-goal`, `edit-goal` |
+  | `--title` | `--title-file` | `edit-epic` |
 
   The manager writes the text verbatim with a quoted heredoc, then passes the file:
 
@@ -176,7 +178,6 @@ and exits 2; a malformed call (unknown command, missing or conflicting options) 
   orch_state.py done <slug> <worker> <goal> --notes-file <scratchpad>/orch-text.txt
   ```
 
-  `add-goal`/`edit-goal --goal-json` and `edit-epic --title` still take their value inline.
 - **Re-register.** `register` for a worker that holds an `assigned` or `needs-user` goal
   returns an `assignment` (the same JSON as `request`), which the manager re-sends as ASSIGN.
 
