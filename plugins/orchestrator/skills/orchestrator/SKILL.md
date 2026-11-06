@@ -24,9 +24,9 @@ Files next to this skill (use the base directory shown when the skill loaded):
 
 ## Free text
 
-Free text never goes inside a shell argument. Notes, reasons and notice summaries can
-contain `$(…)`, backticks or quotes, which the shell would run or choke on even inside double
-quotes. Write the text verbatim to a scratchpad file with a quoted heredoc (the quotes around
+Free text never goes inside a shell argument. Notes, reasons, notice summaries, goal JSON
+and epic titles can contain `$(…)`, backticks or quotes, which the shell would run or choke
+on even inside double quotes. Write the text verbatim to a scratchpad file with a quoted heredoc (the quotes around
 the delimiter stop all expansion), then pass the file with the `-file` option:
 
 ```bash
@@ -37,8 +37,10 @@ $ORCH done <slug> <sender> <goal> --notes-file <scratchpad>/orch-text.txt
 ```
 
 If a line of the text is exactly `ORCH_EOF`, pick another delimiter. The same applies to text the
-user types (a send-back reason) and to notices you draft. The inline `--notes`, `--reason` and
-`--summary` options exist for short fixed text only; in this skill, use the `-file` forms.
+user types (a send-back reason, a new epic title), to notices you draft, and to goal JSON built
+from the plan or the user (`--goal-json-file`). The inline `--notes`, `--reason`, `--summary`,
+`--goal-json` and `--title` options exist for short fixed text only; in this skill, use the
+`-file` forms.
 
 ## Rules
 
@@ -190,9 +192,9 @@ REGISTER): the helper rejects it; relay its error.
 | start <goal> now | `$ORCH start <slug> <goal>` |
 | unblock on review | `$ORCH policy <slug> in-review` (back: `done`) |
 | prioritize … | `$ORCH prioritize <slug> <goal>...` |
-| add / drop a goal | `$ORCH add-goal <slug> --goal-json '<json>'` (json has an `id`) / `$ORCH drop-goal <slug> <goal>`; after a drop, GitHub: `github.md` → "Board after a state change" (offer, then do what the user confirms) |
-| rename the epic / change its link / stop or start updating the epic issue | `$ORCH edit-epic <slug> --title "<title>"` and/or `--source <url>` (`--source ""` removes it) and/or `--owned-by-manager true\|false`. Changes only local state, not GitHub. |
-| edit a goal (title, summary, acceptance, repo, links, depends on) | `$ORCH edit-goal <slug> <goal> --goal-json '<json>'` with only the fields to change. Dependencies change only while the goal is blocked or ready. If the reply has a `worker`, that worker still has the old text; offer a notice (see "Notices"), and send nothing until the user approves. |
+| add / drop a goal | `$ORCH add-goal <slug> --goal-json-file <file>` (the JSON, with an `id`, written to `<file>` per "Free text") / `$ORCH drop-goal <slug> <goal>`; after a drop, GitHub: `github.md` → "Board after a state change" (offer, then do what the user confirms) |
+| rename the epic / change its link / stop or start updating the epic issue | `$ORCH edit-epic <slug> --title-file <file>` (the title written to `<file>` per "Free text") and/or `--source <url>` (`--source ""` removes it) and/or `--owned-by-manager true\|false`. Changes only local state, not GitHub. |
+| edit a goal (title, summary, acceptance, repo, links, depends on) | `$ORCH edit-goal <slug> <goal> --goal-json-file <file>` (JSON with only the fields to change, written to `<file>` per "Free text"). Dependencies change only while the goal is blocked or ready. If the reply has a `worker`, that worker still has the old text; offer a notice (see "Notices"), and send nothing until the user approves. |
 | <worker> was renamed to <new> | `$ORCH rename-worker <slug> <old> <new>` (after the new name has registered) |
 | status / what's X doing | `ListAgents` → `$ORCH liveness <slug> --live <comma-separated peer names>` → `$ORCH show <slug>`. Flag every worker in `gone_with_goal` and offer `release` (goal back to ready) or reassign; never release on your own. Mention the live page URL from `$ORCH serve --ensure`. If every goal is done, suggest cleanup. |
 | tell <worker(s)> that … / notify | See "Notices" below. |

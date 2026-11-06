@@ -1448,6 +1448,100 @@ class TextFileTests(Base):
         self.assertEqual(self.state()["goals"]["g1"]["handoff"]["notes"], HOSTILE)
 
 
+class PlanTextFileTests(Base):
+    """--goal-json-file / --title-file pass plan and user text without the shell."""
+
+    def setUp(self):
+        super().setUp()
+        self.init()
+
+    def text_file(self, text, name="text.txt"):
+        path = Path(self.tmp.name) / name
+        path.write_text(text)
+        return str(path)
+
+    def goal_json(self, **fields):
+        return json.dumps({"title": HOSTILE, "summary": HOSTILE, "acceptance": [HOSTILE], **fields}) + "\n"
+
+    def test_add_goal_json_file(self):
+        code, out = self.run_cli("add-goal", "demo", "--goal-json-file", self.text_file(self.goal_json(id="g9")))
+        self.assertEqual(code, 0, out)
+        g = self.state()["goals"]["g9"]
+        self.assertEqual((g["title"], g["summary"], g["acceptance"]), (HOSTILE, HOSTILE, [HOSTILE]))
+
+    def test_add_goal_json_from_stdin(self):
+        with mock.patch.object(sys, "stdin", io.StringIO(self.goal_json(id="g9"))):
+            code, out = self.run_cli("add-goal", "demo", "--goal-json-file", "-")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.state()["goals"]["g9"]["title"], HOSTILE)
+
+    def test_edit_goal_json_file(self):
+        path = self.text_file(json.dumps({"title": HOSTILE, "summary": HOSTILE}))
+        code, out = self.run_cli("edit-goal", "demo", "g1", "--goal-json-file", path)
+        self.assertEqual(code, 0, out)
+        g = self.state()["goals"]["g1"]
+        self.assertEqual((g["title"], g["summary"]), (HOSTILE, HOSTILE))
+
+    def test_edit_epic_title_file(self):
+        title = "it's \"new\" $(touch pwned) `touch pwned` ${HOME}"
+        code, out = self.run_cli("edit-epic", "demo", "--title-file", self.text_file(title + "\n"))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.state()["epic"]["title"], title)
+
+    def test_edit_epic_title_from_stdin(self):
+        with mock.patch.object(sys, "stdin", io.StringIO("From stdin\n")):
+            code, out = self.run_cli("edit-epic", "demo", "--title-file", "-")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.state()["epic"]["title"], "From stdin")
+
+    def test_edit_epic_blank_title_file_is_rejected(self):
+        code, out = self.run_cli("edit-epic", "demo", "--title-file", self.text_file("\n"))
+        self.assertEqual(code, 2)
+        self.assertIn("title cannot be empty", out["error"])
+
+    def test_inline_and_file_together_are_rejected(self):
+        path = self.text_file(self.goal_json(id="g9"))
+        for argv in (("add-goal", "demo", "--goal-json", "{}", "--goal-json-file", path),
+                     ("edit-goal", "demo", "g1", "--goal-json", "{}", "--goal-json-file", path),
+                     ("edit-epic", "demo", "--title", "t", "--title-file", path)):
+            code, out = self.run_cli(*argv)
+            self.assertEqual(code, 2, argv)
+            self.assertIn("not allowed with", out["error"], argv)
+        self.assertNotIn("g9", self.state()["goals"])
+
+    def test_goal_json_is_required_in_either_form(self):
+        for argv in (("add-goal", "demo"), ("edit-goal", "demo", "g1")):
+            code, out = self.run_cli(*argv)
+            self.assertEqual(code, 2, argv)
+            self.assertIn("one of the arguments --goal-json --goal-json-file is required", out["error"], argv)
+
+    def test_invalid_json_file_is_a_json_error(self):
+        code, out = self.run_cli("add-goal", "demo", "--goal-json-file", self.text_file("{'id': 'g9'}"))
+        self.assertEqual(code, 2)
+        self.assertIn("error", out)
+
+    def test_missing_file_is_a_json_error(self):
+        code, out = self.run_cli("edit-epic", "demo", "--title-file", str(Path(self.tmp.name) / "nope"))
+        self.assertEqual(code, 2)
+        self.assertIn("nope", out["error"])
+
+    def test_quoted_heredoc_recipe_keeps_plan_text_literal(self):
+        """The recipe SKILL.md gives for add-goal and edit-epic: <<'EOF' into a file, then pass it."""
+        import shlex
+        work = Path(self.tmp.name)
+        gfile, tfile = work / "goal.json", work / "title.txt"
+        script = shlex.quote(str(SCRIPT))
+        cmd = (f"cat > {shlex.quote(str(gfile))} <<'ORCH_EOF'\n{json.dumps({'id': 'g9', 'title': HOSTILE, 'summary': 's'})}\nORCH_EOF\n"
+               f"python3 {script} add-goal demo --goal-json-file {shlex.quote(str(gfile))} || exit 1\n"
+               f"cat > {shlex.quote(str(tfile))} <<'ORCH_EOF'\nit's \"$(touch pwned)\" `touch pwned`\nORCH_EOF\n"
+               f"python3 {script} edit-epic demo --title-file {shlex.quote(str(tfile))}\n")
+        res = subprocess.run(["bash", "-c", cmd], cwd=work, env=dict(os.environ), capture_output=True, text=True)
+        self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
+        self.assertFalse((work / "pwned").exists())
+        self.assertEqual(self.state()["goals"]["g9"]["title"], HOSTILE)
+        self.assertEqual(self.state()["epic"]["title"], "it's \"$(touch pwned)\" `touch pwned`")
+
+
 class UsageErrorTests(Base):
     """argparse mistakes come back as {"error", "usage"} JSON on stdout, exit 2, like other errors."""
 
@@ -1481,7 +1575,8 @@ class UsageErrorTests(Base):
         self.assertUsageError([], "required: cmd", "orch_state.py")
 
     def test_missing_required_option(self):
-        self.assertUsageError(["add-goal", "demo"], "required: --goal-json", "orch_state.py add-goal")
+        self.assertUsageError(["add-goal", "demo"], "one of the arguments --goal-json --goal-json-file is required",
+                              "orch_state.py add-goal")
 
     def test_missing_required_text(self):
         self.assertUsageError(["done", "demo", "demo-w-a", "g1"], "one of the arguments --notes --notes-file is required",

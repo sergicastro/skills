@@ -836,12 +836,12 @@ ARGS.update({
     "policy": [(["unblock_on"], {"choices": list(UNBLOCK)})],
     "start": [(["goal"], {})],
     "prioritize": [(["goals"], {"nargs": "+"})],
-    "add-goal": [(["--goal-json"], {"required": True})],
+    "add-goal": [],
     "drop-goal": [(["goal"], {})],
-    "edit-epic": [(["--title"], {}), (["--source"], {"help": "an empty string removes the link"}),
+    "edit-epic": [(["--source"], {"help": "an empty string removes the link"}),
                   (["--owned-by-manager"], {"choices": ["true", "false"],
                                             "help": "whether the manager comments on the epic issue and sets its board status"})],
-    "edit-goal": [(["goal"], {}), (["--goal-json"], {"required": True, "help": "only the fields to change"})],
+    "edit-goal": [(["goal"], {})],
     "rename-worker": [(["old"], {}), (["new"], {})],
     "liveness": [(["--live"], {"default": "", "help": "comma-separated session names from ListAgents"})],
     "notify": [(["--kind"], {"required": True, "choices": list(NOTICE_KINDS)}),
@@ -875,14 +875,17 @@ COMMANDS.update({
 QUIET_SAVE = {"liveness"}
 
 
-# Free text, often from worker messages: (option, required). Each gets --<option> for short
-# fixed text and --<option>-file PATH (or - for stdin) so untrusted text never goes through
-# shell quoting.
+# Free text from worker messages, the plan or the user: (option, required). Each gets
+# --<option> for short fixed text and --<option>-file PATH (or - for stdin) so the text never
+# goes through shell quoting.
 TEXT = {
     "status": [("reason", False)],
     "done": [("notes", True)],
     "sendback": [("reason", True)],
     "notify": [("summary", True)],
+    "add-goal": [("goal-json", True)],
+    "edit-goal": [("goal-json", True)],
+    "edit-epic": [("title", False)],
 }
 
 
@@ -894,9 +897,10 @@ def read_text(path):
 
 def resolve_text(cmd, a):
     for option, _ in TEXT.get(cmd, []):
-        path = getattr(a, f"{option}_file")
+        dest = option.replace("-", "_")
+        path = getattr(a, f"{dest}_file")
         if path is not None:
-            setattr(a, option, read_text(path))
+            setattr(a, dest, read_text(path))
 
 
 def build_parser():
@@ -911,7 +915,7 @@ def build_parser():
             group = sp.add_mutually_exclusive_group(required=required)
             group.add_argument(f"--{option}", help="short fixed text")
             group.add_argument(f"--{option}-file", metavar="PATH",
-                               help=f"read the {option} from PATH, or stdin for -; use for text from messages")
+                               help=f"read the {option} from PATH, or stdin for -; use for any text from messages, the plan or the user")
     sp = sub.add_parser("cleanup", help="tidy up an orchestration whose goals are all done")
     sp.add_argument("slug")
     sp.add_argument("--delete", action="store_true", help="delete the state directory")
