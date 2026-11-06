@@ -19,6 +19,18 @@ const lab = hex => {
   return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
 };
 const deltaE = (a, b) => Math.hypot(...lab(a).map((v, i) => v - lab(b)[i]));
+// Colour-vision deficiency simulation: Machado, Oliveira & Fernandes (2009) matrices at severity 1.0,
+// applied in linear RGB, clamped and encoded back to sRGB hex
+const MACHADO = {
+  deuteranopia: [[0.367322, 0.860646, -0.227968], [0.280085, 0.672501, 0.047413], [-0.011820, 0.042940, 0.968881]],
+  protanopia: [[0.152286, 1.052583, -0.204868], [0.114503, 0.786281, 0.099216], [-0.003882, -0.048116, 1.051998]],
+};
+const encode = c => (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055);
+const simulate = (hex, type) => {
+  const lin = rgb(hex).map(linear);
+  return "#" + MACHADO[type].map(row => row.reduce((s, k, i) => s + k * lin[i], 0))
+    .map(c => Math.round(encode(Math.min(1, Math.max(0, c))) * 255).toString(16).padStart(2, "0")).join("");
+};
 
 // Pairs that must reach 4.5:1: text colours on every surface, accent colours on the plain surfaces and their own tint
 const TEXT = ["fg", "muted", "label"], SURFACES = ["bg", "card", "code-bg", "accent-soft", "hl-soft", "ok-soft", "bad-soft"];
@@ -33,6 +45,10 @@ const DISTINCT_PAIRS = [["hl", "accent"], ["hl", "ok"], ["hl", "bad"], ["ok", "b
 
 const each = fn => PALETTES.flatMap(p => MODES.flatMap(m => fn(p, m, p[m] || {})));
 const report = fails => assert.deepEqual(fails, [], "\n" + fails.join("\n"));
+
+test("PALETTES lists default, high-contrast, colour-blind, sepia and slate, in that order", () => {
+  assert.deepEqual(PALETTES.map(p => p.id), ["default", "high-contrast", "colour-blind", "sepia", "slate"]);
+});
 
 test("palette ids are safe for attribute selectors, unique, and default comes first", () => {
   const ids = PALETTES.map(p => p.id);
@@ -71,6 +87,15 @@ test("highlight, accent, ok and bad differ by ΔE ≥ 30", () => {
     .map(([a, b, d]) => `${p.id} ${m}: --${a} ${v[a]} vs --${b} ${v[b]} is ΔE ${d.toFixed(1)}`)));
 });
 
+test("colour-blind: highlight, accent, ok and bad differ by ΔE ≥ 20 under deuteranopia and protanopia", () => {
+  report(each((p, m, v) => {
+    if (p.id !== "colour-blind") return [];
+    return Object.keys(MACHADO).flatMap(type => DISTINCT_PAIRS
+      .map(([a, b]) => [a, b, deltaE(simulate(v[a], type), simulate(v[b], type))]).filter(([, , d]) => !(d >= 20))
+      .map(([a, b, d]) => `${p.id} ${m} ${type}: --${a} ${v[a]} vs --${b} ${v[b]} is ΔE ${d.toFixed(1)}`));
+  }));
+});
+
 test("paletteCss() writes one block per palette, default first, with the selector scheme", () => {
   const fixture = [
     { id: "other", label: "Other", light: PALETTES[0].light, dark: PALETTES[0].dark },
@@ -85,11 +110,12 @@ test("paletteCss() writes one block per palette, default first, with the selecto
   assert.ok(css.includes(`:root[data-palette="other"]:not([data-theme="light"]) {`));
   assert.ok(css.includes(`:root[data-palette="other"][data-theme="dark"] {`));
   assert.ok(css.indexOf(`[data-palette="other"]`) > css.indexOf(`:root[data-theme="dark"]`), "default is written first");
-  // the default palette's own output: every variable, both schemes
-  const own = paletteCss();
-  for (const k of VARS) assert.equal(own.split(`--${k}: `).length - 1, 3, `--${k} in each of the 3 rules`);
-  assert.equal(own.match(/; color-scheme: light/g).length, 1);
-  assert.equal(own.match(/; color-scheme: dark/g).length, 2);
+  // the real palettes' output: every variable in each of the 3 rules of every palette, both schemes
+  const own = paletteCss(), n = PALETTES.length;
+  for (const k of VARS) assert.equal(own.split(`--${k}: `).length - 1, 3 * n, `--${k} in each of the 3 rules per palette`);
+  assert.equal(own.match(/; color-scheme: light/g).length, n);
+  assert.equal(own.match(/; color-scheme: dark/g).length, 2 * n);
+  for (const p of PALETTES.slice(1)) assert.ok(own.includes(`:root[data-palette="${p.id}"] {`), p.id);
 });
 
 test("contrast and ΔE helpers match known values", () => {
@@ -97,4 +123,12 @@ test("contrast and ΔE helpers match known values", () => {
   assert.equal(contrast("#777777", "#ffffff").toFixed(2), "4.48");
   assert.ok(deltaE("#000000", "#ffffff") > 99.9 && deltaE("#000000", "#ffffff") < 100.1);
   assert.equal(deltaE("#2f6fd6", "#2f6fd6"), 0);
+  // the spec's reference: default dark ok/bad are ΔE ~102 apart, but nearly the same under deuteranopia
+  // (ΔE ~5.1 here; the spec's 4.6 came from a slightly different pipeline, both far below 20)
+  const ok = "#4ac26b", bad = "#ff7b72";
+  assert.ok(Math.abs(deltaE(ok, bad) - 102) < 1, deltaE(ok, bad));
+  const d = deltaE(simulate(ok, "deuteranopia"), simulate(bad, "deuteranopia"));
+  assert.ok(d > 4 && d < 6, `deuteranopia ok/bad ΔE ${d}`);
+  // greys are unchanged by the simulation
+  for (const type of Object.keys(MACHADO)) assert.equal(simulate("#808080", type), "#808080");
 });
