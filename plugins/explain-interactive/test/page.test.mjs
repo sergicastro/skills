@@ -2,9 +2,10 @@
 // Skipped when no Chrome/Chromium is found; set CHROME=/path/to/chrome to choose one.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, rmSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, dirname } from "node:path";
+import { join, dirname, extname, relative, resolve, sep } from "node:path";
+import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -17,12 +18,32 @@ const SKILL = join(dirname(fileURLToPath(import.meta.url)), "../skills/explain-i
 const tmp = mkdtempSync(join(tmpdir(), "explain-page-"));
 let browser, send, js, open, problems = [], requests = [];
 
+// Pages are served from the temp folder over http://127.0.0.1 rather than opened as file:// URLs. Under load, Chrome
+// sometimes doesn't pass a file:// page's localStorage writes on to the pages loaded after it (a page that writes,
+// then the tab moves to another file:// page, whose writes then never show up anywhere else). That made the tests
+// that reload a page and check what it saved flaky. Over http it didn't happen once in the same stress runs.
+const ROOT = realpathSync(tmpdir());
+const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".json": "application/json" };
+let server, base;
+const served = file => base + "/" + relative(ROOT, realpathSync(file)).split(sep).map(encodeURIComponent).join("/");
+// Requests other than the page's own files and data: URLs
+const external = () => requests.filter(u => !u.startsWith("file:") && !u.startsWith("data:") && !u.startsWith(base + "/"));
+
 before(async () => {
   if (skip) return;
+  server = createServer((req, res) => {
+    const path = resolve(ROOT, "." + decodeURIComponent(new URL(req.url, "http://x").pathname));
+    let body; try { if (path.startsWith(ROOT + sep)) body = readFileSync(path); } catch {}
+    if (!body) { res.writeHead(404).end(); return; }
+    res.writeHead(200, { "content-type": TYPES[extname(path)] || "application/octet-stream" }).end(body);
+  });
+  await new Promise(res => server.listen(0, "127.0.0.1", res));
+  base = `http://127.0.0.1:${server.address().port}`;
   browser = await launch();
-  ({ send, js, open, problems, requests } = browser);
+  ({ send, js, problems, requests } = browser);
+  open = file => browser.open(served(file));
 });
-after(() => { browser?.close(); try { rmSync(tmp, { recursive: true, force: true }); } catch {} });
+after(() => { browser?.close(); server?.close(); try { rmSync(tmp, { recursive: true, force: true }); } catch {} });
 
 test("built sample: features work in a browser", { skip }, async () => {
   const page = join(tmp, "sample.html");
@@ -72,7 +93,7 @@ test("built sample: features work in a browser", { skip }, async () => {
   assert.doesNotMatch(prompt, /Terms it uses/, "step 3 has no <dfn>");
   assert.match(prompt, /I got this step's check wrong\. Question: ".+" The answer is ".+"\./);
   assert.match(prompt, /What's unclear to me: why not the service\?/);
-  assert.doesNotMatch(prompt, /file:|\/Users\/|\/home\/|<\w/, "no path or markup in the prompt");
+  assert.doesNotMatch(prompt, /file:|https?:|\/Users\/|\/home\/|<\w/, "no path or markup in the prompt");
   assert.ok(await js(`document.querySelector("#step-3 .stuck .stuck-out").hidden`));
   assert.match(await js(`document.querySelector("#step-3 .stuck-msg").textContent`), /^Copied/);
   // step 2 uses <dfn>Gateway</dfn>: its definition goes along; nothing typed gets a stock line
@@ -148,7 +169,7 @@ test("built sample: features work in a browser", { skip }, async () => {
   await send("Emulation.clearDeviceMetricsOverride");
 
   assert.deepEqual(problems, [], "console errors/warnings");
-  assert.deepEqual(requests.filter(u => !u.startsWith("file:") && !u.startsWith("data:")), [], "external requests");
+  assert.deepEqual(external(), [], "external requests");
 });
 
 test("spec diagrams: every layout renders, a wide one puts its steps full width, a raw <svg> still works", { skip }, async () => {
@@ -551,7 +572,7 @@ test("index page: lists pages, filters them, shows reading progress", { skip }, 
   await js(`document.querySelector('#list a[href="cron-twice.html"]').click()`); await sleep(300);
   assert.equal(await js(`document.title`), "Why the nightly report was sent twice");
   assert.deepEqual(problems, []);
-  assert.deepEqual(requests.filter(u => !u.startsWith("file:") && !u.startsWith("data:")), []);
+  assert.deepEqual(external(), []);
   await js("localStorage.clear()");
   rmSync(dir, { recursive: true, force: true });
 });

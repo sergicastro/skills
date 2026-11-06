@@ -58,7 +58,7 @@ const withTimeout = (promise, ms, what) => {
 
 // Starts a headless browser on a blank page. Returns helpers bound to that page:
 //   send(method, params, { timeout })  raw DevTools call      js(expr)  evaluate and return the value
-//   open(file, { timeout })            load a local file      close()
+//   open(file, { timeout })            load a local file (or an http(s) URL)      close()
 //   problems / requests / dialogs      console errors+warnings, URLs requested, alert/confirm/prompt texts
 // Every call fails after its timeout (default 30 s), and at once when the browser connection closes, so a stuck page
 // can't hang the caller. A dialog the page opens is answered straight away (it would block every later call).
@@ -128,7 +128,7 @@ export async function launch({ chrome = findChrome(), width = 1280, height = 800
     });
     loaded.catch(() => {});   // awaited below; this only keeps an early failure from going unhandled
     try {
-      await send("Page.navigate", { url: pathToFileURL(file).href }, { timeout: ms });
+      await send("Page.navigate", { url: /^https?:\/\//.test(file) ? file : pathToFileURL(file).href }, { timeout: ms });
       await withTimeout(loaded, ms, `loading ${file}`);
     } finally { listeners.delete(h); }
     await sleep(100);
