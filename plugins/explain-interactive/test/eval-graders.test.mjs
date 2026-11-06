@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { NAMES, files } from "../evals/name-graders.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const EVALS = join(ROOT, "evals");
@@ -40,6 +41,16 @@ function entryLines(text) {
   });
   return out;
 }
+
+test("every case has a name list, and the name-* files match what evals/name-graders.mjs writes", () => {
+  assert.deepEqual(Object.keys(NAMES).sort(), [...CASES].sort());
+  for (const c of CASES) {
+    const want = files(c), dir = join(EVALS, c, "graders");
+    const have = readdirSync(dir).filter(f => f.startsWith("name-"));
+    assert.deepEqual(have.sort(), Object.keys(want).sort(), `${c}: run node evals/name-graders.mjs`);
+    for (const f of have) assert.equal(readFileSync(join(dir, f), "utf8"), want[f], `${c}/${f}: run node evals/name-graders.mjs`);
+  }
+});
 
 for (const c of CASES) {
   test(`${c}: the names-covered.md judge is gone and the name graders weigh 1 together`, () => {
@@ -95,6 +106,14 @@ test("a mention in a body or a key outside CAST/GLOSSARY doesn't count as an ent
   assert.ok(!re.test(page('  "recipe-site": "The app.",', body)));
   assert.ok(!re.test(page('  "recipe-site": "The app.",', body) + "\nconst DECISION = { ratings: { jobs: { cost: 1 } } };"));
   assert.ok(re.test(page('  "jobs table": "One row per email to send.",', body)));
+});
+
+test("a one-line CAST ends at its }, so keys in a later object don't count", () => {
+  const re = check("decision", "jobs-table");
+  const rest = `const DECISION = {\n  ratings: {\n    jobs: { cost: "low" },\n  },\n};\nconst STEPS = [{ body: "<p>The <code>jobs</code> table.</p>" }];`;
+  assert.ok(!re.test(`const CAST = { "recipe-site": "The app." };\n${rest}`));
+  assert.ok(!re.test(`const CAST = { "recipe-site": "The app." }\n${rest}`));
+  assert.ok(re.test(`const CAST = { "recipe-site": "The app.", jobs: "One row per email." };\n${rest}`));
 });
 
 test("PATH is matched case-sensitively, so the word 'path' needs no entry", () => {

@@ -37,29 +37,39 @@ Every case has:
 ### Name graders
 
 These replace `names-covered`, an `llm` grader whose votes split on near-identical pages (4 of 15
-runs failed on each side of the #46 comparison). Each case has a hand-written list of the names its
-prompt quotes, one `name-<slug>.md` per name. A grader passes when the name never appears in the
-content file, or appears as a key inside the `CAST` or `GLOSSARY` object: so a name the page uses
-without an entry fails. A mention in a body, or a key in another object (`DECISION`, a diagram)
-doesn't count.
+runs failed on each side of the #46 comparison). Each case has a list of the names its prompt
+quotes, in the `NAMES` table of `evals/name-graders.mjs`, which writes one `name-<slug>.md` per
+name. A grader passes when the name never appears in the content file, or appears as a key inside
+the `CAST` or `GLOSSARY` object: so a name the page uses without an entry fails. A mention in a
+body, a key in another object (`DECISION`, a diagram) or a `Key:` inside an entry's text doesn't
+count.
 
-- Patterns allow optional quotes around the key, an optional `()`, and any case (`flags: i`;
-  the regex grader's `flags` field takes JS RegExp flags, checked on Claude Code 2.1.319). `PATH` and `TZ` leave out `i`, since `path` is an
-  ordinary word.
+- Patterns allow optional quotes around the key, an optional `()`, and any case (`flags: i`; the
+  regex grader's `flags` field takes JS RegExp flags, checked on Claude Code 2.1.319). `PATH` and
+  `TZ` leave out `i`, since `path` is an ordinary word.
 - Each name grader has `weight` 1/N, so a case's names together weigh 1, as the one judge did. A
   run's score is the passed weight over the total weight, and every other grader weighs 1; at the
-  default weight, ten names would outweigh the rest of the case.
+  default weight, ten names would outweigh the rest of the case. (skill-creator, which assumes
+  equal weights, will report a different pass rate than the CLI score for these cases.)
 - A few names accept a broader key where the page explains the name through it: `acme/` may be
   dropped from a repo, `request.state` covers `request.state.user`, a table may be `jobs` or
   `jobs table`.
-- Known limits: names a page brings in beyond the prompt aren't checked, and a key spelled outside
-  the allowed variants fails a fine page. A name explained only in a `LAYERS` item or a step body
-  still fails: the rule is a `CAST`/`GLOSSARY` entry, which is what the page's tooltips read. The `<dfn>` half of the old rule is left to `--check`,
-  which warns about a `<dfn>` with no entry; the skill has the session fix every warning.
-- **Upkeep: when a case's `prompt.md` changes, change its `name-*` list to match.**
-  `test/eval-graders.test.mjs` runs every name grader on a saved good content file per case
-  (`test/fixtures/evals/`) and checks it fails once its entry is removed; refresh the fixture when
-  the prompt changes.
+- For a regex grader the CLI reads the file body as the pattern, so each file says what it checks
+  in a `#` comment in its frontmatter instead.
+- Known limits:
+  - Names a page brings in beyond the prompt aren't checked.
+  - A key spelled outside the allowed variants fails a fine page, and so does a `}` inside a
+    `CAST`/`GLOSSARY` value (the scan stops at the first `}`).
+  - A name explained only in a `LAYERS` item or a step body still fails: the rule is a
+    `CAST`/`GLOSSARY` entry, which is what the page's tooltips read.
+  - A name in a code comment counts as used.
+  - The `<dfn>` half of the old rule is left to `--check`, which warns about a `<dfn>` with no
+    entry; the skill has the session fix every warning.
+- **Upkeep: when a case's `prompt.md` changes, change its row in `NAMES` to match**, then run
+  `node plugins/explain-interactive/evals/name-graders.mjs` to rewrite the files; don't edit
+  `name-*.md` by hand. `test/eval-graders.test.mjs` fails if the files don't match the table, runs
+  every name grader on a saved good content file per case (`test/fixtures/evals/`), and checks
+  each fails once its entry is removed. Refresh the fixture when the prompt changes.
 
 ### Why the prompts end with a harness note
 
