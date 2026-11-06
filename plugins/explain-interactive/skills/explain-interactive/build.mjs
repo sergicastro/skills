@@ -518,13 +518,13 @@ export function indexHtml(pages, { palettes = PALETTES } = {}) {
 ${BOOTSTRAP}
 <style>
 ${paletteCss(palettes)}
-body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 var(--font); }
 main { max-width: 760px; margin: 0 auto; padding: 32px 20px 48px; }
 h1 { margin: 0 0 4px; font-size: 1.5rem; } .sub { margin: 0 0 20px; color: var(--muted); }
-input { width: 100%; box-sizing: border-box; font: inherit; color: inherit; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+input { width: 100%; box-sizing: border-box; font: inherit; color: inherit; padding: 9px 12px; border: var(--border) solid var(--line); border-radius: calc(10px * var(--radius)); background: var(--card); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 ul { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 10px; }
-li { padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+li { padding: 14px 16px; border: var(--border) solid var(--line); border-radius: calc(12px * var(--radius)); background: var(--card); }
 li a { font-weight: 600; color: var(--accent); text-decoration: none; } li a:hover { text-decoration: underline; }
 li p { margin: 4px 0 8px; color: var(--muted); font-size: .92rem; }
 .meta { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .8rem; color: var(--muted); }

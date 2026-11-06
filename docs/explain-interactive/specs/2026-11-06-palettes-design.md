@@ -20,16 +20,19 @@ Constraints:
 
 ## 2. Palette source
 
-New file `skills/explain-interactive/engine/palettes.mjs`, the only place colour values are
-defined:
+New file `skills/explain-interactive/engine/palettes.mjs`, the only place colour values, and the
+font, corner and border styles, are defined:
 
 ```js
 export const VARS = ["bg", "card", "fg", "muted", "line", "accent", "accent-soft", "ok", "ok-soft",
   "bad", "bad-soft", "hl", "hl-soft", "code-bg", "on-accent", "label"];
 export const PALETTES = [
-  { id: "default", label: "Default", light: { bg: "#f6f5f1", ... }, dark: { bg: "#0d0f12", ... } },
+  { id: "default", label: "Default", style: { font: "sans", radius: 1, border: 1 },
+    light: { bg: "#f6f5f1", ... }, dark: { bg: "#0d0f12", ... } },
   ...
 ];
+export const FONTS = { sans: `system-ui, …, sans-serif`, serif: `ui-serif, Georgia, …, serif`, mono: `ui-monospace, …, monospace` };
+export const STYLE = { font: Object.keys(FONTS), radius: [0, .5, 1, 1.5, 2], border: [1, 1.5, 2] };
 export function paletteCss(palettes = PALETTES) { ... }   // returns the CSS text
 ```
 
@@ -38,8 +41,28 @@ export function paletteCss(palettes = PALETTES) { ... }   // returns the CSS tex
 - `build(code, file, { palettes = PALETTES } = {})` and `indexHtml(pages, { palettes = PALETTES } = {})`
   take an optional palette list, so tests can build pages with a fixture palette. The skill's
   own calls pass nothing.
-- Layout variables (`--side`, `--top`, `--foot`) stay in `engine.css`. Only colour variables and
-  `color-scheme` move.
+- Layout variables (`--side`, `--top`, `--foot`) stay in `engine.css`. Only colour variables,
+  `color-scheme` and the three style variables move.
+
+### Style variables
+
+A palette changes shape and type too, not only colour. Its `style` is the same in light and dark
+and becomes three variables:
+
+| Variable | From | Used for |
+|---|---|---|
+| `--font` | a key of `FONTS`: system font stacks only, no web fonts, so pages stay offline | the body (and so all text that inherits it), the index page, diagram text, the diff headers. Code keeps its monospace stack. |
+| `--radius` | a unitless scale; `1` is today's corners | every fixed corner in `engine.css` and the index page becomes `calc(<today's px> * var(--radius))`, so 8/10/12px become 0 at `0` and 16/20/24px at `2`. Pills (`999px`) and circles (`50%`) stay. Diagram boxes (`rx="8"`) and label backgrounds (`rx="3"`) follow it through a CSS `rx` rule. |
+| `--border` | a width in px; `1` is today's | every `1px` line on the page; thicker ones keep their extra width over it (`1.5px` becomes `calc(var(--border) + .5px)`). Diagram box outlines follow it; arrows and lifelines keep today's widths, because an SVG arrowhead grows with its line. |
+
+`default`'s style is today's (`sans`, `1`, `1`), so a default page computes the same fonts, radii
+and border widths as before; a browser test checks this against the values read before the change.
+
+Diagram labels: `build.mjs` sizes boxes and label backgrounds from a table of system-sans widths.
+A wider face (monospace, serif) could overrun them, so `engine.js` measures each label in a box or
+on a label background (on a canvas, so the diagrams of hidden steps fit too) whenever the palette
+is set, and shrinks the font of one that wouldn't fit. A browser test checks that no label
+overflows, in every example with a spec diagram, every palette and both modes.
 - The colour variable blocks at the top of `engine.css` (`:root`, the dark `@media` block and
   `:root[data-theme="dark"]`) are removed. So are the copies in `build.mjs`'s `indexHtml`. Both
   pages get `paletteCss()` instead. The index page uses the variables it already uses, which are
@@ -50,12 +73,14 @@ export function paletteCss(palettes = PALETTES) { ... }   // returns the CSS tex
 For each palette, with `S` = `:root` for `default` and `:root[data-palette="<id>"]` otherwise:
 
 ```css
-S { <light vars>; color-scheme: light; }
+S { <light vars>; color-scheme: light; --font: …; --radius: …; --border: …; }
 @media (prefers-color-scheme: dark) { S:not([data-theme="light"]) { <dark vars>; color-scheme: dark; } }
 S[data-theme="dark"] { <dark vars>; color-scheme: dark; }
 ```
 
-`default` is written first. Why this resolves correctly (specificity, then source order):
+The style variables are written only in the first rule: they are the same in both modes, and the
+dark rules match the same element. A palette with no `style` (a test fixture) writes none, so
+`default`'s apply. `default` is written first. Why this resolves correctly (specificity, then source order):
 
 | State | Rule that wins |
 |---|---|
@@ -76,8 +101,24 @@ A test checks the computed values for these states in a real browser (section 5)
 | `default` | Default | today's colours, with light `--accent` and `--hl` darkened just enough to pass 4.5:1 (they are 4.41 and 4.28 on `--bg` today) |
 | `high-contrast` | High contrast | near-black on white (and white on near-black in dark mode), stronger `--line`, more saturated soft tints |
 | `colour-blind` | Colour-blind safe | based on Okabe–Ito: ok = blue, bad = vermillion, hl = a yellow-orange or reddish purple that stays different from both under deuteranopia and protanopia |
-| `sepia` | Sepia | warm paper background, brown text; for looks |
-| `slate` | Slate | cool blue-grey; for looks |
+| `paper` | Paper | a printed essay: serif text, warm off-white (light) or ink-dark (dark), sharp corners, thin rules |
+| `terminal` | Terminal | monospace everywhere, square corners; phosphor green with amber highlights on near-black (dark), dark green text on pale green (light) |
+| `soft` | Soft | friendly: large rounded corners, pastel violet surfaces, thicker borders |
+
+Styles:
+
+| id | font | radius | border |
+|---|---|---|---|
+| `default` | sans | 1 | 1 |
+| `high-contrast` | sans | 1 | 2 |
+| `colour-blind` | sans | 1 | 1 |
+| `paper` | serif | 0 | 1 |
+| `terminal` | mono | 0 | 1 |
+| `soft` | sans | 2 | 2 |
+
+`high-contrast` and `colour-blind` keep their colours and the system font: they are for
+accessibility, not looks. `high-contrast` takes the thicker border. `paper`, `terminal` and `soft`
+replace the earlier `sepia` and `slate`, which only changed colours.
 
 Each palette defines all of `VARS` in both light and dark. Exact values are chosen when the
 palettes are implemented and must pass section 5's checks.
@@ -198,3 +239,8 @@ epics.
 - User-defined palettes.
 - A picker on the index page.
 - A full WCAG audit beyond the checks in section 5.
+- Web fonts, or any font a reader's system doesn't have: `--font` is a system stack only.
+- Styles beyond font, corners and border width (spacing, shadows, font size), and styles set
+  apart from the palette (a reader can't pick Terminal's font with Default's colours).
+- Laying out diagrams per font: boxes are sized once at build time for a system sans; a wider
+  font shrinks the label to fit instead.

@@ -369,6 +369,22 @@ function setPalette(id, save) {
   if (known === "default") delete root.dataset.palette; else root.dataset.palette = known;   // an unknown saved id shows default
   pickers.forEach(s => { s.value = known; });
   if (save) try { if (known === "default") localStorage.removeItem("explain-palette"); else localStorage.setItem("explain-palette", known); } catch (e) {}
+  fitLabels();
+}
+// Diagram text follows the palette's --font, but build.mjs sized the boxes for a system sans. A wider face (monospace,
+// serif) could overrun a box or a label's background, so such a text is shrunk until it fits. Measured on a canvas
+// rather than with getBBox, so the diagrams of hidden steps fit too.
+const measure = document.createElement("canvas").getContext("2d");
+function fitLabels() {
+  $$(".visual svg text").forEach(t => {
+    const r = t.previousElementSibling;
+    if (!r || r.tagName !== "rect" || !r.matches(".box, .label-bg")) return;
+    t.style.fontSize = "";
+    const cs = getComputedStyle(t), size = parseFloat(cs.fontSize);
+    measure.font = `${cs.fontStyle} ${cs.fontWeight} ${size}px ${cs.fontFamily}`;
+    const room = r.width.baseVal.value - (r.classList.contains("label-bg") ? 4 : 12), w = measure.measureText(t.textContent).width;
+    if (w > room && room > 0) t.style.fontSize = `${Math.floor(size * room / w * 10) / 10}px`;
+  });
 }
 pickers.forEach(s => s.addEventListener("change", () => setPalette(s.value, true)));
 setPalette(root.dataset.palette || "default", false);
