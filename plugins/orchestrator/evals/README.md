@@ -13,6 +13,8 @@ Graders:
 - `skill-loaded` (`tool_used: Skill`, `arm: with-only`): did the skill fire. An indicator, not scored
   when a no-plugin baseline arm runs.
 - one or more `llm` graders: the pass conditions of the scenario, judged on the listed calls.
+- `regex` graders on the final reply where a pass condition is a fixed call sequence
+  (`m8-two-messages`, see "Two messages in one turn").
 
 ## Cases
 
@@ -77,7 +79,7 @@ plugin), skills as of this PR. Total cost $7.35.
 - The skill loaded in every with-plugin run.
 - Fails with the plugin:
   - `m8-two-messages`: 0.0 (second REQUEST of the turn not answered). Re-run 3×: 2/3 pass.
-    A real, intermittent gap in the manager skill.
+    Later traced to the judge, not the skill: see "Two messages in one turn (#61)".
   - `m-edit-goal-notice-offer`: 0.5, a grader problem: it required "only the new criterion"
     while `edit-goal` replaces the whole field, so the skill correctly keeps the old criteria.
     Grader fixed; re-run 3×: 3/3 pass.
@@ -150,6 +152,30 @@ Graders added:
 All 15 with-plugin runs passed. The bare model still mostly passes the older graders of these cases (it does
 refuse the stray orders), so they stay as regression guards; the new graders carry the signal.
 
+## Two messages in one turn (#61)
+
+2026-11-06, Claude Code 2.1.319, `--runs 5` then `--runs 10`, `--ablation none --keep-temp`. Cost
+$1.12 + $2.19.
+
+With the old `both-answered` judge: 4/5 and 7/10 runs passed. But in all 15 traces the session
+ran `request demo demo-w-b`, sent demo-w-b an ASSIGN, then ran `request demo demo-w-c` and sent
+demo-w-c an ASSIGN, and checked before ending the turn that each REQUEST got one reply. The
+failing replies don't differ from the passing ones. Three were failed 3-0. Asked to give its reasons
+on the same reply and criteria, haiku said PASS. With a one-word verdict it split (3 PASS, 1 FAIL).
+So the skill wasn't dropping the second message here, and SKILL.md is unchanged.
+
+`both-answered` is replaced by two `regex` graders on the final reply, `demo-w-b-answered` and
+`demo-w-c-answered`. Each needs, in order: `request demo demo-w-<x>`, a `SendMessage` naming that
+worker, then an `[orch v1 ASSIGN]` or `[orch v1 NONE_READY]`. Both matched all 15 kept replies. On
+the acceptance run (`--runs 5`) they scored 5/5 ($1.11). `tests/test_eval_graders.py` checks both
+patterns against one of the 3-0-failed replies (`tests/fixtures/evals/`). It also checks that each
+pattern fails once that worker's steps are removed.
+
+Limits: a reply that lists the calls in another shape (e.g. `$ORCH` calls not spelled as
+`request demo <worker>`, or a SendMessage written as JSON more than 80 characters before the
+name) fails a fine run. The old "no cause invented" clause is no longer checked; it only mattered
+for a dropped message, which these graders already fail.
+
 ## Old vs new skill text (#37)
 
 2026-11-05, `--runs 3 --ablation none -j 4`. The 4 #37 cases plus `m-resume-name-mismatch`,
@@ -178,4 +204,5 @@ folder (it holds no `prompt.md` cases).
 - Single-turn simulations: a case can't play a second user turn or a real incoming message, so
   "later" behaviour (W5's STATUS assigned, W14's resume) is checked by what the session says it will do.
 - `llm` graders use the default judge (haiku), 3 votes each; with `--runs 1` a single flaky run shows
-  as a fail. Use `--runs 3` before drawing conclusions from one case.
+  as a fail. Use `--runs 3` before drawing conclusions from one case. The judge can also fail a
+  correct reply 3-0 (#61), so read the trace (`--keep-temp`) before blaming the skill.
