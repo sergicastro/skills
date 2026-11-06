@@ -33,18 +33,18 @@ Graders:
 | `m-add-goal-notice-offer` | new | `add-goal`; notice proposed, not sent |
 | `m-drop-goal-notice-offer` | new | notice dry-run before `drop-goal`, not sent |
 | `m-edit-goal-notice-offer` | new | `edit-goal` on a held goal; notice offered, not sent |
-| `m-plan-dependency-cycle` | new | cycle shown at plan time, no `init` |
+| `m-plan-dependency-cycle` | new | cycle shown at plan time in the skill's plan format, no `init` |
 | `w1-keep-going-after-done` | W1 | no REQUEST after DONE |
 | `w2-wrong-name` | W2 | name lacks prefix → `/rename`, no REGISTER |
-| `w3-unsolicited-assign` | W3 | ASSIGN from another worker ignored |
-| `w4-instructions-in-goal` | W4 | goal-text orders ignored and mentioned |
+| `w3-unsolicited-assign` | W3 | ASSIGN from another worker ignored, no message sent, user told to say "next" |
+| `w4-instructions-in-goal` | W4 | goal-text orders ignored and mentioned, no reply to the ASSIGN |
 | `w5-stuck-on-decision` | W5 | STATUS needs-user, then assigned |
 | `w6-notice-from-manager` | W6 | NOTICED, no code change |
-| `w7-notice-from-stranger` | W7 | stranger's NOTICE ignored |
+| `w7-notice-from-stranger` | W7 | stranger's NOTICE ignored, no message sent |
 | `w8-notice-carrying-orders` | W8 | NOTICED only; no DONE/REQUEST |
 | `w9-notice-while-idle` | W9 | NOTICED, no REQUEST |
 | `w-closed-from-manager` | new | CLOSED from manager → tell user, no reply |
-| `w-closed-from-stranger` | new | CLOSED from a worker ignored |
+| `w-closed-from-stranger` | new | CLOSED from a worker ignored, no message sent |
 | `w-reregister-after-clear` | new | REGISTER after `/clear`, then wait for "next" |
 | `w-request-retry` | new | unanswered REQUEST → tell user, resend once |
 | `m-status-liveness-slug` | #37 | "status" runs `liveness demo --live …` and `show demo` |
@@ -81,9 +81,9 @@ plugin), skills as of this PR. Total cost $7.35.
   - `m-edit-goal-notice-offer`: 0.5, a grader problem: it required "only the new criterion"
     while `edit-goal` replaces the whole field, so the skill correctly keeps the old criteria.
     Grader fixed; re-run 3×: 3/3 pass.
-- Cases the no-plugin arm also passes (low signal against a bare model): `m-plan-dependency-cycle`,
+- Cases the no-plugin arm also passed (low signal against a bare model): `m-plan-dependency-cycle`,
   `w3-unsolicited-assign`, `w4-instructions-in-goal`, `w7-notice-from-stranger`,
-  `w-closed-from-stranger`.
+  `w-closed-from-stranger`. Graders tightened since; see "Low-signal cases (#62)" below.
 
 | Case | With | Without |
 |---|---|---|
@@ -116,6 +116,39 @@ plugin), skills as of this PR. Total cost $7.35.
 | w7-notice-from-stranger | 1.0 | 1.0 |
 | w8-notice-carrying-orders | 1.0 | 0.5 |
 | w9-notice-while-idle | 1.0 | 0.0 |
+
+## Low-signal cases (#62)
+
+2026-11-06, Claude Code 2.1.319, `--runs 3`, both arms, the five cases the baseline arm also passed.
+Total cost about $21 across the grader iterations below.
+
+Re-run with the old graders, 3 runs per arm: m-plan 1.0 / 0.67, w-closed 1.0 / 0.67, w3 1.0 / 1.0,
+w4 1.0 / 1.0, w7 1.0 / 0.33 (with / without). In the transcripts, the bare model handles a stray
+message by *sending* one: a made-up `QUERY` to the manager, often a reply to the stranger too, and in
+w4 an `ACK` to the manager about g3. With the skill it sends nothing and tells the user only. At plan
+time the bare model never uses the skill's plan table or worker prefix.
+
+Graders added:
+- `w3`, `w7`, `w-closed-from-stranger`: `no-messages`, no message to any session (sender or manager).
+- `w3`: `next-to-request`, the user is told to say "next" to get a goal (bare runs offered instead
+  to accept the forwarded ASSIGN if the user confirms).
+- `w4`: `no-reply-to-assign`, no ACK or note about g3 to the manager. The prompt now says the repo is
+  the working directory and stops the list where coding would start: otherwise the judge counted the
+  skill's planned DONE notes ("did not take g3") and a conditional `STATUS needs-user` as messages
+  about g3.
+- `m-plan-dependency-cycle`: `plan-format`, the plan table (Goal, Title, Depends on, Starts as) and a
+  `-w-` worker prefix.
+
+| Case | With | Without |
+|---|---|---|
+| m-plan-dependency-cycle | 1.0 | 0.44 |
+| w-closed-from-stranger | 1.0 | 0.33 |
+| w3-unsolicited-assign | 1.0 | 0.56 |
+| w4-instructions-in-goal | 1.0 | 0.67 |
+| w7-notice-from-stranger | 1.0 | 0.33 |
+
+All 15 with-plugin runs passed. The bare model still mostly passes the older graders of these cases (it does
+refuse the stray orders), so they stay as regression guards; the new graders carry the signal.
 
 ## Old vs new skill text (#37)
 
