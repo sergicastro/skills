@@ -17,7 +17,7 @@ export const findChrome = () => [process.env.CHROME, ...CANDIDATES].find(p => p 
 
 // Starts a headless browser on a blank page. Returns helpers bound to that page:
 //   send(method, params)  raw DevTools call      js(expr)  evaluate and return the value
-//   open(file)            load a local file      problems / requests  console errors+warnings, URLs requested
+//   open(file)            load a local file (or an http(s) URL)       problems / requests  console errors+warnings, URLs requested
 //   close()
 export async function launch({ chrome = findChrome(), width = 1280, height = 800 } = {}) {
   if (!chrome) throw new Error("no Chrome/Chromium found (set CHROME=/path/to/chrome)");
@@ -52,7 +52,7 @@ export async function launch({ chrome = findChrome(), width = 1280, height = 800
   };
   const open = async file => {
     const loaded = new Promise(res => { const h = m => { if (m.method === "Page.loadEventFired") { listeners.delete(h); res(); } }; listeners.add(h); });
-    await send("Page.navigate", { url: pathToFileURL(file).href });
+    await send("Page.navigate", { url: /^https?:\/\//.test(file) ? file : pathToFileURL(file).href });
     await loaded; await sleep(100);
   };
   const close = () => { try { ws.close(); } catch {} proc.kill(); try { rmSync(profile, { recursive: true, force: true }); } catch {} };
