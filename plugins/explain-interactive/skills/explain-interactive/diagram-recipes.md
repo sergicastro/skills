@@ -52,7 +52,7 @@ The build checks the spec. Unknown layouts, unknown or repeated ids, edges namin
 - **At most ~7 nodes.** Merge or drop details this explanation doesn't need. Keep a `layers` stack to 5 bands and a `sequence` to about 8 messages, or the picture gets too tall to read.
 - **No sentences inside boxes**: a name (≤ 3 words) per node. Prose belongs in `body`.
 - **Short edge labels** (≤ ~25 characters). The layout makes room for each label, so a long one stretches the whole diagram and shrinks its text.
-- **Colour means one thing:** orange `hl` = new in this step (and the `<mark>` in the text), red `bad` = rejected/failure, green `ok` = accepted/success, ghosted = not introduced yet.
+- **Colour means one thing:** the highlight colour `hl` = new in this step (and the `<mark>` in the text), red `bad` = rejected/failure, green `ok` = accepted/success, ghosted = not introduced yet.
 - `build` (staged reveal, ≤ 4 stages) is for sequences where the order of messages is the point.
 
 A diagram wider than 680 units would be too small beside the text, so the page shows its steps full width, with the text above and a quiz beside the diagram. A `sequence` grows wider with each column and a `chain` with each box. If the build says the diagram is wider than ~900 units, drop a node or shorten labels.
