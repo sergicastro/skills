@@ -7,7 +7,9 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { skip } from "./chrome.mjs";
-import { MARKER, optionNames, prepareOut, shotFile, SHOT_FILE } from "../skills/explain-interactive/shots.mjs";
+import { MARKER, optionNames, prepareOut, shoot, shotFile, SHOT_FILE } from "../skills/explain-interactive/shots.mjs";
+import { build } from "../skills/explain-interactive/build.mjs";
+import { PALETTES } from "../skills/explain-interactive/engine/palettes.mjs";
 
 const SKILL = join(dirname(fileURLToPath(import.meta.url)), "../skills/explain-interactive");
 const run = (...a) => spawnSync(process.execPath, [join(SKILL, "shots.mjs"), ...a], { encoding: "utf8", timeout: 120000 });
@@ -155,4 +157,33 @@ test("output folder: a new one is created", () => {
     assert.ok(prepareOut(join(dir, "a", "b")).marker);
     assert.ok(existsSync(join(dir, "a", "b", MARKER)));
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("shots --palette: an unknown or missing id is refused with the valid ids, before anything is rendered", () => {
+  const ids = PALETTES.map(p => p.id).join(", ");
+  let r = run(join(SKILL, "examples/token-401.content.js"), "--palette", "nope");
+  assert.equal(r.status, 2);
+  assert.equal(r.stderr.trim(), `--palette nope: no such palette; use one of ${ids}`);
+  r = run(join(SKILL, "examples/token-401.content.js"), "--palette");
+  assert.equal(r.status, 2);
+  assert.equal(r.stderr.trim(), `--palette needs an id; use one of ${ids}`);
+});
+
+test("shots --palette: the page is shot in that palette; one the page doesn't offer is an error", { skip }, async () => {
+  const out = mkdtempSync(join(tmpdir(), "explain-shots-"));
+  try {
+    const def = PALETTES.find(p => p.id === "default");
+    const alt = { id: "alt", label: "Alt", light: { ...def.light, bg: "#203040", card: "#304050" }, dark: def.dark };
+    const page = join(out, "p.html");
+    writeFileSync(page, build(readFileSync(join(SKILL, "examples/token-401.content.js"), "utf8"), undefined, { palettes: [def, alt] }).html);
+    const dirs = { default: join(out, "default"), alt: join(out, "alt") };
+    for (const [id, dir] of Object.entries(dirs)) {
+      prepareOut(dir, { ours: true });
+      const r = await shoot(page, { out: dir, palette: id });
+      assert.equal(r.shots.length, 6);
+      assert.deepEqual(r.findings, []);
+    }
+    assert.ok(!readFileSync(join(dirs.default, "step-01.png")).equals(readFileSync(join(dirs.alt, "step-01.png"))), "the palettes look different");
+    await assert.rejects(shoot(page, { out: dirs.alt, palette: "sepia" }), /has no palette "sepia" \(it has default, alt\)/);
+  } finally { rmSync(out, { recursive: true, force: true }); }
 });

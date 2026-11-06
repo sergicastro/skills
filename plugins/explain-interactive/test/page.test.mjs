@@ -643,3 +643,80 @@ test("palettes: the computed colours follow the OS scheme, the forced mode and t
     await send("Emulation.setEmulatedMedia", { features: [] });
   }
 });
+
+test("palette picker: the top-bar select sets the palette in every state, syncs the menu and is remembered; the index follows", { skip }, async () => {
+  const def = PALETTES.find(p => p.id === "default");
+  const alt = { id: "alt", label: "Alt", light: { ...def.light, bg: "#fafaff" }, dark: { ...def.dark, bg: "#101020" } };
+  const palettes = [def, alt];
+  const page = join(tmp, "picker.html"), index = join(tmp, "picker-index.html");
+  writeFileSync(page, build(readFileSync(join(SKILL, "examples/token-401.content.js"), "utf8"), undefined, { palettes }).html);
+  writeFileSync(index, indexHtml([], { palettes }));
+  const looks = () => js(`(s => [s.getPropertyValue("--bg").trim(), s.colorScheme])(getComputedStyle(document.documentElement))`);
+  const picked = () => js(`[document.querySelector("#palette").value, document.querySelector(".side-tools select.palette").value,
+    document.documentElement.dataset.palette ?? null, localStorage.getItem("explain-palette")]`);
+  const pick = id => js(`(s => { s.value = "${id}"; s.dispatchEvent(new Event("change", { bubbles: true })); })(document.querySelector("#palette"))`);
+  // Each row of spec section 2's table, with the palette picked the way a reader does: the mode saved, the page loaded, then the select
+  const rows = [
+    ["no palette, OS light", "light", null, "default", def.light.bg, "light"],
+    ["no palette, OS dark", "dark", null, "default", def.dark.bg, "dark"],
+    ["no palette, forced light, OS dark", "dark", "light", "default", def.light.bg, "light"],
+    ["no palette, forced dark, OS light", "light", "dark", "default", def.dark.bg, "dark"],
+    ["palette, OS light", "light", null, "alt", alt.light.bg, "light"],
+    ["palette, OS dark", "dark", null, "alt", alt.dark.bg, "dark"],
+    ["palette, forced light, OS dark", "dark", "light", "alt", alt.light.bg, "light"],
+    ["palette, forced dark, OS light", "light", "dark", "alt", alt.dark.bg, "dark"],
+  ];
+  problems.length = 0;
+  try {
+    for (const [name, os, theme, id, bg, scheme] of rows) {
+      await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: os }] });
+      await open(page);
+      await js(`localStorage.clear(); ${theme ? `localStorage.setItem("explain-theme", "${theme}")` : ""}`);
+      await open(page);
+      await pick(id === "default" ? "alt" : "default");   // start from the other palette, so the pick is a change
+      await pick(id);
+      assert.deepEqual(await looks(), [bg, scheme], `picked: ${name}`);
+      const attr = id === "default" ? null : id;
+      assert.deepEqual(await picked(), [id, id, attr, attr], `selects, attribute and key: ${name}`);
+      await open(page);
+      assert.deepEqual(await looks(), [bg, scheme], `after a reload: ${name}`);
+      assert.deepEqual(await picked(), [id, id, attr, attr], `selected after a reload: ${name}`);
+      // The index page follows the saved palette and mode, and has no picker
+      await open(index);
+      assert.deepEqual(await looks(), [bg, scheme], `index: ${name}`);
+      assert.equal(await js(`document.querySelectorAll("select").length`), 0);
+    }
+    // A saved id the page doesn't have: default colours, Default selected, the attribute removed
+    await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: "light" }] });
+    await js(`localStorage.clear(); localStorage.setItem("explain-palette", "nope")`);
+    await open(page);
+    assert.deepEqual(await looks(), [def.light.bg, "light"]);
+    assert.deepEqual(await picked(), ["default", "default", null, "nope"]);
+    await open(index);
+    assert.deepEqual(await looks(), [def.light.bg, "light"], "index: unknown id");
+    // The menu select drives the top-bar one too; ←/→ on a focused select don't change the step
+    await js(`localStorage.clear()`);
+    await open(page);
+    await js(`(s => { s.focus(); s.value = "alt"; s.dispatchEvent(new Event("change", { bubbles: true })); })(document.querySelector(".side-tools select.palette"))`);
+    assert.deepEqual(await picked(), ["alt", "alt", "alt", "alt"]);
+    const at = () => js(`[...document.querySelectorAll(".step")].findIndex(a => a.classList.contains("active"))`);
+    const before = await at();
+    await js(`document.querySelector("#palette").focus(); document.querySelector("#palette").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }))`);
+    assert.equal(await at(), before);
+    // Phone menu: the palette and light/dark sit in their own section, below the other tools, after a horizontal line
+    await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 800, deviceScaleFactor: 1, mobile: true });
+    await js(`document.querySelector("#menu").click()`);
+    assert.deepEqual(await js(`(() => {
+      const look = document.querySelector(".side .side-look"), tools = document.querySelector(".side .side-tools:not(.side-look)");
+      const s = getComputedStyle(look);
+      return [[...look.children].map(e => e.matches("select.palette") ? "palette" : e.dataset.act),
+        [...tools.children].map(e => e.dataset.act), s.display, s.borderTopStyle, parseFloat(s.borderTopWidth) > 0,
+        look.getBoundingClientRect().top >= tools.getBoundingClientRect().bottom];
+    })()`), [["palette", "theme"], ["depth", "gloss", "all"], "flex", "solid", true, true]);
+    await send("Emulation.clearDeviceMetricsOverride");
+    assert.deepEqual(problems, [], "console errors/warnings");
+    assert.deepEqual(external(), [], "external requests");
+  } finally {
+    await send("Emulation.setEmulatedMedia", { features: [] });
+  }
+});

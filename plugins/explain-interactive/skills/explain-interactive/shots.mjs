@@ -2,13 +2,14 @@
 // Renders every step of an explainer page in headless Chrome and saves one screenshot per step, for review.
 // Node 22+, no dependencies; needs Chrome, Chromium or Edge (set CHROME=/path/to/chrome to pick one).
 //
-//   node shots.mjs <topic>.html | <topic>.content.js [-o <dir>] [--phone] [--dark]
+//   node shots.mjs <topic>.html | <topic>.content.js [-o <dir>] [--phone] [--dark] [--palette <id>]
 //
 //   -o <dir>   where to write the images (default: <tmp>/explain-shots/<topic>). Old shots are removed first: in the
 //              default folder every step-*.png, elsewhere only the ones an earlier run wrote there (listed in .explain-shots).
 //              A folder holding other step-*.png files is refused, so an existing folder's images are never deleted.
 //   --phone    also render each step at phone size (390×844): step-NN-phone.png
 //   --dark     dark theme instead of light
+//   --palette <id>  colour palette to shoot (an id from engine/palettes.mjs; default: the default palette)
 //
 // A content file is built first (into the output directory). Each step is shown as the reader sees it on arrival,
 // with every build stage revealed. A step with a what-if control is also shot once per other option: step-NN-<option>.png
@@ -16,8 +17,9 @@
 // a middle step much taller than the screen, a diagram too wide for its box, diagram text rendered too small,
 // console errors or warnings (e.g. a <dfn> with no glossary entry), a dialog the page opens (answered, so it can't
 // hang the run), and any request the page makes.
-// Exit code: 0 rendered (findings are printed, not fatal), 1 the page failed, 2 bad arguments, no browser, Node older
-// than 22, or an -o folder with step images this script didn't write.
+// Exit code: 0 rendered (findings are printed, not fatal), 1 the page failed (or has no picker offering --palette),
+// 2 bad arguments (an unknown --palette id among them), no browser, Node older than 22, or an -o folder with step
+// images this script didn't write.
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
@@ -25,6 +27,7 @@ import { fileURLToPath } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
 import { build } from "./build.mjs";
 import { findChrome, launch, nodeProblem } from "./cdp.mjs";
+import { PALETTES } from "./engine/palettes.mjs";
 
 export const SIZES = { desktop: { width: 1280, height: 800, mobile: false }, phone: { width: 390, height: 844, mobile: true } };
 const MIN_TEXT_PX = 10;   // diagram text rendered smaller than this is hard to read
@@ -70,7 +73,7 @@ const WHATIF_IDS = `[...document.querySelectorAll(".step.active .whatif .wi-out"
 const pickOption = k => `(f => { const r = f.querySelector("input[type=range]");
   if (r) { r.value = ${k}; r.dispatchEvent(new Event("input", { bubbles: true })); } else f.querySelectorAll("input[type=radio]")[${k}].click(); })(document.querySelector(".step.active .whatif"))`;
 
-export async function shoot(page, { out, phone = false, dark = false, onShot = () => {} } = {}) {
+export async function shoot(page, { out, phone = false, dark = false, palette = null, onShot = () => {} } = {}) {
   const b = await launch({ width: SIZES.desktop.width, height: SIZES.desktop.height });
   const shots = [], findings = [];
   const check = (m, i, n, size, dim, what) => {
@@ -87,7 +90,14 @@ export async function shoot(page, { out, phone = false, dark = false, onShot = (
       { name: "prefers-color-scheme", value: dark ? "dark" : "light" }] });
     await b.open(page);
     await b.js(`localStorage.clear()`);   // start fresh: no saved step, quiz answers or theme
+    // The palette as a reader's earlier pick would leave it: saved, then applied by the page's <head> script
+    if (palette) await b.js(`localStorage.setItem("explain-palette", ${JSON.stringify(palette)})`);
     await b.open(page);
+    if (palette && palette !== "default") {
+      const offered = await b.js(`[...document.querySelectorAll("#palette option")].map(o => o.value)`);
+      if (!offered.includes(palette) || (await b.js(`document.documentElement.dataset.palette`)) !== palette)
+        throw new Error(`${page}: the page has no palette "${palette}"${offered.length ? ` (it has ${offered.join(", ")})` : " picker"}; rebuild it with build.mjs`);
+    }
     if (!(await b.js(`!!document.querySelector("#outline button")`))) throw new Error(`${page}: no steps rendered (${b.problems.join("; ") || "not an explainer page?"})`);
     const n = await b.js(`document.querySelectorAll("#outline button").length`);
     for (const [size, dim] of Object.entries(SIZES)) {
@@ -143,9 +153,15 @@ async function main(argv) {
   const take = f => { const i = args.indexOf(f); if (i < 0) return undefined; const v = args[i + 1]; args.splice(i, 2); return v; };
   const phone = flag("--phone"), dark = flag("--dark"), help = flag("-h") || flag("--help");
   let out = take("-o") ?? take("--out");
+  const hasPalette = args.includes("--palette"), palette = take("--palette");
   if (help || args.length !== 1) {
-    console.log("usage: node shots.mjs <topic>.html | <topic>.content.js [-o <dir>] [--phone] [--dark]");
+    console.log("usage: node shots.mjs <topic>.html | <topic>.content.js [-o <dir>] [--phone] [--dark] [--palette <id>]");
     return help ? 0 : 2;
+  }
+  const ids = PALETTES.map(p => p.id);
+  if (hasPalette && !ids.includes(palette)) {
+    console.error(`${palette === undefined ? "--palette needs an id" : `--palette ${palette}: no such palette`}; use one of ${ids.join(", ")}`);
+    return 2;
   }
   const problem = nodeProblem();
   if (problem) { console.error(problem); return 2; }
@@ -164,7 +180,7 @@ async function main(argv) {
     writeFileSync(page, res.html);
   }
   let r;
-  try { r = await shoot(page, { out, phone, dark, onShot: f => appendFileSync(marker, `${basename(f)}\n`) }); } catch (e) { console.error(e.message); return 1; }
+  try { r = await shoot(page, { out, phone, dark, palette, onShot: f => appendFileSync(marker, `${basename(f)}\n`) }); } catch (e) { console.error(e.message); return 1; }
   r.shots.forEach(f => console.log(f));
   r.findings.forEach(f => console.warn(`finding: ${f}`));
   console.log(`${r.shots.length} screenshot${r.shots.length === 1 ? "" : "s"} in ${out}${r.findings.length ? `, ${r.findings.length} finding${r.findings.length === 1 ? "" : "s"}` : ""}`);
