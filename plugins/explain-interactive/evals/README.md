@@ -99,3 +99,38 @@ the skill before #46 (plugin 0.2.1) and after it.
   a rerun of `decision`: the judge's votes split on near-identical pages, so read it as noise.
 - The one other fail: a `decision` run whose final reply named no path. A rerun of `decision`
   (3 runs, $3.38) had the path in every reply.
+
+## Triggering (#49)
+
+`trigger-eval.json` holds 32 requests for the description check: 16 that should load the skill and
+16 near misses that shouldn't. The near misses reuse the description's own phrases on other jobs
+("make it visual" for a revenue table, "present that as HTML" for a pricing table, "walk me through
+it step by step" for a CI setup), plus charts, dashboards, Mermaid, slides, docs and landing pages.
+The positives include requests that never say "interactive" or "HTML" ("something new hires can go
+through at their own pace").
+
+It is scored with the skill-creator description loop (`scripts/run_loop.py`; each query 3 times,
+counted as triggered when 2 of 3 runs load the skill). Two things the stock scripts need here:
+
+- Turn off the installed copy, or it competes with the copy under test: pass
+  `--settings '{"enabledPlugins":{"explain-interactive@sergicastro-skills":false}}'` to `claude -p`.
+- Give each query its own project directory. The script writes its temporary skill into a shared
+  `.claude/commands/`, so parallel runs each see every other run's copy, pick one at random and
+  count as misses. With the shared directory every description scored 8–25% recall.
+
+2026-11-06, Claude Code 2.1.319, `claude-opus-5-5`, all 32 queries:
+
+| Description | Correct runs | Queries passed | Misses |
+|---|---|---|---|
+| Before: "Use when the user finds an explanation hard to follow…" | 95 / 96 | 32 / 32 | one run of "present the explanation you just gave… as an HTML page" |
+| Rewrite 1: explanation types first, follow-ups last | 91 / 96 | 30 / 32 | "present the explanation you just gave…" 0/3, "the memory leak you just traced…" 1/3 |
+| **After** (rewrite 2, shipped) | **95 / 96** | **32 / 32** | one run |
+
+- The old description already triggered on direct requests and stayed off the near misses, so the
+  loop had nothing to improve (it stops when every query passes). The issue's guess that it missed
+  direct asks didn't hold for this model.
+- The new one ties on score and says what the skill is for (how something works, a choice, a
+  change, a bug, a concept) and what it isn't for (charts, dashboards, decks, docs, landing pages).
+- Rewrite 1 shows the risk: moving "turn an earlier answer into a page" to the end lost those
+  requests. Keep that use first.
+- No false triggers in any run; all errors were missed triggers.

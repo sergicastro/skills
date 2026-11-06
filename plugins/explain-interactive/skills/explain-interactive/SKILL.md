@@ -1,6 +1,6 @@
 ---
 name: explain-interactive
-description: Use when the user finds an explanation hard to follow and asks to see it as an interactive / dynamic / visual HTML page, step-by-step walkthrough, or "explain it in HTML" — e.g. "present that as HTML", "make it visual", "walk me through it step by step", "I don't get it, show me", "/explain-interactive". Turns the previous explanation (or a named topic) into a self-contained, step-by-step interactive HTML explainer.
+description: Use when the user wants an explanation as an interactive, step-by-step HTML page instead of prose: how a system or flow works, a choice between options, what a change or PR does, why a bug happens, or a concept. Covers turning an explanation you already gave into a page ("present that as HTML", "make it visual", "I don't get it, show me", "something the team can step through") and direct asks ("an interactive diagram of our auth flow", "walk me through what this PR changes", "compare Redis vs Postgres for sessions interactively", "/explain-interactive"). Builds a self-contained explainer page from the previous explanation or a named topic. Not for charts, dashboards or other data visualizations, slide decks, docs or landing pages.
 ---
 
 # Interactive Step-by-Step Explainer
