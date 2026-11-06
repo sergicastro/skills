@@ -65,6 +65,11 @@ const STEPS = [
     summary: "deployed APIs get traffic",
     body: "<p>After publishing comes <dfn data-term=\"deploy\">deploying</dfn>, which moves it to <mark>Deployed</mark>: the gateway now routes <code>GET /orders</code>. Undeploying takes it back to Published.</p>",
     diagram: { hl: ["deploy", "dep", "undeploy"], build: ["deploy", "undeploy"] },
+    quiz: { q: "The team undeploys orders to fix a bug. What happens to it?",
+      options: ["Still in the catalogue, and GET /orders gets a 404",
+        { t: "Gone from the catalogue, and GET /orders gets a 404", why: "Undeploying goes back to Published, and a Published API stays listed." },
+        { t: "Still in the catalogue, and GET /orders still works", why: "Back in Published, no gateway routes it any more." }],
+      answer: 0, why: "Undeploying moves it back to Published: listed in the catalogue, but not routed." },
   },
   {
     title: "Recap",

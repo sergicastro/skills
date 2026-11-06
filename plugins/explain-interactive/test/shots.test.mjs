@@ -1,13 +1,13 @@
 // The screenshot script: one image per step, findings for problems it can measure. Skipped without Chrome.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { skip } from "./chrome.mjs";
-import { optionNames, shotFile, SHOT_FILE } from "../skills/explain-interactive/shots.mjs";
+import { MARKER, optionNames, prepareOut, shotFile, SHOT_FILE } from "../skills/explain-interactive/shots.mjs";
 
 const SKILL = join(dirname(fileURLToPath(import.meta.url)), "../skills/explain-interactive");
 const run = (...a) => spawnSync(process.execPath, [join(SKILL, "shots.mjs"), ...a], { encoding: "utf8", timeout: 120000 });
@@ -17,8 +17,12 @@ const pngSize = f => { const b = readFileSync(f); assert.ok(b.subarray(0, 4).equ
 test("shots: one PNG per step from a content file, plus phone shots", { skip }, () => {
   const out = mkdtempSync(join(tmpdir(), "explain-shots-"));
   try {
-    writeFileSync(join(out, "step-99.png"), "stale");   // left over from an earlier run: removed
-    const r = run(join(SKILL, "examples/token-401.content.js"), "-o", out, "--phone");
+    writeFileSync(join(out, "step-99.png"), "stale");   // left over from an earlier run there: removed
+    writeFileSync(join(out, MARKER), "step-99.png\n");
+    let r = run(join(SKILL, "examples/token-401.content.js"), "-o", out);
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(!existsSync(join(out, "step-99.png")));
+    r = run(join(SKILL, "examples/token-401.content.js"), "-o", out, "--phone");   // its own shots don't block a re-run
     assert.equal(r.status, 0, r.stderr);
     const files = readdirSync(out).filter(f => f.endsWith(".png")).sort();
     assert.deepEqual(files.filter(f => !f.includes("phone")), ["step-01.png", "step-02.png", "step-03.png", "step-04.png", "step-05.png", "step-06.png"]);
@@ -109,4 +113,46 @@ const STEPS = [
       "step-02-phone.png", "step-02-phone_2-phone.png", "step-02-phone_2.png", "step-02.png"]);
     assert.match(r.stdout, /12 screenshots in /);
   } finally { rmSync(out, { recursive: true, force: true }); }
+});
+
+test("output folder: only shots an earlier run wrote are removed", () => {
+  const out = mkdtempSync(join(tmpdir(), "explain-shots-"));
+  try {
+    for (const f of ["step-01.png", "step-02-phone.png", "notes.png", "step.png"]) writeFileSync(join(out, f), "x");
+    writeFileSync(join(out, MARKER), "step-01.png\nstep-02-phone.png\n../escape.png\n");
+    assert.deepEqual(prepareOut(out), { marker: join(out, MARKER) });
+    assert.deepEqual(readdirSync(out).sort(), [MARKER, "notes.png", "step.png"]);
+    assert.equal(readFileSync(join(out, MARKER), "utf8"), "", "the list starts over");
+  } finally { rmSync(out, { recursive: true, force: true }); }
+});
+
+test("output folder: one with step images of its own is refused and left alone", () => {
+  const out = mkdtempSync(join(tmpdir(), "explain-shots-"));
+  try {
+    for (const f of ["step-01.png", "step-07-phone.png"]) writeFileSync(join(out, f), "mine");
+    const { error } = prepareOut(out);
+    assert.match(error, /already holds step images this script didn't write \(step-01\.png, step-07-phone\.png\)/);
+    assert.deepEqual(readdirSync(out).sort(), ["step-01.png", "step-07-phone.png"]);
+    const r = run(join(SKILL, "examples/token-401.content.js"), "-o", out);
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /already holds step images/);
+    assert.equal(readFileSync(join(out, "step-01.png"), "utf8"), "mine");
+  } finally { rmSync(out, { recursive: true, force: true }); }
+});
+
+test("output folder: the default one is the script's own and is cleared", () => {
+  const out = mkdtempSync(join(tmpdir(), "explain-shots-"));
+  try {
+    for (const f of ["step-01.png", "notes.txt"]) writeFileSync(join(out, f), "x");
+    assert.ok(prepareOut(out, { ours: true }).marker);
+    assert.deepEqual(readdirSync(out).sort(), [MARKER, "notes.txt"]);
+  } finally { rmSync(out, { recursive: true, force: true }); }
+});
+
+test("output folder: a new one is created", () => {
+  const dir = mkdtempSync(join(tmpdir(), "explain-shots-"));
+  try {
+    assert.ok(prepareOut(join(dir, "a", "b")).marker);
+    assert.ok(existsSync(join(dir, "a", "b", MARKER)));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });

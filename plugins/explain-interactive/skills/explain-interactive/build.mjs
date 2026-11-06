@@ -26,7 +26,9 @@ const ENGINE_DIR = join(HERE, "engine");
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 // A literal "</script" inside an inline script would end it early; "<\/script" means the same in JS strings and comments.
-const inlineScript = s => s.replace(/<\/(script)/gi, "<\\/$1");
+// A literal "<!--" (followed later by "<script") puts the parser in its double-escaped state, where "</script>" no
+// longer ends the element and the next script is swallowed; "<!\x2D-" means the same in strings, templates and regexes.
+const inlineScript = s => s.replace(/<\/(script)/gi, "<\\/$1").replace(/<!--/g, "<!\\x2D-");
 const inlineStyle = s => s.replace(/<\/(style)/gi, "<\\/$1");
 
 // ---------- Load and check the content ----------
@@ -47,7 +49,7 @@ const EXTERNAL = [
   [/<(image|use)\b[^>]*\bhref\s*=\s*["']?(https?:)?\/\//i, "remote SVG href"],
 ];
 
-// Every step field the engine reads; SKILL.md's "Content rules per step" documents each one
+// Every step field the engine reads; references/content-file.md, "Fields of a step", documents each one
 export const STEP_KEYS = ["title", "summary", "context", "body", "diagram", "visual", "build", "analogy", "code", "deeper",
   "quiz", "whatif", "matrix", "diff", "phase", "verdicts", "evidence", "layer", "panel", "depth", "wide"];
 
@@ -60,10 +62,12 @@ export function check(c) {
   else {
     if (!META.title) errors.push("META.title is missing");
     if (!META.bigPicture) warnings.push("META.bigPicture is empty");
+    for (const k of ["title", "bigPicture", "before", "after"]) mustBeText(META[k], `META.${k}`, errors);
   }
   if (!Array.isArray(STEPS) || !STEPS.length) { errors.push("STEPS is missing or empty"); return { errors, warnings }; }
   for (const [name, v] of [["CAST", c.CAST], ["GLOSSARY", c.GLOSSARY]])
     if (v !== undefined && (typeof v !== "object" || v === null || Array.isArray(v))) errors.push(`${name} must be an object of "name": "one-liner"`);
+    else if (v) for (const [k, t] of Object.entries(v)) mustBeText(t, `${name} "${k}"`, errors);
   if (c.DIAGRAM !== undefined && typeof c.DIAGRAM !== "string" && !spec)
     errors.push("DIAGRAM must be a spec object { layout, label, nodes, edges } or an <svg>…</svg> string");
   let ids;
@@ -82,9 +86,11 @@ export function check(c) {
   const stripTags = s => s.replace(/<[^>]*>/g, "");
 
   STEPS.forEach((s, i) => {
-    const at = `step ${i + 1}${s && s.title ? ` ("${stripTags(s.title)}")` : ""}`;
+    const at = `step ${i + 1}${s && typeof s.title === "string" && s.title ? ` ("${stripTags(s.title)}")` : ""}`;
     if (!s || typeof s !== "object") return errors.push(`step ${i + 1} is not an object`);
     if (!s.title) errors.push(`${at}: title is missing`);
+    for (const k of TEXT_KEYS) mustBeText(s[k], `${at}: ${k}`, errors);
+    checkContextTypes(s.context, at, errors);
     // The engine ignores a field it doesn't know, so a misspelt one would vanish from the page without a word
     Object.keys(s).filter(k => !STEP_KEYS.includes(k))
       .forEach(k => warnings.push(`${at}: unknown field "${k}" (known: ${STEP_KEYS.join(", ")})`));
@@ -110,12 +116,15 @@ export function check(c) {
       else {
         if (!Number.isInteger(q.answer) || q.answer < 0 || q.answer >= q.options.length)
           errors.push(`${at}: quiz.answer ${q.answer} is not an index into its ${q.options.length} options`);
+        mustBeText(q.q, `${at}: quiz.q`, errors); mustBeText(q.why, `${at}: quiz.why`, errors);
         if (!q.why) warnings.push(`${at}: quiz.why is missing (shown once the quiz is answered: why the answer is right)`);
         if (q.options.length < 3) warnings.push(`${at}: quiz has ${q.options.length} options; use 3–4 (the retry would give a 2-option answer away)`);
-        q.options.forEach((o, j) => { if (typeof o !== "string" && !(o && typeof o.t === "string")) errors.push(`${at}: quiz option ${j} must be a string or { t, why }`); });
+        q.options.forEach((o, j) => {
+          if (typeof o !== "string" && !(o && typeof o.t === "string")) errors.push(`${at}: quiz option ${j} must be a string or { t, why }`);
+          else if (typeof o === "object") mustBeText(o.why, `${at}: quiz option ${j} why`, errors);
+        });
       }
     }
-    if (s.code && typeof s.code !== "string") errors.push(`${at}: code must be a string`);
     if (s.depth !== undefined) {
       if (s.depth !== "full") errors.push(`${at}: depth must be "full" (a background step the short version skips) or left out`);
       else if (i === 0 || i === STEPS.length - 1) warnings.push(`${at}: depth "full" is ignored on ${i === 0 ? "the Context step" : "the Recap"}; both are always shown`);
@@ -128,11 +137,13 @@ export function check(c) {
       }
     }
     checkStepType(type, c, s, at, errors, warnings);
+    for (const x of ["evidence", "diff"]) if (s[x] && typeof s[x] === "object") mustBeText(s[x].label, `${at}: ${x}.label`, errors);
     checkSize(s, i, STEPS.length, at, warnings);
     checkDfns(rendered(s), at, hasTerm, warnings);
   });
 
   checkTypeCoverage(type, c, warnings);
+  checkStructure(STEPS, !!(DIAGRAM || spec), warnings);
   // The rest of the text rendered as HTML (META.title and bigPicture are shown as plain text)
   if (META && typeof META === "object") for (const k of ["before", "after"]) checkDfns(META[k], `META.${k}`, hasTerm, warnings);
   for (const [name, v] of [["CAST", CAST], ["GLOSSARY", GLOSSARY]])
@@ -145,6 +156,41 @@ export function check(c) {
   return { errors, warnings, svg: spec ? DIAGRAM : null };
 }
 
+// ---------- Types of text fields ----------
+// The engine writes these into the page as text or HTML; a number or an object there renders as "42" or
+// "[object Object]", or breaks the page, so anything but a string is an error. null, like leaving the field out, means none.
+const TEXT_KEYS = ["title", "summary", "body", "analogy", "deeper", "visual", "code"];
+const kind = v => (Array.isArray(v) ? "an array" : `a ${typeof v}`).replace(/^a ([aeiou])/, "an $1");
+function mustBeText(v, where, errors) {
+  if (v !== undefined && v !== null && typeof v !== "string") errors.push(`${where} must be a string (it is ${kind(v)})`);
+}
+function checkContextTypes(c, at, errors) {
+  if (c === undefined || c === null) return;
+  if (!c || typeof c !== "object" || Array.isArray(c)) return errors.push(`${at}: context must be { question, setting, why, prereqs, example }`);
+  for (const k of ["question", "setting", "why", "example"]) mustBeText(c[k], `${at}: context.${k}`, errors);
+  if (c.prereqs === undefined || c.prereqs === null) return;
+  if (!Array.isArray(c.prereqs)) errors.push(`${at}: context.prereqs must be a list of strings`);
+  else c.prereqs.forEach((x, j) => mustBeText(x, `${at}: context.prereqs item ${j}`, errors));
+}
+
+// ---------- The page's structure: Context step first, Recap last, enough steps and quizzes (SKILL.md, "Workflow" and "Rules for every page") ----------
+function checkStructure(STEPS, hasDiagram, warnings) {
+  const n = STEPS.length, first = STEPS[0], last = STEPS[n - 1];
+  const at = (s, i) => `step ${i + 1}${s && typeof s.title === "string" && s.title ? ` ("${s.title.replace(/<[^>]*>/g, "")}")` : ""}`;
+  const [lo, hi] = LIMITS.steps;
+  if (n < lo || n > hi) warnings.push(`STEPS has ${n} steps; plan ${lo}–${hi}, Context and Recap included`);
+  if (first && typeof first === "object" && !first.context)
+    warnings.push(`${at(first, 0)}: no context card; step 1 is the Context step (context: { question, setting, why, prereqs, example })`);
+  if (n > 1 && last && typeof last === "object") {
+    if (typeof last.title === "string" && !/\brecap\b/i.test(last.title)) warnings.push(`${at(last, n - 1)}: the last step is the Recap; title it "Recap"`);
+    if (hasDiagram && !last.diagram) warnings.push(`${at(last, n - 1)}: no diagram; set diagram: {} so the Recap shows the whole DIAGRAM`);
+  }
+  const quizzes = STEPS.filter(s => s && s.quiz).length;
+  const [qlo, qhi] = LIMITS.quizzes, has = `the page has ${quizzes} quiz${quizzes === 1 ? "" : "zes"} (plan ${qlo}–${qhi})`;
+  if (quizzes < qlo) warnings.push(`${has}: add one where a reader most likely gets confused`);
+  if (quizzes > qhi) warnings.push(`${has}: keep the ones on the steps readers most likely get wrong`);
+}
+
 // ---------- What-if control: options that switch the step's outcome text and diagram state ----------
 const CONTROLS = ["choice", "slider"];
 function checkWhatif(s, i, n, at, { ids, hasDiagram }, errors, warnings) {
@@ -152,6 +198,7 @@ function checkWhatif(s, i, n, at, { ids, hasDiagram }, errors, warnings) {
   if (w === undefined) return;
   if (!w || typeof w !== "object" || !Array.isArray(w.options)) return errors.push(`${at}: whatif needs label and options[] ({ id, label, outcome, diagram? })`);
   if (!w.label) errors.push(`${at}: whatif.label is missing (it reads "What if <label>")`);
+  mustBeText(w.label, `${at}: whatif.label`, errors);
   if (w.control !== undefined && !CONTROLS.includes(w.control)) errors.push(`${at}: whatif.control "${w.control}" is not one of ${CONTROLS.join(", ")}`);
   if (w.options.length < 2) errors.push(`${at}: whatif has ${w.options.length} option(s); a what-if switches between at least 2`);
   if (w.options.length > LIMITS.whatifOptions) warnings.push(`${at}: whatif has ${w.options.length} options (2–${LIMITS.whatifOptions}): keep the cases that change the outcome`);
@@ -166,6 +213,7 @@ function checkWhatif(s, i, n, at, { ids, hasDiagram }, errors, warnings) {
     else if (seen.has(o.id)) errors.push(`${at}: whatif repeats the option id "${o.id}"`);
     seen.add(o.id);
     if (!o.label) errors.push(`${at}: ${name} needs a label`);
+    for (const k of ["label", "outcome"]) mustBeText(o[k], `${at}: ${name} ${k}`, errors);
     if (!o.outcome) errors.push(`${at}: ${name} needs an outcome (what happens in that case)`);
     else if (sentences(o.outcome) > LIMITS.outcomeSentences) warnings.push(`${at}: ${name} outcome has ${sentences(o.outcome)} sentences (≤ ${LIMITS.outcomeSentences})`);
     const d = o.diagram;
@@ -235,7 +283,8 @@ function checkTerms(spec, svg, hasTerm, warnings) {
 // ---------- Size and focus: each step fits one screen and is about one thing ----------
 // The limits SKILL.md gives; over them is a warning, since a page can still be built.
 export const LIMITS = { titleWords: 6, summaryWords: 8, bodySentences: 5, bodyWords: 120, hlParts: 3,
-  codeLines: 15, codeWidth: 60, prereqs: 3, contextSentences: 2, quizOptions: 4, whatifOptions: 4, outcomeSentences: 2 };
+  codeLines: 15, codeWidth: 60, prereqs: 3, contextSentences: 2, quizOptions: 4, whatifOptions: 4, outcomeSentences: 2,
+  steps: [5, 10], quizzes: [2, 3] };
 const text = s => String(s).replace(/<[^>]*>/g, " ").replace(/&[a-z#0-9]+;/gi, " ").replace(/\s+/g, " ").trim();
 const words = s => (text(s).match(/\S+/g) || []).length;
 // A sentence ends at . ! ? (or …) followed by the end or by a space and a capital, digit or quote; "e.g. this" stays one sentence
@@ -289,6 +338,7 @@ function idsOf(list, name, need, errors) {
     if (ids.has(x.id)) errors.push(`${name} repeats the id "${x.id}"`);
     ids.add(x.id);
     if (!x[need]) errors.push(`${name} "${x.id}" needs ${need}`);
+    for (const k of ["name", "text", "summary"]) mustBeText(x[k], `${name} "${x.id}" ${k}`, errors);
   });
   return ids;
 }
@@ -299,7 +349,7 @@ function checkType(c, errors, warnings) {
     if (c[name] !== undefined && type !== t) warnings.push(`${name} is only drawn on a "${t}" page (META.type is "${type}")`);
   if (c.META && (c.META.before || c.META.after) && type !== "before-after") warnings.push(`META.before/after are only shown on a "before-after" page`);
   const need = NEEDS[type];
-  if (need && c[need] === undefined) { errors.push(`a "${type}" page needs ${need} (see SKILL.md)`); return type; }
+  if (need && c[need] === undefined) { errors.push(`a "${type}" page needs ${need} (see references/${type}.md)`); return type; }
   if (type === "decision") {
     const D = c.DECISION;
     if (typeof D !== "object" || D === null || !Array.isArray(D.options) || !Array.isArray(D.criteria)) { errors.push("DECISION needs options[] and criteria[]"); return type; }
@@ -415,7 +465,7 @@ export function build(code, file) {
 export function extract(html) {
   // Pages built by this script
   let m = html.match(/<script id="explain-content">\n?([\s\S]*?)\n?<\/script>/);
-  if (m) return m[1].replace(/<\\\/(script)/gi, "</$1") + "\n";
+  if (m) return m[1].replace(/<\\\/(script)/gi, "</$1").replace(/<!\\x2D-/g, "<!--") + "\n";
   // Pages filled in from the old template.html: the data sits between the FILL THIS DATA markers
   m = html.match(/\/\* =+ FILL THIS DATA =+ \*\/\n([\s\S]*?)\n\/\* =+ \*\//);
   if (m) return m[1] + "\n";

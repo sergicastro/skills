@@ -78,6 +78,16 @@ RUN CGO_ENABLED=0 go build -o /bin/api ./cmd/api`,
     title: "Add a stage that only runs",
     summary: "a second FROM holds the binary",
     body: `<p>The last lines start a second <dfn>stage</dfn> from <code>distroless/static</code>, a <dfn>base image</dfn> with no shell and no package manager. <code>COPY --from=build</code> takes just the binary from the first stage. <strong>Only this stage is shipped</strong>, so the toolchain and the source stay behind.</p>`,
+    quiz: {
+      q: "After the change, someone runs docker exec -it api sh to look around the running container. What happens?",
+      options: [
+        "It fails: the shipped image has no shell",
+        { t: "It opens a shell from the build stage", why: "Only the last stage is shipped; the build stage and everything in it stay behind." },
+        { t: "It works; distroless only drops the package manager", why: "distroless/static has no shell either." },
+      ],
+      answer: 0,
+      why: "The shipped image is the second stage: distroless/static plus the binary, with no shell to start.",
+    },
     diff: {
       label: "Dockerfile",
       before: `FROM golang:1.23 AS build

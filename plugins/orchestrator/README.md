@@ -212,9 +212,9 @@ stays through live updates.
 
 ![Epic page in dark mode](docs/images/status-epic-dark.png)
 
-![Index of all orchestrations](docs/images/status-index.png)
-
 </details>
+
+![Index of all orchestrations](docs/images/status-index.png)
 
 The screenshots use made-up data.
 

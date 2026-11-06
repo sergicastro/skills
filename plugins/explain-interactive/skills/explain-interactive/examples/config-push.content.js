@@ -68,6 +68,11 @@ const STEPS = [
     summary: "the next call sees 50/minute",
     body: "<p>From the next request on, the gateway checks <mark>GET /orders</mark> against the new limit before passing it to <dfn>orders-svc</dfn>.</p>",
     diagram: { hl: ["call", "svc"] },
+    quiz: { q: "The gateway has reported v42 applied. Where, and against which limit, is the next GET /orders checked?",
+      options: ["At the gateway, against 50 a minute",
+        { t: "At orders-svc, against 50 a minute", why: "The gateway checks the limit before passing the request on; orders-svc never sees one over it." },
+        { t: "At the gateway, against 10 until it restarts", why: "Applying the pushed config is enough; nothing in the flow restarts the gateway." }],
+      answer: 0, why: "Once v42 is applied, the gateway checks every request against the new limit before passing it to orders-svc." },
   },
   {
     title: "Recap",

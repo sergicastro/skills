@@ -4,7 +4,9 @@
 //
 //   node shots.mjs <topic>.html | <topic>.content.js [-o <dir>] [--phone] [--dark]
 //
-//   -o <dir>   where to write the images (default: <tmp>/explain-shots/<topic>; old step-*.png there are removed)
+//   -o <dir>   where to write the images (default: <tmp>/explain-shots/<topic>). Old shots are removed first: in the
+//              default folder every step-*.png, elsewhere only the ones an earlier run wrote there (listed in .explain-shots).
+//              A folder holding other step-*.png files is refused, so an existing folder's images are never deleted.
 //   --phone    also render each step at phone size (390×844): step-NN-phone.png
 //   --dark     dark theme instead of light
 //
@@ -12,15 +14,17 @@
 // with every build stage revealed. A step with a what-if control is also shot once per other option: step-NN-<option>.png
 // (naming: see optionNames below; names never collide). Besides the images it lists what it can measure on each step:
 // a middle step much taller than the screen, a diagram too wide for its box, diagram text rendered too small,
-// console errors or warnings (e.g. a <dfn> with no glossary entry), and any request the page makes.
-// Exit code: 0 rendered (findings are printed, not fatal), 1 the page failed, 2 bad arguments or no browser.
-import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+// console errors or warnings (e.g. a <dfn> with no glossary entry), a dialog the page opens (answered, so it can't
+// hang the run), and any request the page makes.
+// Exit code: 0 rendered (findings are printed, not fatal), 1 the page failed, 2 bad arguments, no browser, Node older
+// than 22, or an -o folder with step images this script didn't write.
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
 import { build } from "./build.mjs";
-import { findChrome, launch } from "./cdp.mjs";
+import { findChrome, launch, nodeProblem } from "./cdp.mjs";
 
 export const SIZES = { desktop: { width: 1280, height: 800, mobile: false }, phone: { width: 390, height: 844, mobile: true } };
 const MIN_TEXT_PX = 10;   // diagram text rendered smaller than this is hard to read
@@ -66,7 +70,7 @@ const WHATIF_IDS = `[...document.querySelectorAll(".step.active .whatif .wi-out"
 const pickOption = k => `(f => { const r = f.querySelector("input[type=range]");
   if (r) { r.value = ${k}; r.dispatchEvent(new Event("input", { bubbles: true })); } else f.querySelectorAll("input[type=radio]")[${k}].click(); })(document.querySelector(".step.active .whatif"))`;
 
-export async function shoot(page, { out, phone = false, dark = false } = {}) {
+export async function shoot(page, { out, phone = false, dark = false, onShot = () => {} } = {}) {
   const b = await launch({ width: SIZES.desktop.width, height: SIZES.desktop.height });
   const shots = [], findings = [];
   const check = (m, i, n, size, dim, what) => {
@@ -103,7 +107,7 @@ export async function shoot(page, { out, phone = false, dark = false } = {}) {
           const file = join(out, shotFile(i, names[k], size));
           const { data } = await b.send("Page.captureScreenshot", { format: "png" });
           writeFileSync(file, Buffer.from(data, "base64"));
-          shots.push(file);
+          shots.push(file); onShot(file);
           check(m, i, n, size, dim, k ? ` with what-if "${options[k]}"` : "");
         }
         if (options.length) await b.js(pickOption(0));   // leave the step as a reader finds it
@@ -111,9 +115,26 @@ export async function shoot(page, { out, phone = false, dark = false } = {}) {
     }
     await b.send("Emulation.clearDeviceMetricsOverride");
     [...new Set(b.problems)].forEach(p => findings.push(`console: ${p}`));
+    [...new Set(b.dialogs)].forEach(d => findings.push(`dialog: ${d} (answered automatically; a page shouldn't open dialogs)`));
     [...new Set(b.requests.filter(u => !u.startsWith("file:") && !u.startsWith("data:")))].forEach(u => findings.push(`external request: ${u} (pages must work offline)`));
   } finally { b.close(); }
   return { shots, findings };
+}
+
+// Makes the output folder ready and removes the previous run's shots, never other files. In the default folder (ours by
+// construction) every step image goes. Anywhere else only the images an earlier run listed in MARKER go, and a folder
+// with any other step image is refused (returns why), so `-o ~/Pictures` can't lose a file. Returns the marker's path.
+export const MARKER = ".explain-shots";
+export function prepareOut(out, { ours = false } = {}) {
+  mkdirSync(out, { recursive: true });
+  const marker = join(out, MARKER);
+  const listed = new Set(existsSync(marker) ? readFileSync(marker, "utf8").split("\n").filter(f => SHOT_FILE.test(f)) : []);
+  const shots = readdirSync(out).filter(f => SHOT_FILE.test(f));
+  const foreign = ours ? [] : shots.filter(f => !listed.has(f));
+  if (foreign.length) return { error: `${out} already holds step images this script didn't write (${foreign.slice(0, 3).join(", ")}${foreign.length > 3 ? ", …" : ""}); pick an empty or new folder for -o, or remove them` };
+  shots.filter(f => ours || listed.has(f)).forEach(f => rmSync(join(out, f), { force: true }));
+  writeFileSync(marker, "");
+  return { marker };
 }
 
 async function main(argv) {
@@ -126,11 +147,14 @@ async function main(argv) {
     console.log("usage: node shots.mjs <topic>.html | <topic>.content.js [-o <dir>] [--phone] [--dark]");
     return help ? 0 : 2;
   }
+  const problem = nodeProblem();
+  if (problem) { console.error(problem); return 2; }
   if (!findChrome()) { console.error("no Chrome/Chromium found (set CHROME=/path/to/chrome)"); return 2; }
   const src = args[0], topic = basename(src).replace(/(\.content)?\.(m?js|html?)$/i, "");
+  const ours = out === undefined;
   out = resolve(out ?? join(tmpdir(), "explain-shots", topic));
-  mkdirSync(out, { recursive: true });
-  readdirSync(out).filter(f => SHOT_FILE.test(f)).forEach(f => rmSync(join(out, f)));
+  const { marker, error } = prepareOut(out, { ours });
+  if (error) { console.error(error); return 2; }
   let page = resolve(src);
   if (/\.m?js$/i.test(src)) {
     let res;
@@ -140,7 +164,7 @@ async function main(argv) {
     writeFileSync(page, res.html);
   }
   let r;
-  try { r = await shoot(page, { out, phone, dark }); } catch (e) { console.error(e.message); return 1; }
+  try { r = await shoot(page, { out, phone, dark, onShot: f => appendFileSync(marker, `${basename(f)}\n`) }); } catch (e) { console.error(e.message); return 1; }
   r.shots.forEach(f => console.log(f));
   r.findings.forEach(f => console.warn(`finding: ${f}`));
   console.log(`${r.shots.length} screenshot${r.shots.length === 1 ? "" : "s"} in ${out}${r.findings.length ? `, ${r.findings.length} finding${r.findings.length === 1 ? "" : "s"}` : ""}`);

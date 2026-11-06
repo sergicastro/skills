@@ -1,0 +1,130 @@
+[
+ {
+  "query": "can you make an interactive diagram of how our auth flow works? login hits nginx, then auth-svc checks the password, stores a session in redis, and api-gateway mints the jwt. i keep re-explaining this to every new hire",
+  "should_trigger": true
+ },
+ {
+  "query": "walk me through what PR #123 changes, step by step, as something I can click through. it moves rate limiting out of the individual handlers into a middleware in internal/http/mw.go",
+  "should_trigger": true
+ },
+ {
+  "query": "compare redis vs postgres for storing user sessions interactively. we're at ~50k DAU and already run postgres 15 on RDS, I want to see the tradeoffs and what changes if traffic 10x",
+  "should_trigger": true
+ },
+ {
+  "query": "ugh I still don't get your explanation of raft leader election, too many terms and timeouts flying around. can you show me instead of telling me?",
+  "should_trigger": true
+ },
+ {
+  "query": "present the explanation you just gave about the cache invalidation bug as an HTML page I can send to my team lead",
+  "should_trigger": true
+ },
+ {
+  "query": "make an explainer page for why test_checkout_total only fails in CI (the timezone + DST thing you found). something I can step through with the team at standup tomorrow",
+  "should_trigger": true
+ },
+ {
+  "query": "i'm a frontend dev and python virtualenvs confuse me every time. could you build me a visual step by step thing showing how pip, venv and PATH actually interact?",
+  "should_trigger": true
+ },
+ {
+  "query": "Turn that git rebase vs merge explanation into an interactive walkthrough, ideally with a toggle for what happens when there's a conflict halfway through the rebase",
+  "should_trigger": true
+ },
+ {
+  "query": "we're deciding between kafka and SQS for the order-events pipeline. can u lay out the decision as a clickable page w/ what-ifs (what if volume goes 10x, what if we need replay)?",
+  "should_trigger": true
+ },
+ {
+  "query": "explain how the kubernetes scheduler picks a node for a pod, but visually, with steps I can go through one at a time, not another wall of text",
+  "should_trigger": true
+ },
+ {
+  "query": "make a chart of our monthly signups from data/signups.csv (columns: month, signups, churned). line chart with churn on a second axis, save it as a png for the board deck",
+  "should_trigger": false
+ },
+ {
+  "query": "build me a react dashboard showing p95 latency per service, the data comes from this prometheus query: histogram_quantile(0.95, sum by (service, le) (rate(http_request_duration_seconds_bucket[5m])))",
+  "should_trigger": false
+ },
+ {
+  "query": "how do JWT refresh tokens work? quick answer is fine, I just need to know if the refresh token should be rotated on every use",
+  "should_trigger": false
+ },
+ {
+  "query": "write a mermaid sequence diagram of our oauth login flow (browser, api, auth server, google) and put it in the README under ## Architecture",
+  "should_trigger": false
+ },
+ {
+  "query": "make me a 10-slide deck for my meetup talk on kubernetes networking: CNI, services, kube-proxy, ingress. speaker notes would be nice",
+  "should_trigger": false
+ },
+ {
+  "query": "convert docs/architecture.md to a standalone html page with a nice stylesheet and a sidebar table of contents so we can host it on github pages",
+  "should_trigger": false
+ },
+ {
+  "query": "create an interactive landing page for acme/recipe-site: hero section with a search box, three feature cards, and a newsletter signup form that animates on submit",
+  "should_trigger": false
+ },
+ {
+  "query": "can you visualize the dependency graph of the go packages in this repo? generate a graphviz svg and highlight any import cycles in red",
+  "should_trigger": false
+ },
+ {
+  "query": "write a step-by-step setup guide in markdown for new contributors (install go 1.22, run make bootstrap, set up the pre-commit hooks) and save it to docs/SETUP.md",
+  "should_trigger": false
+ },
+ {
+  "query": "build a heatmap of CI test failure rates by test file and day from ci-results.json using plotly, so we can spot which tests got flaky after the runner upgrade",
+  "should_trigger": false
+ },
+ {
+  "query": "here's last quarter's revenue by region table you made, can you make it visual? I want to drop it into the exec update",
+  "should_trigger": false
+ },
+ {
+  "query": "present that as HTML please \u2014 the comparison table of the three hosting plans with prices, so I can paste it into our pricing page",
+  "should_trigger": false
+ },
+ {
+  "query": "walk me through setting up a github actions workflow that runs pytest on every PR, step by step, I'll follow along in my terminal",
+  "should_trigger": false
+ },
+ {
+  "query": "I don't get it, show me the actual code. what does the retry decorator in utils/retry.py look like with exponential backoff added?",
+  "should_trigger": false
+ },
+ {
+  "query": "turn the incident timeline from this morning into an html status page for customers: 09:12 detected, 09:30 mitigated, 10:05 resolved",
+  "should_trigger": false
+ },
+ {
+  "query": "make the onboarding flow in our react app more interactive, add a step-by-step tooltip tour with react-joyride on the dashboard page",
+  "should_trigger": false
+ },
+ {
+  "query": "new hires keep asking how a request travels from the load balancer through envoy to our grpc services. could you put together something they can go through at their own pace?",
+  "should_trigger": true
+ },
+ {
+  "query": "that explanation of the saga pattern was a lot to take in. break it down so I can go through it one piece at a time, with the compensating transactions shown as they happen",
+  "should_trigger": true
+ },
+ {
+  "query": "I need to explain to my PM why we should pick option B (event sourcing) over option A (CRUD + audit table). make it something they can poke at, not a doc",
+  "should_trigger": true
+ },
+ {
+  "query": "the memory leak you just traced through the websocket handler \u2014 can you turn that into something visual the team can step through in the postmortem?",
+  "should_trigger": true
+ },
+ {
+  "query": "how does TLS 1.3 handshake actually work? I learn better when I can see each message flying between client and server, one at a time",
+  "should_trigger": true
+ },
+ {
+  "query": "show me what changed between v1 and v2 of our billing calculation as a before/after I can click through, our finance folks need to sign off on it",
+  "should_trigger": true
+ }
+]

@@ -1,7 +1,7 @@
 /* explain-interactive engine: renders a step-by-step explainer from the page's content.
    The content script (inlined before this one by build.mjs) declares META, CAST, GLOSSARY, DIAGRAM and STEPS,
    plus DECISION, HYPOTHESES or LAYERS for the page types that need them (META.type).
-   Don't edit pages by hand: change the content file and rebuild. Field reference: SKILL.md. */
+   Don't edit pages by hand: change the content file and rebuild. Field reference: references/content-file.md. */
 ((META, CAST, GLOSSARY, DIAGRAM, STEPS, DECISION, HYPOTHESES, LAYERS) => {
 if (!META || !Array.isArray(STEPS) || !STEPS.length) {
   document.getElementById("stage").textContent = "This page has no content: META and STEPS are missing (rebuild it from its content file).";
@@ -10,7 +10,7 @@ if (!META || !Array.isArray(STEPS) || !STEPS.length) {
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const plain = h => new DOMParser().parseFromString(String(h || ""), "text/html").body.textContent.replace(/\s+/g, " ").trim();
-const esc = s => s.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+const esc = s => String(s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 const N = STEPS.length, LAST = N - 1;
 const terms = Object.keys(GLOSSARY), cast = Object.keys(CAST);
 // Page type: picks the panel drawn next to each step's text. A walkthrough has none and renders as it always has.
