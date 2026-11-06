@@ -49,7 +49,7 @@ const EXTERNAL = [
   [/<(image|use)\b[^>]*\bhref\s*=\s*["']?(https?:)?\/\//i, "remote SVG href"],
 ];
 
-// Every step field the engine reads; SKILL.md's "Content rules per step" documents each one
+// Every step field the engine reads; references/content-file.md, "Fields of a step", documents each one
 export const STEP_KEYS = ["title", "summary", "context", "body", "diagram", "visual", "build", "analogy", "code", "deeper",
   "quiz", "whatif", "matrix", "diff", "phase", "verdicts", "evidence", "layer", "panel", "depth", "wide"];
 
@@ -173,7 +173,7 @@ function checkContextTypes(c, at, errors) {
   else c.prereqs.forEach((x, j) => mustBeText(x, `${at}: context.prereqs item ${j}`, errors));
 }
 
-// ---------- The page's structure: Context step first, Recap last, enough steps and quizzes (SKILL.md, "How to work") ----------
+// ---------- The page's structure: Context step first, Recap last, enough steps and quizzes (SKILL.md, "Workflow" and "Rules for every page") ----------
 function checkStructure(STEPS, hasDiagram, warnings) {
   const n = STEPS.length, first = STEPS[0], last = STEPS[n - 1];
   const at = (s, i) => `step ${i + 1}${s && typeof s.title === "string" && s.title ? ` ("${s.title.replace(/<[^>]*>/g, "")}")` : ""}`;
@@ -349,7 +349,7 @@ function checkType(c, errors, warnings) {
     if (c[name] !== undefined && type !== t) warnings.push(`${name} is only drawn on a "${t}" page (META.type is "${type}")`);
   if (c.META && (c.META.before || c.META.after) && type !== "before-after") warnings.push(`META.before/after are only shown on a "before-after" page`);
   const need = NEEDS[type];
-  if (need && c[need] === undefined) { errors.push(`a "${type}" page needs ${need} (see SKILL.md)`); return type; }
+  if (need && c[need] === undefined) { errors.push(`a "${type}" page needs ${need} (see references/${type}.md)`); return type; }
   if (type === "decision") {
     const D = c.DECISION;
     if (typeof D !== "object" || D === null || !Array.isArray(D.options) || !Array.isArray(D.criteria)) { errors.push("DECISION needs options[] and criteria[]"); return type; }

@@ -79,3 +79,23 @@ plugin 0.2.1 (before #46). Total cost $6.05.
   rather than a real gap; re-run with `--runs 3` before reading anything into it.
 - To compare #46: run the same command on the new skill and compare score per case and `costUsd`.
   With one run per case the cost varies by tens of percent; use `--runs 3` for both sides.
+
+## After #46 (SKILL.md split into `references/`)
+
+2026-11-05, same Claude Code and model, `--runs 3 -j 5 --ablation none`, run back to back against
+the skill before #46 (plugin 0.2.1) and after it.
+
+| Case | Before: score / cost | After: score / cost |
+|---|---|---|
+| before-after | 1.00 / $2.98 | 1.00 / $3.30 |
+| concept | 0.90 / $3.47 | 0.86 / $3.39 |
+| debugging | 1.00 / $3.45 | 0.95 / $2.64 |
+| decision | 0.95 / $4.43 | 0.95 / $3.84 |
+| walkthrough-whatif | 0.96 / $3.61 | 1.00 / $3.25 |
+| **All 15 runs** | **0.96 / $17.93** | **0.95 / $16.42** |
+
+- Cost is 8% lower; turns went up (168 → 199), mostly from reading the reference files.
+- `names-covered` failed 4 of 15 runs before and 4 of 15 after (in different cases), and 2 more in
+  a rerun of `decision`: the judge's votes split on near-identical pages, so read it as noise.
+- The one other fail: a `decision` run whose final reply named no path. A rerun of `decision`
+  (3 runs, $3.38) had the path in every reply.
