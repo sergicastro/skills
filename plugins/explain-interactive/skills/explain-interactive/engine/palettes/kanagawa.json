@@ -1,0 +1,51 @@
+{
+  "id": "kanagawa",
+  "label": "Kanagawa",
+  "group": "Editor themes",
+  "style": {
+    "font": "mono",
+    "radius": 0,
+    "border": 1.5
+  },
+  "light": {
+    "bg": "#e7e2d6",
+    "card": "#f1ede4",
+    "fg": "#545464",
+    "muted": "#57544a",
+    "line": "#a6b3c2",
+    "accent": "#435d8b",
+    "accent-soft": "#d9dfe6",
+    "ok": "#4a6429",
+    "ok-soft": "#dde4cc",
+    "bad": "#a62f42",
+    "bad-soft": "#f1d9d3",
+    "hl": "#8a4b00",
+    "hl-soft": "#efdcbc",
+    "code-bg": "#dcd5c4",
+    "on-accent": "#f1ede4",
+    "label": "#43436c"
+  },
+  "dark": {
+    "bg": "#1f1f28",
+    "card": "#223249",
+    "fg": "#dcd7ba",
+    "muted": "#b8b5a6",
+    "line": "#2d4f67",
+    "accent": "#7e9cd8",
+    "accent-soft": "#2a2a37",
+    "ok": "#98bb6c",
+    "ok-soft": "#2b3328",
+    "bad": "#ef7e88",
+    "bad-soft": "#3d2228",
+    "hl": "#ffa066",
+    "hl-soft": "#3c3830",
+    "code-bg": "#16161d",
+    "on-accent": "#1f1f28",
+    "label": "#c8c093"
+  },
+  "credit": {
+    "theme": "Kanagawa (Lotus and Wave)",
+    "licence": "MIT",
+    "url": "https://github.com/rebelot/kanagawa.nvim"
+  }
+}
