@@ -69,8 +69,9 @@ Every page gets these from the engine, whatever its content:
   close on Esc and block ← / → while open; ← / → scroll a wide diagram instead of changing step;
   reduced motion is respected.
 - **Palettes and light/dark**: a picker offers Default, then Colour-blind safe and High contrast
-  (Accessibility), then Paper, Soft and Terminal (Looks), then Dracula, Nord and Tokyo Night
-  (Editor themes, based on those MIT-licensed themes), each with a light and a dark version.
+  (Accessibility), then Paper, Soft and Terminal (Looks), then Catppuccin, Dracula, Gruvbox, Nord,
+  Solarized and Tokyo Night (Editor themes, based on those MIT-licensed themes), each with a light
+  and a dark version.
   Paper, Terminal and Soft also change the font and the corners (serif and square, monospace and
   square, rounded). Light or dark follows the system setting, and the ☀ / ☾ button switches it.
   Both choices are remembered across pages, and the index page follows them. See them all in

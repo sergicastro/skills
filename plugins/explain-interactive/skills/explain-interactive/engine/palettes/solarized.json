@@ -1,0 +1,51 @@
+{
+  "id": "solarized",
+  "label": "Solarized",
+  "group": "Editor themes",
+  "style": {
+    "font": "sans",
+    "radius": 0,
+    "border": 2
+  },
+  "light": {
+    "bg": "#eee8d5",
+    "card": "#fdf6e3",
+    "fg": "#073642",
+    "muted": "#50656c",
+    "line": "#d6cdb0",
+    "accent": "#0068ab",
+    "accent-soft": "#dfe7e1",
+    "ok": "#586f00",
+    "ok-soft": "#ece9c3",
+    "bad": "#c4121e",
+    "bad-soft": "#f8dbca",
+    "hl": "#bb166e",
+    "hl-soft": "#f7dbd5",
+    "code-bg": "#eee8d5",
+    "on-accent": "#fdf6e3",
+    "label": "#4a5f66"
+  },
+  "dark": {
+    "bg": "#002b36",
+    "card": "#073642",
+    "fg": "#eee8d5",
+    "muted": "#a7b5b5",
+    "line": "#1f5260",
+    "accent": "#68b9ff",
+    "accent-soft": "#0e4962",
+    "ok": "#aabc34",
+    "ok-soft": "#234c33",
+    "bad": "#ff7664",
+    "bad-soft": "#36353e",
+    "hl": "#ff71b5",
+    "hl-soft": "#343650",
+    "code-bg": "#00212b",
+    "on-accent": "#002b36",
+    "label": "#b5bfbd"
+  },
+  "credit": {
+    "theme": "Solarized",
+    "licence": "MIT",
+    "url": "https://github.com/altercation/solarized"
+  }
+}
