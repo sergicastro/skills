@@ -3,16 +3,16 @@
   "label": "Rosé Pine",
   "group": "Editor themes",
   "style": {
-    "font": "sans",
-    "radius": 1.5,
-    "border": 1
+    "font": "serif",
+    "radius": 2,
+    "border": 1.5
   },
   "light": {
     "bg": "#faf4ed",
     "card": "#fffaf3",
     "fg": "#575279",
     "muted": "#635e7e",
-    "line": "#dfdad9",
+    "line": "#e6cfc9",
     "accent": "#6d5a94",
     "accent-soft": "#efe8f3",
     "ok": "#286983",
@@ -23,28 +23,28 @@
     "hl-soft": "#f8ead4",
     "code-bg": "#f2e9e1",
     "on-accent": "#fffaf3",
-    "label": "#464261"
+    "label": "#7e4458"
   },
   "dark": {
-    "bg": "#191724",
-    "card": "#1f1d2e",
+    "bg": "#232136",
+    "card": "#2a273f",
     "fg": "#e0def4",
-    "muted": "#a19db9",
-    "line": "#403d52",
+    "muted": "#b1adc8",
+    "line": "#5c4a66",
     "accent": "#c4a7e7",
-    "accent-soft": "#2b2540",
+    "accent-soft": "#3b3256",
     "ok": "#9ccfd8",
-    "ok-soft": "#1c2d33",
-    "bad": "#eb6f92",
-    "bad-soft": "#3a1f2b",
+    "ok-soft": "#283a4a",
+    "bad": "#ef7d9e",
+    "bad-soft": "#46263c",
     "hl": "#f6c177",
-    "hl-soft": "#332a1d",
-    "code-bg": "#26233a",
-    "on-accent": "#191724",
-    "label": "#c8c5de"
+    "hl-soft": "#44393a",
+    "code-bg": "#393552",
+    "on-accent": "#232136",
+    "label": "#ebaaa6"
   },
   "credit": {
-    "theme": "Rosé Pine (Dawn and Main)",
+    "theme": "Rosé Pine (Dawn and Moon)",
     "licence": "MIT",
     "url": "https://rosepinetheme.com"
   }
