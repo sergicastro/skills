@@ -1,0 +1,51 @@
+{
+  "id": "rose-pine",
+  "label": "Rosé Pine",
+  "group": "Editor themes",
+  "style": {
+    "font": "sans",
+    "radius": 1.5,
+    "border": 1
+  },
+  "light": {
+    "bg": "#faf4ed",
+    "card": "#fffaf3",
+    "fg": "#575279",
+    "muted": "#635e7e",
+    "line": "#dfdad9",
+    "accent": "#6d5a94",
+    "accent-soft": "#efe8f3",
+    "ok": "#286983",
+    "ok-soft": "#e3eef0",
+    "bad": "#9c4a63",
+    "bad-soft": "#f8e8e6",
+    "hl": "#915708",
+    "hl-soft": "#f8ead4",
+    "code-bg": "#f2e9e1",
+    "on-accent": "#fffaf3",
+    "label": "#464261"
+  },
+  "dark": {
+    "bg": "#191724",
+    "card": "#1f1d2e",
+    "fg": "#e0def4",
+    "muted": "#a19db9",
+    "line": "#403d52",
+    "accent": "#c4a7e7",
+    "accent-soft": "#2b2540",
+    "ok": "#9ccfd8",
+    "ok-soft": "#1c2d33",
+    "bad": "#eb6f92",
+    "bad-soft": "#3a1f2b",
+    "hl": "#f6c177",
+    "hl-soft": "#332a1d",
+    "code-bg": "#26233a",
+    "on-accent": "#191724",
+    "label": "#c8c5de"
+  },
+  "credit": {
+    "theme": "Rosé Pine (Dawn and Main)",
+    "licence": "MIT",
+    "url": "https://rosepinetheme.com"
+  }
+}
