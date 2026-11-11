@@ -1,0 +1,51 @@
+{
+  "id": "catppuccin",
+  "label": "Catppuccin",
+  "group": "Editor themes",
+  "style": {
+    "font": "sans",
+    "radius": 1.5,
+    "border": 1
+  },
+  "light": {
+    "bg": "#e6e9ef",
+    "card": "#eff1f5",
+    "fg": "#4c4f69",
+    "muted": "#585b73",
+    "line": "#bcc0cc",
+    "accent": "#7a2ce2",
+    "accent-soft": "#e1d7f4",
+    "ok": "#007400",
+    "ok-soft": "#d6e6d9",
+    "bad": "#bc002a",
+    "bad-soft": "#ebd1db",
+    "hl": "#975300",
+    "hl-soft": "#ede3d7",
+    "code-bg": "#dce0e8",
+    "on-accent": "#eff1f5",
+    "label": "#585b73"
+  },
+  "dark": {
+    "bg": "#181825",
+    "card": "#1e1e2e",
+    "fg": "#cdd6f4",
+    "muted": "#aeb5d0",
+    "line": "#45475a",
+    "accent": "#cba6f7",
+    "accent-soft": "#443c5a",
+    "ok": "#a6e3a1",
+    "ok-soft": "#3c4947",
+    "bad": "#f38ba8",
+    "bad-soft": "#4d3649",
+    "hl": "#fab387",
+    "hl-soft": "#4e3f42",
+    "code-bg": "#11111b",
+    "on-accent": "#1e1e2e",
+    "label": "#bac2de"
+  },
+  "credit": {
+    "theme": "Catppuccin (Latte and Mocha)",
+    "licence": "MIT",
+    "url": "https://github.com/catppuccin/catppuccin"
+  }
+}
