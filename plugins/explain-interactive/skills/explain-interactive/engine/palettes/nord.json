@@ -1,0 +1,51 @@
+{
+  "id": "nord",
+  "label": "Nord",
+  "group": "Editor themes",
+  "style": {
+    "font": "sans",
+    "radius": 1,
+    "border": 1
+  },
+  "light": {
+    "bg": "#e5e9f0",
+    "card": "#eceff4",
+    "fg": "#2e3440",
+    "muted": "#4c566a",
+    "line": "#c8d0dc",
+    "accent": "#3d6594",
+    "accent-soft": "#dce5f0",
+    "ok": "#3c752a",
+    "ok-soft": "#e3ecdb",
+    "bad": "#a8343f",
+    "bad-soft": "#f3dfe1",
+    "hl": "#8a5a00",
+    "hl-soft": "#f2e8d4",
+    "code-bg": "#d8dee9",
+    "on-accent": "#eceff4",
+    "label": "#3b4252"
+  },
+  "dark": {
+    "bg": "#2e3440",
+    "card": "#3b4252",
+    "fg": "#eceff4",
+    "muted": "#d8dee9",
+    "line": "#4c566a",
+    "accent": "#88c0d0",
+    "accent-soft": "#2f4a56",
+    "ok": "#a3be8c",
+    "ok-soft": "#36432f",
+    "bad": "#ee98a0",
+    "bad-soft": "#4f3238",
+    "hl": "#f0c86a",
+    "hl-soft": "#4d4532",
+    "code-bg": "#353c4a",
+    "on-accent": "#2e3440",
+    "label": "#e5e9f0"
+  },
+  "credit": {
+    "theme": "Nord",
+    "licence": "MIT",
+    "url": "https://www.nordtheme.com"
+  }
+}
