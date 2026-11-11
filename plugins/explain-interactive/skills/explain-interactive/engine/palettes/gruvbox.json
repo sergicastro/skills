@@ -1,0 +1,51 @@
+{
+  "id": "gruvbox",
+  "label": "Gruvbox",
+  "group": "Editor themes",
+  "style": {
+    "font": "mono",
+    "radius": 0,
+    "border": 1.5
+  },
+  "light": {
+    "bg": "#ebdbb2",
+    "card": "#fbf1c7",
+    "fg": "#3c3836",
+    "muted": "#625850",
+    "line": "#d5c4a1",
+    "accent": "#076678",
+    "accent-soft": "#d9debc",
+    "ok": "#306947",
+    "ok-soft": "#e1e0b7",
+    "bad": "#9d0006",
+    "bad-soft": "#eecfac",
+    "hl": "#8a5300",
+    "hl-soft": "#f1e0ae",
+    "code-bg": "#f2e5bc",
+    "on-accent": "#fbf1c7",
+    "label": "#504945"
+  },
+  "dark": {
+    "bg": "#282828",
+    "card": "#32302f",
+    "fg": "#ebdbb2",
+    "muted": "#d3c4a8",
+    "line": "#665c54",
+    "accent": "#9fc2b4",
+    "accent-soft": "#444a46",
+    "ok": "#9acd88",
+    "ok-soft": "#465040",
+    "bad": "#ff9170",
+    "bad-soft": "#5e3630",
+    "hl": "#fabd2f",
+    "hl-soft": "#5e4f2f",
+    "code-bg": "#3c3836",
+    "on-accent": "#282828",
+    "label": "#d5c4a1"
+  },
+  "credit": {
+    "theme": "Gruvbox",
+    "licence": "MIT",
+    "url": "https://github.com/morhetz/gruvbox"
+  }
+}
