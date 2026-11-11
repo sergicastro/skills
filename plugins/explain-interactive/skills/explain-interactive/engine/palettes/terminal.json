@@ -1,0 +1,46 @@
+{
+  "id": "terminal",
+  "label": "Terminal",
+  "group": "Looks",
+  "style": {
+    "font": "mono",
+    "radius": 0,
+    "border": 1
+  },
+  "light": {
+    "bg": "#e8f3e4",
+    "card": "#f4faf1",
+    "fg": "#0d2b12",
+    "muted": "#2f5634",
+    "line": "#b9d3b2",
+    "accent": "#005f73",
+    "accent-soft": "#d9ecee",
+    "ok": "#1d6b1d",
+    "ok-soft": "#d5edd0",
+    "bad": "#b3261e",
+    "bad-soft": "#f6dcd8",
+    "hl": "#8a5200",
+    "hl-soft": "#f3e6c8",
+    "code-bg": "#dcebd7",
+    "on-accent": "#ffffff",
+    "label": "#1f4425"
+  },
+  "dark": {
+    "bg": "#070b07",
+    "card": "#0d140d",
+    "fg": "#7cf08a",
+    "muted": "#58c066",
+    "line": "#245a2b",
+    "accent": "#4fd6e6",
+    "accent-soft": "#0e2c30",
+    "ok": "#a6f04f",
+    "ok-soft": "#1b2e0c",
+    "bad": "#ff6b5f",
+    "bad-soft": "#3a1310",
+    "hl": "#ffb000",
+    "hl-soft": "#352600",
+    "code-bg": "#111c11",
+    "on-accent": "#04191c",
+    "label": "#6ad879"
+  }
+}

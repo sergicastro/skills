@@ -1,0 +1,46 @@
+{
+  "id": "colour-blind",
+  "label": "Colour-blind safe",
+  "group": "Accessibility",
+  "style": {
+    "font": "sans",
+    "radius": 1,
+    "border": 1
+  },
+  "light": {
+    "bg": "#f7f7f5",
+    "card": "#ffffff",
+    "fg": "#1a1a1a",
+    "muted": "#555b62",
+    "line": "#d6d9dd",
+    "accent": "#4a3fc0",
+    "accent-soft": "#e9e7fb",
+    "ok": "#005f9e",
+    "ok-soft": "#dcecf8",
+    "bad": "#b84300",
+    "bad-soft": "#fbe6da",
+    "hl": "#c2185b",
+    "hl-soft": "#fce4ee",
+    "code-bg": "#f1f1ee",
+    "on-accent": "#ffffff",
+    "label": "#3d434a"
+  },
+  "dark": {
+    "bg": "#101114",
+    "card": "#1c1e22",
+    "fg": "#ececec",
+    "muted": "#b8bcc2",
+    "line": "#474b52",
+    "accent": "#a99cff",
+    "accent-soft": "#2a2550",
+    "ok": "#56b4e9",
+    "ok-soft": "#12324a",
+    "bad": "#ff8a4c",
+    "bad-soft": "#4a2412",
+    "hl": "#f0e442",
+    "hl-soft": "#3d3a10",
+    "code-bg": "#25282d",
+    "on-accent": "#14102e",
+    "label": "#d6d9dd"
+  }
+}

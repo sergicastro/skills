@@ -1,0 +1,46 @@
+{
+  "id": "paper",
+  "label": "Paper",
+  "group": "Looks",
+  "style": {
+    "font": "serif",
+    "radius": 0,
+    "border": 1
+  },
+  "light": {
+    "bg": "#f7f3ea",
+    "card": "#fffdf8",
+    "fg": "#1e1b16",
+    "muted": "#5e574c",
+    "line": "#d6cdbd",
+    "accent": "#1f4e8c",
+    "accent-soft": "#e6ecf4",
+    "ok": "#2c6a2c",
+    "ok-soft": "#e2eddb",
+    "bad": "#a4262c",
+    "bad-soft": "#f6e0dc",
+    "hl": "#8a5300",
+    "hl-soft": "#f7ead2",
+    "code-bg": "#f0ebe0",
+    "on-accent": "#ffffff",
+    "label": "#47413a"
+  },
+  "dark": {
+    "bg": "#15130f",
+    "card": "#1f1c17",
+    "fg": "#ece5d6",
+    "muted": "#bdb4a2",
+    "line": "#4a4438",
+    "accent": "#8fb4e6",
+    "accent-soft": "#24303f",
+    "ok": "#8cc97a",
+    "ok-soft": "#22331d",
+    "bad": "#f08a7a",
+    "bad-soft": "#47221d",
+    "hl": "#e8b04a",
+    "hl-soft": "#45351a",
+    "code-bg": "#29251e",
+    "on-accent": "#111a28",
+    "label": "#d8d0c0"
+  }
+}

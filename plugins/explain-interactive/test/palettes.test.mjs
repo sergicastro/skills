@@ -1,8 +1,10 @@
-// Checks every palette in engine/palettes.mjs: ids, variables, contrast and colour difference.
+// Checks every palette in engine/palettes/*.json, as engine/palettes.mjs loads them: files, ids, groups, order,
+// variables, contrast and colour difference. Nothing here lists the palettes, so adding a file needs no test edit.
 // A failure names the palette, mode, pair and the measured value, so a palette can be tuned from the output.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { VARS, PALETTES, paletteCss, FONTS, STYLE } from "../skills/explain-interactive/engine/palettes.mjs";
+import { readdirSync, readFileSync } from "node:fs";
+import { VARS, PALETTES, paletteCss, FONTS, STYLE, GROUPS, PALETTE_DIR, sortPalettes } from "../skills/explain-interactive/engine/palettes.mjs";
 
 const MODES = ["light", "dark"];
 const rgb = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
@@ -46,8 +48,43 @@ const DISTINCT_PAIRS = [["hl", "accent"], ["hl", "ok"], ["hl", "bad"], ["ok", "b
 const each = fn => PALETTES.flatMap(p => MODES.flatMap(m => fn(p, m, p[m] || {})));
 const report = fails => assert.deepEqual(fails, [], "\n" + fails.join("\n"));
 
-test("PALETTES lists default, high-contrast, colour-blind, paper, terminal and soft, in that order", () => {
-  assert.deepEqual(PALETTES.map(p => p.id), ["default", "high-contrast", "colour-blind", "paper", "terminal", "soft"]);
+test("one file per palette: engine/palettes/<id>.json, with only the known keys", () => {
+  const files = readdirSync(PALETTE_DIR);
+  assert.ok(files.includes("default.json"), "default.json");
+  report(files.flatMap(f => {
+    if (!f.endsWith(".json")) return [`engine/palettes/${f}: not a .json file`];
+    const p = JSON.parse(readFileSync(new URL(f, PALETTE_DIR), "utf8"));
+    return [
+      ...(f === `${p.id}.json` ? [] : [`engine/palettes/${f}: id is ${p.id}; the file must be named ${p.id}.json`]),
+      ...["id", "label", "group", "style", "light", "dark"].filter(k => !(k in p)).map(k => `${f}: missing ${k}`),
+      ...Object.keys(p).filter(k => !["id", "label", "group", "style", "light", "dark", "credit"].includes(k)).map(k => `${f}: extra key ${k}`),
+    ];
+  }));
+  assert.equal(PALETTES.length, files.length, "PALETTES has every file");
+});
+
+test("every palette names a group from GROUPS; a credit names the original theme and its licence", () => {
+  report(PALETTES.flatMap(p => [
+    ...(GROUPS.includes(p.group) ? [] : [`${p.id}: group ${p.group}, not one of ${GROUPS.join(", ")}`]),
+    ...(p.credit === undefined ? [] :
+      ["theme", "licence"].filter(k => typeof p.credit[k] !== "string" || !p.credit[k].trim()).map(k => `${p.id}: credit.${k} is missing`)
+        .concat(Object.keys(p.credit).filter(k => !["theme", "licence", "url"].includes(k)).map(k => `${p.id}: extra credit key ${k}`))),
+  ]));
+});
+
+test("PALETTES order: default first, then by group in GROUPS order, then by label", () => {
+  assert.equal(PALETTES[0].id, "default");
+  const rest = PALETTES.slice(1);
+  for (let i = 1; i < rest.length; i++) {
+    const [a, b] = [rest[i - 1], rest[i]], ga = GROUPS.indexOf(a.group), gb = GROUPS.indexOf(b.group);
+    assert.ok(ga < gb || (ga === gb && a.label.localeCompare(b.label, "en") < 0), `${a.id} (${a.group}) before ${b.id} (${b.group})`);
+  }
+  // the rule itself, on a fixture: an unknown group sorts last
+  const p = (id, group, label = id) => ({ id, group, label });
+  const fixture = [p("z", "Mystery"), p("t", "Editor themes"), p("b", "Looks", "Beta"), p("a", "Looks", "alpha"),
+    p("c", "Accessibility"), p("default", "Looks", "Zed")];
+  assert.deepEqual(sortPalettes(fixture).map(x => x.id), ["default", "c", "a", "b", "t", "z"]);
+  assert.deepEqual(GROUPS, ["Accessibility", "Looks", "Editor themes"]);
 });
 
 test("every palette has a style: font, radius and border from the allowed values, no other keys", () => {
@@ -69,7 +106,7 @@ test("style: Default keeps today's look; the accessibility palettes keep the fon
   const style = Object.fromEntries(PALETTES.map(p => [p.id, p.style]));
   assert.deepEqual(style.default, { font: "sans", radius: 1, border: 1 });
   assert.equal(FONTS.sans, `system-ui, -apple-system, "Segoe UI", sans-serif`, "today's body font");
-  for (const id of ["high-contrast", "colour-blind"]) {
+  for (const { id } of PALETTES.filter(p => p.group === "Accessibility")) {
     assert.equal(style[id].font, "sans", `${id} keeps the font`);
     assert.equal(style[id].radius, 1, `${id} keeps the corners`);
     assert.ok(style[id].border >= 1, `${id} border`);

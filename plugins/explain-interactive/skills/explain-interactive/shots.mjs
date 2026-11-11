@@ -9,7 +9,7 @@
 //              A folder holding other step-*.png files is refused, so an existing folder's images are never deleted.
 //   --phone    also render each step at phone size (390×844): step-NN-phone.png
 //   --dark     dark theme instead of light
-//   --palette <id>  colour palette to shoot (an id from engine/palettes.mjs; default: the default palette)
+//   --palette <id>  colour palette to shoot (an id from engine/palettes/<id>.json; default: the default palette)
 //
 // A content file is built first (into the output directory). Each step is shown as the reader sees it on arrival,
 // with every build stage revealed. A step with a what-if control is also shot once per other option: step-NN-<option>.png
