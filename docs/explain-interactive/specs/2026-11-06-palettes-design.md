@@ -20,6 +20,12 @@ Constraints:
 
 ## 2. Palette source
 
+> Update (2026-11-11): each palette now lives in its own file, `engine/palettes/<id>.json` (`id`,
+> `label`, `group`, `style`, `light`, `dark`, optional `credit: { theme, licence }`), which
+> `palettes.mjs` reads at import time. `PALETTES` is computed: `default` first, then the groups
+> in `GROUPS` order (Accessibility, Looks, Editor themes), alphabetical by label within a group.
+> The picker shows one `<optgroup>` per group. The exports below are unchanged.
+
 New file `skills/explain-interactive/engine/palettes.mjs`, the only place colour values, and the
 font, corner and border styles, are defined:
 

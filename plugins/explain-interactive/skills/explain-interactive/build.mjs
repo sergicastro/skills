@@ -440,9 +440,16 @@ function checkTypeCoverage(type, c, warnings) {
 }
 
 // ---------- Build ----------
-// The pickers' options, in paletteCss()'s order: default first
-const paletteOptions = palettes => [...palettes].sort((a, b) => (b.id === "default") - (a.id === "default"))
-  .map(p => `<option value="${esc(p.id)}">${esc(p.label)}</option>`).join("");
+// The pickers' options, in paletteCss()'s order: default first, on its own, then one <optgroup> per group in the
+// order the groups first appear (PALETTES is already sorted by group and label). A palette without a group (a test
+// fixture) is a plain option after default.
+const paletteOptions = palettes => {
+  const option = p => `<option value="${esc(p.id)}">${esc(p.label)}</option>`;
+  const sorted = [...palettes].sort((a, b) => (b.id === "default") - (a.id === "default"));
+  const loose = sorted.filter(p => p.id === "default" || !p.group), grouped = sorted.filter(p => !loose.includes(p));
+  return loose.map(option).join("") + [...new Set(grouped.map(p => p.group))].map(g =>
+    `<optgroup label="${esc(g)}">${grouped.filter(p => p.group === g).map(option).join("")}</optgroup>`).join("");
+};
 // Run in <head> before the CSS, so a page never shows the default colours or mode first
 const BOOTSTRAP = `<script>try { const s = localStorage, t = s.getItem("explain-theme"), p = s.getItem("explain-palette");
   if (t) document.documentElement.dataset.theme = t; if (p) document.documentElement.dataset.palette = p; } catch (e) {}</script>`;

@@ -7,7 +7,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync, spawnSync } from "node:child_process";
 import { build, check, extract, indexHtml, loadContent, readPage, writeIndex, TYPES } from "../skills/explain-interactive/build.mjs";
-import { PALETTES } from "../skills/explain-interactive/engine/palettes.mjs";
+import { PALETTES, GROUPS } from "../skills/explain-interactive/engine/palettes.mjs";
 import { launch } from "../skills/explain-interactive/cdp.mjs";
 import { skip } from "./chrome.mjs";
 
@@ -46,7 +46,7 @@ test("the sample builds into one self-contained page", () => {
   assert.equal(html.match(/<script/g).length, 3);   // theme bootstrap, content, engine
 });
 
-test("palette picker: one <option> per palette in each select, none with a single palette", () => {
+test("palette picker: one <option> per palette in each select, grouped in <optgroup>s, none with a single palette", () => {
   const def = PALETTES.find(p => p.id === "default");
   const alt = { id: "alt", label: "Alt & co", light: { ...def.light, bg: "#fafaff" }, dark: { ...def.dark, bg: "#101020" } };
   const selects = html => [...html.matchAll(/<select\b([^>]*)>([\s\S]*?)<\/select>/g)].map(m => [m[1], m[2]]);
@@ -69,6 +69,16 @@ test("palette picker: one <option> per palette in each select, none with a singl
   const own = build(sample, SAMPLE).html;
   if (PALETTES.length > 1) for (const [, inner] of selects(own)) assert.deepEqual(options(inner).map(o => o[0]), PALETTES.map(p => p.id));
   else assert.equal(selects(own).length, 0);
+
+  // Grouped palettes: default on its own, then one <optgroup> per group, in the order the palettes come
+  const g = (id, group) => ({ ...alt, id, label: id.toUpperCase(), group });
+  const grouped = build(sample, SAMPLE, { palettes: [g("c", "Looks"), def, g("a", "Accessibility"), g("b", "Looks")] }).html;
+  for (const [, inner] of selects(grouped))
+    assert.equal(inner, `<option value="default">Default</option><optgroup label="Looks"><option value="c">C</option>` +
+      `<option value="b">B</option></optgroup><optgroup label="Accessibility"><option value="a">A</option></optgroup>`);
+  // The skill's own build: one optgroup per group used, in GROUPS order
+  if (PALETTES.length > 1) for (const [, inner] of selects(own))
+    assert.deepEqual([...inner.matchAll(/<optgroup label="([^"]*)">/g)].map(m => m[1]), GROUPS.filter(x => PALETTES.some(p => p.id !== "default" && p.group === x)));
 
   const one = build(sample, SAMPLE, { palettes: [def] }).html;
   assert.equal(selects(one).length, 0);

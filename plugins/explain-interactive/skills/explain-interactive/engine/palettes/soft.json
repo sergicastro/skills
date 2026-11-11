@@ -1,0 +1,46 @@
+{
+  "id": "soft",
+  "label": "Soft",
+  "group": "Looks",
+  "style": {
+    "font": "sans",
+    "radius": 2,
+    "border": 2
+  },
+  "light": {
+    "bg": "#f6f3fb",
+    "card": "#ffffff",
+    "fg": "#2a2540",
+    "muted": "#5f5878",
+    "line": "#ddd5ee",
+    "accent": "#6a3fc8",
+    "accent-soft": "#ece5fb",
+    "ok": "#23764a",
+    "ok-soft": "#dcf3e6",
+    "bad": "#c0344d",
+    "bad-soft": "#fde3e8",
+    "hl": "#9a4f0a",
+    "hl-soft": "#fdecd9",
+    "code-bg": "#f1edf8",
+    "on-accent": "#ffffff",
+    "label": "#4a4462"
+  },
+  "dark": {
+    "bg": "#1a1724",
+    "card": "#252135",
+    "fg": "#ece8f6",
+    "muted": "#bdb5d4",
+    "line": "#4a4363",
+    "accent": "#b9a2ff",
+    "accent-soft": "#352c55",
+    "ok": "#6fd3a0",
+    "ok-soft": "#1f3f30",
+    "bad": "#ff8fa3",
+    "bad-soft": "#4a2230",
+    "hl": "#ffbf73",
+    "hl-soft": "#4a3418",
+    "code-bg": "#2d2840",
+    "on-accent": "#1a1330",
+    "label": "#d6d0e8"
+  }
+}
