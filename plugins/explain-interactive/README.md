@@ -72,10 +72,9 @@ Every page gets these from the engine, whatever its content:
   (Accessibility), then Paper, Soft and Terminal (Looks), each with a light and a dark version.
   Paper, Terminal and Soft also change the font and the corners (serif and square, monospace and
   square, rounded). Light or dark follows the system setting, and the ☀ / ☾ button switches it.
-  Both choices are remembered across pages, and the index page follows them.
+  Both choices are remembered across pages, and the index page follows them. See them all in
+  [Palettes](#palettes) at the end.
   Diagrams scroll sideways on phones rather than shrinking to unreadable text.
-
-![The same step in every palette, light and dark: Default, Colour-blind safe, High contrast, Paper, Soft and Terminal](../../docs/explain-interactive/images/palette-styles.png)
 
 ## Install
 
@@ -110,3 +109,9 @@ Claude writes only `~/explanations/<topic>.content.js`; the build turns it into 
 ## License
 
 MIT. See [LICENSE](../../LICENSE).
+
+## Palettes
+
+The same step in every palette, light and dark, in the picker's order.
+
+![The same step in every palette, light and dark: Default, Colour-blind safe, High contrast, Paper, Soft and Terminal](../../docs/explain-interactive/images/palette-styles.png)
