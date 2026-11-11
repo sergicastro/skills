@@ -1,0 +1,51 @@
+{
+  "id": "dracula",
+  "label": "Dracula",
+  "group": "Editor themes",
+  "style": {
+    "font": "mono",
+    "radius": 1.5,
+    "border": 1
+  },
+  "light": {
+    "bg": "#f6eef3",
+    "card": "#fdf9fb",
+    "fg": "#1f1f1f",
+    "muted": "#5b4f5a",
+    "line": "#d8c5d3",
+    "accent": "#644ac9",
+    "accent-soft": "#e9e1f6",
+    "ok": "#14710a",
+    "ok-soft": "#dcecd6",
+    "bad": "#b73426",
+    "bad-soft": "#f8dcd8",
+    "hl": "#a3144d",
+    "hl-soft": "#f6d9e5",
+    "code-bg": "#ede2ea",
+    "on-accent": "#ffffff",
+    "label": "#3e3440"
+  },
+  "dark": {
+    "bg": "#282a36",
+    "card": "#44475a",
+    "fg": "#f8f8f2",
+    "muted": "#d5d8ea",
+    "line": "#6272a4",
+    "accent": "#caa9fa",
+    "accent-soft": "#3d3458",
+    "ok": "#50fa7b",
+    "ok-soft": "#24402e",
+    "bad": "#ff9d9d",
+    "bad-soft": "#4d2a35",
+    "hl": "#f1fa8c",
+    "hl-soft": "#45472f",
+    "code-bg": "#21222c",
+    "on-accent": "#282a36",
+    "label": "#ececf0"
+  },
+  "credit": {
+    "theme": "Dracula (light mode from Alucard)",
+    "licence": "MIT",
+    "url": "https://draculatheme.com"
+  }
+}

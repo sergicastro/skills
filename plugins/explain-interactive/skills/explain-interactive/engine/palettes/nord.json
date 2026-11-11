@@ -1,0 +1,51 @@
+{
+  "id": "nord",
+  "label": "Nord",
+  "group": "Editor themes",
+  "style": {
+    "font": "sans",
+    "radius": 0.5,
+    "border": 1.5
+  },
+  "light": {
+    "bg": "#d8dee9",
+    "card": "#e5e9f0",
+    "fg": "#2e3440",
+    "muted": "#434c5e",
+    "line": "#a9b5c7",
+    "accent": "#375d8b",
+    "accent-soft": "#c9d7e8",
+    "ok": "#3a6a28",
+    "ok-soft": "#d3e0c9",
+    "bad": "#a3343f",
+    "bad-soft": "#ecd3d6",
+    "hl": "#8a5000",
+    "hl-soft": "#efdfc0",
+    "code-bg": "#cdd4e0",
+    "on-accent": "#eceff4",
+    "label": "#3b4252"
+  },
+  "dark": {
+    "bg": "#2e3440",
+    "card": "#3b4252",
+    "fg": "#eceff4",
+    "muted": "#d8dee9",
+    "line": "#5e6a80",
+    "accent": "#88c0d0",
+    "accent-soft": "#2c4652",
+    "ok": "#8fbf72",
+    "ok-soft": "#34402e",
+    "bad": "#ee98a0",
+    "bad-soft": "#4d3036",
+    "hl": "#ebcb8b",
+    "hl-soft": "#4a4232",
+    "code-bg": "#434c5e",
+    "on-accent": "#2e3440",
+    "label": "#e5e9f0"
+  },
+  "credit": {
+    "theme": "Nord (light mode derived from Snow Storm)",
+    "licence": "MIT",
+    "url": "https://www.nordtheme.com"
+  }
+}

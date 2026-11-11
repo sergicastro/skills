@@ -1,0 +1,51 @@
+{
+  "id": "tokyo-night",
+  "label": "Tokyo Night",
+  "group": "Editor themes",
+  "style": {
+    "font": "sans",
+    "radius": 1.5,
+    "border": 2
+  },
+  "light": {
+    "bg": "#cdd1ec",
+    "card": "#e4e5f4",
+    "fg": "#1f2547",
+    "muted": "#3d4470",
+    "line": "#9fa6d2",
+    "accent": "#2255a9",
+    "accent-soft": "#c3d0f0",
+    "ok": "#47622e",
+    "ok-soft": "#cfdac7",
+    "bad": "#ad1d47",
+    "bad-soft": "#ecd0dc",
+    "hl": "#894800",
+    "hl-soft": "#ead8c8",
+    "code-bg": "#c0c5e4",
+    "on-accent": "#ffffff",
+    "label": "#2d4d9b"
+  },
+  "dark": {
+    "bg": "#1a1b26",
+    "card": "#24283b",
+    "fg": "#c0caf5",
+    "muted": "#a9b1d6",
+    "line": "#3d4a7a",
+    "accent": "#7fa6f7",
+    "accent-soft": "#2b3a66",
+    "ok": "#9ece6a",
+    "ok-soft": "#283a2c",
+    "bad": "#f7768e",
+    "bad-soft": "#43283a",
+    "hl": "#ff9e64",
+    "hl-soft": "#43301f",
+    "code-bg": "#1f2335",
+    "on-accent": "#1a1b26",
+    "label": "#b4bce4"
+  },
+  "credit": {
+    "theme": "Tokyo Night (light mode from Tokyo Night Day)",
+    "licence": "MIT",
+    "url": "https://github.com/enkia/tokyo-night-vscode-theme"
+  }
+}
