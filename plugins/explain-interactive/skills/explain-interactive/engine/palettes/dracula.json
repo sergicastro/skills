@@ -8,22 +8,22 @@
     "border": 1
   },
   "light": {
-    "bg": "#f4eed5",
-    "card": "#fffbeb",
+    "bg": "#f6eef3",
+    "card": "#fdf9fb",
     "fg": "#1f1f1f",
-    "muted": "#5c5640",
-    "line": "#d4caa2",
+    "muted": "#5b4f5a",
+    "line": "#d8c5d3",
     "accent": "#644ac9",
-    "accent-soft": "#e7e0f7",
+    "accent-soft": "#e9e1f6",
     "ok": "#14710a",
-    "ok-soft": "#dcedd2",
+    "ok-soft": "#dcecd6",
     "bad": "#b73426",
-    "bad-soft": "#f7ddd6",
+    "bad-soft": "#f8dcd8",
     "hl": "#a3144d",
-    "hl-soft": "#f6dde4",
-    "code-bg": "#ebe3c4",
+    "hl-soft": "#f6d9e5",
+    "code-bg": "#ede2ea",
     "on-accent": "#ffffff",
-    "label": "#3f3a2b"
+    "label": "#3e3440"
   },
   "dark": {
     "bg": "#282a36",
