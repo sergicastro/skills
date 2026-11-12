@@ -1,0 +1,46 @@
+{
+  "id": "olive",
+  "label": "Olive",
+  "group": "Editor vivid",
+  "style": {
+    "font": "mono",
+    "radius": 0.5,
+    "border": 1
+  },
+  "light": {
+    "bg": "#fafaf5",
+    "card": "#ffffff",
+    "fg": "#272822",
+    "muted": "#5f5f52",
+    "line": "#d8d8c8",
+    "accent": "#0a6e85",
+    "accent-soft": "#e4edeb",
+    "ok": "#3f6600",
+    "ok-soft": "#e9eddf",
+    "bad": "#c4145a",
+    "bad-soft": "#f5e5e7",
+    "hl": "#9a4f00",
+    "hl-soft": "#f1ebdf",
+    "code-bg": "#f0f0e6",
+    "on-accent": "#ffffff",
+    "label": "#1d4145"
+  },
+  "dark": {
+    "bg": "#272822",
+    "card": "#32332b",
+    "fg": "#f8f8f2",
+    "muted": "#cfcfc2",
+    "line": "#75715e",
+    "accent": "#66d9ef",
+    "accent-soft": "#2f3f3d",
+    "ok": "#a6e22e",
+    "ok-soft": "#384024",
+    "bad": "#ff7aa8",
+    "bad-soft": "#433333",
+    "hl": "#fd971f",
+    "hl-soft": "#433622",
+    "code-bg": "#1e1f1c",
+    "on-accent": "#272822",
+    "label": "#dbf2f1"
+  }
+}

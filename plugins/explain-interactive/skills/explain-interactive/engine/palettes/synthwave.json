@@ -1,0 +1,51 @@
+{
+  "id": "synthwave",
+  "label": "Synthwave '84",
+  "group": "Editor vivid",
+  "style": {
+    "font": "sans",
+    "radius": 2,
+    "border": 1
+  },
+  "light": {
+    "bg": "#fbf0fa",
+    "card": "#ffffff",
+    "fg": "#2a1b3d",
+    "muted": "#5e4a75",
+    "line": "#e3c5e6",
+    "accent": "#a8148a",
+    "accent-soft": "#f4dcf0",
+    "ok": "#0b6e50",
+    "ok-soft": "#e5e4eb",
+    "bad": "#c21f3a",
+    "bad-soft": "#f6dde9",
+    "hl": "#8a5a00",
+    "hl-soft": "#f1e3e4",
+    "code-bg": "#f3e3f4",
+    "on-accent": "#ffffff",
+    "label": "#561958"
+  },
+  "dark": {
+    "bg": "#262335",
+    "card": "#241b2f",
+    "fg": "#ffffff",
+    "muted": "#b6b1cc",
+    "line": "#495495",
+    "accent": "#ff7edb",
+    "accent-soft": "#422f4b",
+    "ok": "#72f1b8",
+    "ok-soft": "#303e46",
+    "bad": "#ff6b75",
+    "bad-soft": "#422c3d",
+    "hl": "#fede5d",
+    "hl-soft": "#423b3a",
+    "code-bg": "#2a2139",
+    "on-accent": "#262335",
+    "label": "#ffe5f8"
+  },
+  "credit": {
+    "theme": "Synthwave '84 (light mode invented)",
+    "licence": "MIT",
+    "url": "https://github.com/robb0wen/synthwave-vscode"
+  }
+}
