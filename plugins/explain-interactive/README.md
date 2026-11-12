@@ -70,7 +70,7 @@ Every page gets these from the engine, whatever its content:
   reduced motion is respected.
 - **Palettes and light/dark**: a picker offers Default, then Colour-blind safe and High contrast
   (Accessibility), then Paper, Soft and Terminal (Looks), then Catppuccin, Dracula, Gruvbox,
-  Kanagawa, Nord, Rosé Pine, Solarized and Tokyo Night ("Editor, calm" and "Editor, vivid", based
+  Kanagawa, Nord, Rosé Pine, Solarized and Tokyo Night (Editor calm and Editor vivid, based
   on those MIT-licensed themes), each with a light and a dark version.
   Paper, Terminal and Soft also change the font and the corners (serif and square, monospace and
   square, rounded). Light or dark follows the system setting, and the ☀ / ☾ button switches it.

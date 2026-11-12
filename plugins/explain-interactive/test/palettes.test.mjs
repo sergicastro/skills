@@ -81,10 +81,10 @@ test("PALETTES order: default first, then by group in GROUPS order, then by labe
   }
   // the rule itself, on a fixture: an unknown group sorts last
   const p = (id, group, label = id) => ({ id, group, label });
-  const fixture = [p("z", "Mystery"), p("v", "Editor, vivid"), p("t", "Editor, calm"), p("b", "Looks", "Beta"),
+  const fixture = [p("z", "Mystery"), p("v", "Editor vivid"), p("t", "Editor calm"), p("b", "Looks", "Beta"),
     p("a", "Looks", "alpha"), p("c", "Accessibility"), p("default", "Looks", "Zed")];
   assert.deepEqual(sortPalettes(fixture).map(x => x.id), ["default", "c", "a", "b", "t", "v", "z"]);
-  assert.deepEqual(GROUPS, ["Accessibility", "Looks", "Editor, calm", "Editor, vivid"]);
+  assert.deepEqual(GROUPS, ["Accessibility", "Looks", "Editor calm", "Editor vivid"]);
 });
 
 test("every palette has a style: font, radius and border from the allowed values, no other keys", () => {

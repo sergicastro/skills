@@ -19,7 +19,7 @@ export const FONTS = {
 export const STYLE = { font: Object.keys(FONTS), radius: [0, .5, 1, 1.5, 2], border: [1, 1.5, 2] };
 
 // The picker's groups, in this order. Default comes first, on its own, whatever its group.
-export const GROUPS = ["Accessibility", "Looks", "Editor, calm", "Editor, vivid"];
+export const GROUPS = ["Accessibility", "Looks", "Editor calm", "Editor vivid"];
 
 // Default first, then by group in GROUPS order (an unknown group last), then by label
 export function sortPalettes(palettes) {
