@@ -1,0 +1,46 @@
+{
+  "id": "newsprint",
+  "label": "Newsprint",
+  "group": "Looks",
+  "style": {
+    "font": "sans",
+    "radius": 0,
+    "border": 1
+  },
+  "light": {
+    "bg": "#f6f6ef",
+    "card": "#fbfbf6",
+    "fg": "#000000",
+    "muted": "#666666",
+    "line": "#dcdcc8",
+    "accent": "#b34700",
+    "accent-soft": "#f3e7db",
+    "ok": "#2f6b2f",
+    "ok-soft": "#e3eade",
+    "bad": "#a3124a",
+    "bad-soft": "#f1e1e3",
+    "hl": "#6b5a00",
+    "hl-soft": "#eae8d8",
+    "code-bg": "#ececdf",
+    "on-accent": "#ffffff",
+    "label": "#4d4d40"
+  },
+  "dark": {
+    "bg": "#1a1a16",
+    "card": "#22221d",
+    "fg": "#e8e8dc",
+    "muted": "#a8a898",
+    "line": "#3c3c33",
+    "accent": "#ff6600",
+    "accent-soft": "#462812",
+    "ok": "#8ccf7e",
+    "ok-soft": "#32402c",
+    "bad": "#ff7ba6",
+    "bad-soft": "#4c2f36",
+    "hl": "#ffcc66",
+    "hl-soft": "#463c25",
+    "code-bg": "#2a2a24",
+    "on-accent": "#1a1a16",
+    "label": "#c8c8b8"
+  }
+}
