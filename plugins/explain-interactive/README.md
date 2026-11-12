@@ -68,12 +68,14 @@ Every page gets these from the engine, whatever its content:
   `aria-current` marks the current step; drawers are dialogs that take focus, return it on close,
   close on Esc and block ← / → while open; ← / → scroll a wide diagram instead of changing step;
   reduced motion is respected.
-- **Palettes and light/dark**: a picker offers Default, then Colour-blind safe and High contrast
-  (Accessibility), then Paper, Soft and Terminal (Looks), then Catppuccin, Dracula, Gruvbox,
-  Kanagawa, Nord, Rosé Pine, Solarized and Tokyo Night (Editor calm and Editor vivid, based
-  on those MIT-licensed themes), each with a light and a dark version.
-  Paper, Terminal and Soft also change the font and the corners (serif and square, monospace and
-  square, rounded). Light or dark follows the system setting, and the ☀ / ☾ button switches it.
+- **Palettes and light/dark**: a picker offers Default, then Civic, Colour-blind safe and High
+  contrast (Accessibility), then Aubergine, Blueprint, Chalkboard, Newsprint, Paper, Soft and
+  Terminal (Looks), then Catppuccin, Gruvbox, Kanagawa, Nord, Rosé Pine, Solarized and Tokyo Night
+  (Editor calm), then Ayu, Cobalt2, Dracula, Olive and Synthwave '84 (Editor vivid), each with a
+  light and a dark version. The editor palettes other than Olive are based on the MIT-licensed
+  themes of the same name. Many palettes also change the font, the corners and the line width
+  (Paper is serif and square, Terminal monospace and square, Soft rounded). Light or dark follows
+  the system setting, and the ☀ / ☾ button switches it.
   Both choices are remembered across pages, and the index page follows them. See them all in
   [Palettes](#palettes) at the end.
   Diagrams scroll sideways on phones rather than shrinking to unreadable text.
@@ -116,4 +118,4 @@ MIT. See [LICENSE](../../LICENSE).
 
 The same step in every palette, light and dark, in the picker's order.
 
-![The same step in every palette, light and dark: Default, Colour-blind safe, High contrast, Paper, Soft, Terminal, Catppuccin, Dracula, Gruvbox, Kanagawa, Nord, Rosé Pine, Solarized and Tokyo Night](../../docs/explain-interactive/images/palette-styles.png)
+![The same step in every palette, light and dark: Default, Civic, Colour-blind safe, High contrast, Aubergine, Blueprint, Chalkboard, Newsprint, Paper, Soft, Terminal, Catppuccin, Gruvbox, Kanagawa, Nord, Rosé Pine, Solarized, Tokyo Night, Ayu, Cobalt2, Dracula, Olive and Synthwave '84](../../docs/explain-interactive/images/palette-styles.png)
