@@ -1,0 +1,46 @@
+{
+  "id": "aubergine",
+  "label": "Aubergine",
+  "group": "Looks",
+  "style": {
+    "font": "sans",
+    "radius": 1,
+    "border": 1
+  },
+  "light": {
+    "bg": "#f7f7f7",
+    "card": "#ffffff",
+    "fg": "#111111",
+    "muted": "#5c5c5c",
+    "line": "#d9cdd6",
+    "accent": "#b83d14",
+    "accent-soft": "#f6e8e3",
+    "ok": "#0e7a3d",
+    "ok-soft": "#e2efe8",
+    "bad": "#a8124a",
+    "bad-soft": "#f5e3e9",
+    "hl": "#77216f",
+    "hl-soft": "#efe4ee",
+    "code-bg": "#f0e9ee",
+    "on-accent": "#ffffff",
+    "label": "#5e2750"
+  },
+  "dark": {
+    "bg": "#2c001e",
+    "card": "#3d0a2e",
+    "fg": "#ffffff",
+    "muted": "#d9c3d3",
+    "line": "#5e2750",
+    "accent": "#ff7a4d",
+    "accent-soft": "#5a1b28",
+    "ok": "#7fd18a",
+    "ok-soft": "#3e2e36",
+    "bad": "#ff8fb8",
+    "bad-soft": "#5a1f40",
+    "hl": "#ffcc66",
+    "hl-soft": "#5a2d2e",
+    "code-bg": "#250019",
+    "on-accent": "#2c001e",
+    "label": "#e9d3e3"
+  }
+}
