@@ -1,0 +1,46 @@
+{
+  "id": "civic",
+  "label": "Civic",
+  "group": "Accessibility",
+  "style": {
+    "font": "sans",
+    "radius": 1,
+    "border": 2
+  },
+  "light": {
+    "bg": "#ffffff",
+    "card": "#f3f2f1",
+    "fg": "#0b0c0c",
+    "muted": "#505a5f",
+    "line": "#b1b4b6",
+    "accent": "#1d70b8",
+    "accent-soft": "#e8f1f8",
+    "ok": "#00703c",
+    "ok-soft": "#e0eee8",
+    "bad": "#c0301a",
+    "bad-soft": "#f7e6e4",
+    "hl": "#6e4a00",
+    "hl-soft": "#ffdd00",
+    "code-bg": "#f3f2f1",
+    "on-accent": "#ffffff",
+    "label": "#383f43"
+  },
+  "dark": {
+    "bg": "#0b0c0c",
+    "card": "#1d1e1f",
+    "fg": "#ffffff",
+    "muted": "#b1b4b6",
+    "line": "#505a5f",
+    "accent": "#5694ca",
+    "accent-soft": "#1c2a36",
+    "ok": "#85c98f",
+    "ok-soft": "#263629",
+    "bad": "#ff6f61",
+    "bad-soft": "#41221f",
+    "hl": "#ffdd00",
+    "hl-soft": "#413a09",
+    "code-bg": "#262728",
+    "on-accent": "#0b0c0c",
+    "label": "#f3f2f1"
+  }
+}
