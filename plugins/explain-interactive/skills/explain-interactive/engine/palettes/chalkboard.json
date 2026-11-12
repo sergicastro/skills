@@ -1,0 +1,46 @@
+{
+  "id": "chalkboard",
+  "label": "Chalkboard",
+  "group": "Looks",
+  "style": {
+    "font": "serif",
+    "radius": 0.5,
+    "border": 1.5
+  },
+  "light": {
+    "bg": "#dde8df",
+    "card": "#eef4ef",
+    "fg": "#1f2d24",
+    "muted": "#45574a",
+    "line": "#a9bcad",
+    "accent": "#4a4a9e",
+    "accent-soft": "#d0dad9",
+    "ok": "#1d6650",
+    "ok-soft": "#ccdcd2",
+    "bad": "#a3285c",
+    "bad-soft": "#d8d7d3",
+    "hl": "#9a3f0a",
+    "hl-soft": "#d7d9cc",
+    "code-bg": "#d0ddd2",
+    "on-accent": "#ffffff",
+    "label": "#2e374f"
+  },
+  "dark": {
+    "bg": "#2b3a2f",
+    "card": "#33463a",
+    "fg": "#f4f1e6",
+    "muted": "#c9c6b6",
+    "line": "#5b7563",
+    "accent": "#a8d8ff",
+    "accent-soft": "#3b4f4a",
+    "ok": "#b5e5a0",
+    "ok-soft": "#3d503e",
+    "bad": "#ffadad",
+    "bad-soft": "#47493f",
+    "hl": "#ffe48a",
+    "hl-soft": "#47503b",
+    "code-bg": "#26332a",
+    "on-accent": "#2b3a2f",
+    "label": "#e5eceb"
+  }
+}
