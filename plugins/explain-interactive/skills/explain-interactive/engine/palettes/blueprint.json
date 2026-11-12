@@ -1,0 +1,46 @@
+{
+  "id": "blueprint",
+  "label": "Blueprint",
+  "group": "Looks",
+  "style": {
+    "font": "mono",
+    "radius": 0,
+    "border": 1
+  },
+  "light": {
+    "bg": "#e4effb",
+    "card": "#f4f9ff",
+    "fg": "#123a6b",
+    "muted": "#3f5f88",
+    "line": "#93b4de",
+    "accent": "#2340b8",
+    "accent-soft": "#d3dff5",
+    "ok": "#00695c",
+    "ok-soft": "#cfe3ed",
+    "bad": "#b4235a",
+    "bad-soft": "#e0dded",
+    "hl": "#7a2e8f",
+    "hl-soft": "#dadef1",
+    "code-bg": "#d8e7f8",
+    "on-accent": "#ffffff",
+    "label": "#183c86"
+  },
+  "dark": {
+    "bg": "#1f4e8c",
+    "card": "#245a9e",
+    "fg": "#ffffff",
+    "muted": "#d6e4f5",
+    "line": "#7fa6d9",
+    "accent": "#9fe3ff",
+    "accent-soft": "#30619b",
+    "ok": "#b8f5c4",
+    "ok-soft": "#336493",
+    "bad": "#ffd4cc",
+    "bad-soft": "#3c5f94",
+    "hl": "#ffd166",
+    "hl-soft": "#3c5f87",
+    "code-bg": "#1a4479",
+    "on-accent": "#1f4e8c",
+    "label": "#ecf9ff"
+  }
+}
