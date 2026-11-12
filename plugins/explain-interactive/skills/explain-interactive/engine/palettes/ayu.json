@@ -1,0 +1,51 @@
+{
+  "id": "ayu",
+  "label": "Ayu",
+  "group": "Editor vivid",
+  "style": {
+    "font": "sans",
+    "radius": 1,
+    "border": 1
+  },
+  "light": {
+    "bg": "#fcfcfc",
+    "card": "#f3f4f5",
+    "fg": "#5c6166",
+    "muted": "#5f666d",
+    "line": "#e1e3e6",
+    "accent": "#a84e00",
+    "accent-soft": "#ede7e1",
+    "ok": "#4d6b00",
+    "ok-soft": "#e1e5da",
+    "bad": "#c4213f",
+    "bad-soft": "#efe1e5",
+    "hl": "#1a7090",
+    "hl-soft": "#e2e9ed",
+    "code-bg": "#eef0f2",
+    "on-accent": "#ffffff",
+    "label": "#454a50"
+  },
+  "dark": {
+    "bg": "#242936",
+    "card": "#1f2430",
+    "fg": "#cccac2",
+    "muted": "#a3aab3",
+    "line": "#3a4252",
+    "accent": "#ffcc66",
+    "accent-soft": "#403e3c",
+    "ok": "#d5ff80",
+    "ok-soft": "#37413e",
+    "bad": "#ff6666",
+    "bad-soft": "#382e3a",
+    "hl": "#5ccfe6",
+    "hl-soft": "#2c404f",
+    "code-bg": "#2a3040",
+    "on-accent": "#242936",
+    "label": "#e6e1cf"
+  },
+  "credit": {
+    "theme": "Ayu (Light and Mirage)",
+    "licence": "MIT",
+    "url": "https://github.com/ayu-theme/ayu-colors"
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "id": "cobalt",
+  "label": "Cobalt2",
+  "group": "Editor vivid",
+  "style": {
+    "font": "sans",
+    "radius": 1,
+    "border": 1
+  },
+  "light": {
+    "bg": "#e8f1fa",
+    "card": "#ffffff",
+    "fg": "#0d2233",
+    "muted": "#3d5a73",
+    "line": "#b9cfe6",
+    "accent": "#005bb8",
+    "accent-soft": "#e0ebf6",
+    "ok": "#256e00",
+    "ok-soft": "#e5eee0",
+    "bad": "#b8123f",
+    "bad-soft": "#f6e3e8",
+    "hl": "#8a5a00",
+    "hl-soft": "#f1ebe0",
+    "code-bg": "#dbe8f5",
+    "on-accent": "#ffffff",
+    "label": "#1d3a57"
+  },
+  "dark": {
+    "bg": "#193549",
+    "card": "#1f4662",
+    "fg": "#ffffff",
+    "muted": "#aaccee",
+    "line": "#2d5a7b",
+    "accent": "#ffc600",
+    "accent-soft": "#4c5539",
+    "ok": "#3ad900",
+    "ok-soft": "#20563a",
+    "bad": "#ff9db8",
+    "bad-soft": "#45495e",
+    "hl": "#9effff",
+    "hl-soft": "#31596a",
+    "code-bg": "#122738",
+    "on-accent": "#193549",
+    "label": "#d6e6f5"
+  },
+  "credit": {
+    "theme": "Cobalt2 (light mode invented)",
+    "licence": "MIT",
+    "url": "https://github.com/wesbos/cobalt2-vscode"
+  }
+}
