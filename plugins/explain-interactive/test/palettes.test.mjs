@@ -168,6 +168,25 @@ test("highlight, accent, ok and bad differ by ΔE ≥ 30", () => {
     .map(([a, b, d]) => `${p.id} ${m}: --${a} ${v[a]} vs --${b} ${v[b]} is ΔE ${d.toFixed(1)}`)));
 });
 
+// Two palettes must not look alike: the mean ΔE of these colours, in the same mode, is at least LOOK_APART.
+// The Accessibility palettes are left out: they follow Default on purpose.
+const LOOK = ["bg", "card", "accent", "hl", "ok", "bad"], LOOK_APART = 8;
+const lookDistance = (a, b) => LOOK.reduce((s, k) => s + deltaE(a[k], b[k]), 0) / LOOK.length;
+
+test(`no two palettes look alike: mean ΔE of ${LOOK.join(", ")} ≥ ${LOOK_APART} in each mode`, () => {
+  const looks = PALETTES.filter(p => p.group !== "Accessibility");
+  report(looks.flatMap((a, i) => looks.slice(i + 1).flatMap(b => MODES.flatMap(m => {
+    const d = lookDistance(a[m], b[m]);
+    if (d >= LOOK_APART) return [];
+    const each = LOOK.map(k => `${k} ${deltaE(a[m][k], b[m][k]).toFixed(0)}`).join(", ");
+    return [`${a.id} vs ${b.id} ${m}: mean ΔE ${d.toFixed(1)} (${each}); change bg, card or accent of one of them`];
+  }))));
+  // the rule itself: a palette is too close to itself, and Default is far from Terminal
+  const def = PALETTES[0], term = PALETTES.find(p => p.id === "terminal");
+  assert.equal(lookDistance(def.light, def.light), 0);
+  assert.ok(lookDistance(def.dark, term.dark) >= LOOK_APART);
+});
+
 test("colour-blind: highlight, accent, ok and bad differ by ΔE ≥ 20 under deuteranopia and protanopia", () => {
   report(each((p, m, v) => {
     if (p.id !== "colour-blind") return [];
