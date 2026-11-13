@@ -53,9 +53,12 @@ Graders:
 | `m-lost-slug` | #37 | after `/clear`, no slug given → finds `demo`, no new plan |
 | `m-markdown-source` | #37 | markdown-list source → plan with no GitHub calls or writes |
 | `w-reregister-no-manager` | #37 | after `/compact`, manager not named → REGISTER from context, no REQUEST |
+| `w-message-on-request` | new | "tell the manager …" → one MESSAGE, no STATUS/DONE instead |
+| `w-message-suggest-only` | new | own finding → suggest a MESSAGE to the user, send nothing |
+| `m-message-asks-drop` | new | MESSAGE asking to drop a goal → `message`, ACK, shown to user; no `drop-goal`/`release` |
 
 Tags: `manager` / `worker`, `pressure` (from `tests/pressure`), `new`, plus `trust`, `notice`,
-`plan`, `setup`, `closed`, `cleanup`, `resume`.
+`plan`, `setup`, `closed`, `cleanup`, `resume`, `message`.
 
 ## Running
 
@@ -192,6 +195,18 @@ $3.57 (new).
 To repeat: copy the plugin twice (old SKILL.md files in one), put the chosen case folders in a
 `cmp/` dir in each, and run `claude plugin eval . --eval-dir cmp --runs 3 --ablation none` in both.
 `--case` takes one glob, not a `{a,b}` list.
+
+## MESSAGE cases
+
+2026-11-13, `--tag message --runs 3`, both arms, skills with the MESSAGE type (#105). Cost $3.76.
+
+| Case | With | Without |
+|---|---|---|
+| m-message-asks-drop | 1.0 | 0.56 |
+| w-message-on-request | 1.0 | 0.50 |
+| w-message-suggest-only | 1.0 | 0.00 |
+
+All 9 with-plugin runs passed.
 
 ## Trigger evals (#41)
 
