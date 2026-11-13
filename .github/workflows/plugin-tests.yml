@@ -1,11 +1,10 @@
 name: Plugin tests
 
+# No paths filter: the workflow runs on every PR so the required `plugin-checks`
+# sentinel always reports. The `changes` job decides which plugin jobs run.
 on:
   pull_request:
     branches: [main]
-    paths:
-      - "plugins/**"
-      - ".github/workflows/plugin-tests.yml"
   workflow_dispatch:
 
 permissions:
@@ -16,7 +15,44 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      orchestrator: ${{ steps.diff.outputs.orchestrator }}
+      explain-interactive: ${{ steps.diff.outputs.explain-interactive }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Detect changed plugins
+        id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          plugins=(orchestrator explain-interactive)
+          if [ "$EVENT" != "pull_request" ]; then
+            # manual runs test everything
+            for p in "${plugins[@]}"; do echo "$p=true" >> "$GITHUB_OUTPUT"; done
+            exit 0
+          fi
+          changed=$(git diff --name-only "origin/$BASE_REF...HEAD")
+          echo "Changed files:"; echo "$changed"
+          # editing this workflow re-runs every plugin's tests
+          all=false
+          grep -qx '.github/workflows/plugin-tests.yml' <<<"$changed" && all=true
+          for p in "${plugins[@]}"; do
+            if [ "$all" = true ] || grep -q "^plugins/$p/" <<<"$changed"; then
+              echo "$p=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "$p=false" >> "$GITHUB_OUTPUT"
+            fi
+          done
+          cat "$GITHUB_OUTPUT"
+
   orchestrator:
+    needs: changes
+    if: needs.changes.outputs.orchestrator == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -30,6 +66,8 @@ jobs:
         run: python3 -m unittest discover -s tests -v
 
   explain-interactive:
+    needs: changes
+    if: needs.changes.outputs.explain-interactive == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -56,3 +94,20 @@ jobs:
         env:
           CHROME: ${{ steps.chrome.outputs.chrome-path }}
         run: node --test test/*.test.mjs
+
+  # Sentinel: the only check the ruleset requires. Add every new plugin job to `needs`.
+  plugin-checks:
+    needs: [changes, orchestrator, explain-interactive]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if any plugin job failed or was cancelled
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          echo "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          bad=$(echo "$NEEDS" | jq -r '[to_entries[] | select(.value.result != "success" and .value.result != "skipped") | .key] | join(", ")')
+          if [ -n "$bad" ]; then
+            echo "::error::Plugin checks did not pass: $bad"
+            exit 1
+          fi
