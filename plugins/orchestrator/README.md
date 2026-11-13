@@ -11,6 +11,8 @@ working on related goals from one epic or task list:
 The manager can also propose a change notice to the affected workers when a goal changes
 or a merged goal settles a design question. It sends the notice only after the user approves;
 workers acknowledge it and change course only on the user's say-so.
+A worker's user can also send the manager's user a short free-text message ("tell the manager …");
+the manager logs it, shows it and acknowledges it, and any answer goes back as an approved notice.
 Workers report each PR as soon as they open it, so the status page lists a goal's PRs while it is still in progress.
 GitHub issue and PR references in a goal's title or reason (`#123`, `owner/repo#123`, or a full URL) are links on the status page; a bare `#123` uses the goal's repo, or the epic's when the goal has none.
 Each PR a worker opens ends with a small footer naming the worker, epic and goal, so you can tell who opened it from the PR alone.
@@ -166,6 +168,7 @@ and exits 2; a malformed call (unknown command, missing or conflicting options) 
   | `--notes` | `--notes-file` | `done` |
   | `--reason` | `--reason-file` | `status`, `sendback` |
   | `--summary` | `--summary-file` | `notify` |
+  | `--text` | `--text-file` | `message` |
   | `--goal-json` | `--goal-json-file` | `add-goal`, `edit-goal` |
   | `--title` | `--title-file` | `edit-epic` |
 

@@ -31,6 +31,7 @@ UNBLOCK = {"done": ("done",), "in-review": ("in-review", "done")}
 NOTICE_KINDS = ("changed", "decision", "dependency-merged", "dropped", "added")
 NOTICE_LIVE = ("assigned", "needs-user", "in-review")
 NOTICE_MAX_LINES = 10
+MESSAGE_MAX_LINES = 10
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 EVENTS_SHOWN = 30
 
@@ -510,6 +511,24 @@ def done(state, name, gid, pr, notes):
     return {"goal": gid, "status": "in-review", "newly_ready": newly}, [(name, "DONE", f"{gid} pr={pr or '-'}")]
 
 
+def message(state, name, gid, text):
+    """A free-text note from a worker to the manager's user. Logged only; it changes no goal."""
+    w = require_worker(state, name)
+    gid = None if gid in (None, "", "-") else gid
+    if gid is not None:
+        g = goal(state, gid)
+        if gid != w["current"] and gid not in w["history"] and g["worker"] != name:
+            raise OrchError(f"{gid} is not a goal of {name}")
+    text = (text or "").strip()
+    if not text:
+        raise OrchError("text is required")
+    lines = text.splitlines()
+    if len(lines) > MESSAGE_MAX_LINES:
+        raise OrchError(f"text must be at most {MESSAGE_MAX_LINES} lines")
+    flat = " / ".join(line.strip() for line in lines if line.strip())
+    return {"from": name, "goal": gid, "text": text}, [(name, "MESSAGE", f"{gid or '-'} {flat}")]
+
+
 def approve(state, gid):
     g = goal(state, gid)
     if g["status"] != "in-review":
@@ -818,6 +837,7 @@ ARGS.update({
                (["state"], {"choices": ["needs-user", "blocked", "assigned"]})],
     "done": [(["worker"], {}), (["goal"], {}), (["--pr"], {})],
     "pr": [(["worker"], {}), (["goal"], {}), (["--url"], {"required": True})],
+    "message": [(["worker"], {}), (["--goal"], {"help": "goal the message is about; omit for none"})],
 })
 
 COMMANDS.update({
@@ -826,6 +846,7 @@ COMMANDS.update({
     "status": lambda s, a: report_status(s, a.worker, a.goal, a.state, a.reason),
     "done": lambda s, a: done(s, a.worker, a.goal, a.pr, a.notes),
     "pr": lambda s, a: report_pr(s, a.worker, a.goal, a.url),
+    "message": lambda s, a: message(s, a.worker, a.goal, a.text),
 })
 
 
@@ -881,6 +902,7 @@ QUIET_SAVE = {"liveness"}
 TEXT = {
     "status": [("reason", False)],
     "done": [("notes", True)],
+    "message": [("text", True)],
     "sendback": [("reason", True)],
     "notify": [("summary", True)],
     "add-goal": [("goal-json", True)],

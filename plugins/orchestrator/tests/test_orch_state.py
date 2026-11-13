@@ -438,6 +438,55 @@ class WorkerTests(Base):
         state["goals"]["g1"]["prs"] = ["https://example.com/pull/1"]
         self.assertEqual(orch_state.validate(state), [])
 
+    def message_log(self):
+        return (Path(self.tmp.name) / "demo" / "events.log").read_text()
+
+    def test_message_is_logged_without_changing_state(self):
+        self.start_g1()
+        before = self.state()
+        code, out = self.run_cli("message", "demo", "demo-w-a", "--goal", "g1",
+                                 "--text", "The API needs a second endpoint.\nShould g3 cover it?")
+        self.assertEqual((code, out), (0, {"from": "demo-w-a", "goal": "g1",
+                                           "text": "The API needs a second endpoint.\nShould g3 cover it?"}))
+        after = self.state()
+        self.assertEqual(after["goals"], before["goals"])
+        self.assertIn("demo-w-a MESSAGE g1 The API needs a second endpoint. / Should g3 cover it?", self.message_log())
+
+    def test_message_without_goal_and_without_holding_one(self):
+        self.run_cli("register", "demo", "demo-w-a")
+        code, out = self.run_cli("message", "demo", "demo-w-a", "--text", "I can only work mornings.")
+        self.assertEqual((code, out["goal"]), (0, None))
+        self.assertIn("demo-w-a MESSAGE - I can only work mornings.", self.message_log())
+        code, out = self.run_cli("message", "demo", "demo-w-a", "--goal", "-", "--text", "again")
+        self.assertEqual((code, out["goal"]), (0, None))
+
+    def test_message_about_own_earlier_goal_is_accepted(self):
+        self.start_g1()
+        self.run_cli("done", "demo", "demo-w-a", "g1", "--notes", "n")
+        self.run_cli("approve", "demo", "g1")
+        code, out = self.run_cli("message", "demo", "demo-w-a", "--goal", "g1", "--text", "Found a bug in g1.")
+        self.assertEqual(code, 0, out)
+
+    def test_message_rejects_unregistered_other_goal_empty_and_long_text(self):
+        self.start_g1()
+        code, out = self.run_cli("message", "demo", "demo-w-z", "--text", "hi")
+        self.assertEqual(code, 2)
+        self.assertIn("demo-w-z is not registered", out["error"])
+        self.run_cli("register", "demo", "demo-w-b")
+        code, out = self.run_cli("message", "demo", "demo-w-b", "--goal", "g1", "--text", "hi")
+        self.assertEqual(code, 2)
+        self.assertIn("g1 is not a goal of demo-w-b", out["error"])
+        code, out = self.run_cli("message", "demo", "demo-w-a", "--goal", "nope", "--text", "hi")
+        self.assertEqual(code, 2)
+        self.assertIn("unknown goal nope", out["error"])
+        code, out = self.run_cli("message", "demo", "demo-w-a", "--text", "  ")
+        self.assertEqual(code, 2)
+        self.assertIn("text is required", out["error"])
+        code, out = self.run_cli("message", "demo", "demo-w-a", "--text", "\n".join(["x"] * 11))
+        self.assertEqual(code, 2)
+        self.assertIn("at most 10 lines", out["error"])
+        self.assertNotIn("MESSAGE", self.message_log())
+
 
 class ConcurrencyTests(Base):
     SCRIPT = Path(__file__).resolve().parents[1] / "skills" / "orchestrator" / "scripts" / "orch_state.py"
@@ -1415,6 +1464,11 @@ class TextFileTests(Base):
         self.assertEqual(code, 0, out)
         self.assertEqual(self.run_cli("pending-notices", "demo")[1][0]["summary"], HOSTILE)
 
+    def test_message_text_file(self):
+        code, out = self.run_cli("message", "demo", "demo-w-a", "--goal", "g1", "--text-file", self.text_file())
+        self.assertEqual((code, out.get("text")), (0, HOSTILE))
+        self.assertFalse((Path(self.tmp.name) / "pwned").exists())
+
     def test_inline_and_file_together_are_rejected(self):
         code, out = self.run_cli("done", "demo", "demo-w-a", "g1", "--notes", "n", "--notes-file", self.text_file())
         self.assertEqual(code, 2)
@@ -1423,7 +1477,7 @@ class TextFileTests(Base):
 
     def test_required_text_accepts_either_form(self):
         for argv in (("done", "demo", "demo-w-a", "g1"), ("sendback", "demo", "g1"),
-                     ("notify", "demo", "--kind", "changed")):
+                     ("notify", "demo", "--kind", "changed"), ("message", "demo", "demo-w-a")):
             code, out = self.run_cli(*argv)
             self.assertEqual(code, 2, argv)
             self.assertIn("one of the arguments", out["error"], argv)
